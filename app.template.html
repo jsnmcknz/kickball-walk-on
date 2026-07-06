@@ -312,6 +312,16 @@ let currentGain = null;
 // Overrides played from the Grid tab never touch this.
 let pendingLineupSource = null;
 let pendingLineupStartPointer = null;
+// For the on-card countdown: when the current source started (in the audio
+// clock's own time) and how long it runs, so remaining time is computed
+// straight from the real audio clock rather than a separate JS timer that
+// could drift out of sync with what's actually playing.
+let currentStartTime = null;
+let currentDuration = null;
+// Drives the countdown by re-rendering a few times a second while
+// something plays; render()'s own bookkeeping (below) starts/stops this,
+// so nothing else needs to remember to manage it.
+let tickInterval = null;
 
 function b64ToArrayBuffer(b64) {
   const bin = atob(b64);
@@ -359,6 +369,22 @@ function isLineupCardPlaying(id) {
   return currentSource !== null && pendingLineupSource === currentSource && pendingLineupStartPointer === id;
 }
 
+// Seconds left in the clip currently showing on the card, or null if the
+// card isn't the thing playing (idle, or what's playing is a Grid
+// override). Reads straight off the audio clock (ctx.currentTime) rather
+// than a wall-clock timer, so it can't drift from what's actually audible.
+function cardRemainingSeconds(id) {
+  if (!isLineupCardPlaying(id) || currentStartTime === null || currentDuration === null) return null;
+  return Math.max(0, currentDuration - (ctx.currentTime - currentStartTime));
+}
+
+function formatCountdown(seconds) {
+  const whole = Math.max(0, Math.ceil(seconds));
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
 // `opts.advanceIfPending` (default true) controls whether this stop counts
 // as "finishing the turn" for a pending lineup advance:
 //  - Stop/fade button (explicit, nothing replacing the clip): yes, advance.
@@ -380,6 +406,8 @@ function stopCurrent(fade, opts) {
   currentSource = null;
   currentGain = null;
   playingId = null;
+  currentStartTime = null;
+  currentDuration = null;
   if (fade && srcGain) {
     const now = ctx.currentTime;
     const fadeSec = (DATA.fadeOutMs || 1500) / 1000;
@@ -416,6 +444,7 @@ async function playClip(playerId, opts) {
   source.onended = () => {
     if (currentSource === source) {
       currentSource = null; currentGain = null; playingId = null;
+      currentStartTime = null; currentDuration = null;
       finishLineupIfPending(source);
       render();
     }
@@ -424,6 +453,8 @@ async function playClip(playerId, opts) {
   currentSource = source;
   currentGain = gain;
   playingId = playerId;
+  currentStartTime = ctx.currentTime;
+  currentDuration = buffer.duration;
   if (opts.lineup) {
     pendingLineupSource = source;
     pendingLineupStartPointer = playerId;
@@ -511,6 +542,18 @@ function render() {
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
   const inReorder = state.activeTab === 'grid' && state.gridMode === 'reorder';
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
+
+  // Keep the on-card countdown live: start a re-render tick the moment
+  // something starts playing, stop it the moment nothing is. Living here
+  // (rather than in playClip/stopCurrent) means every path that starts or
+  // ends playback automatically keeps this in sync just by calling
+  // render(), which they all already do.
+  if (currentSource && !tickInterval) {
+    tickInterval = setInterval(render, 200);
+  } else if (!currentSource && tickInterval) {
+    clearInterval(tickInterval);
+    tickInterval = null;
+  }
 }
 
 function renderLineupTab() {
@@ -542,6 +585,10 @@ function renderLineupTab() {
   // playing. While it's playing, the card itself is the stop control:
   // there's no separate Stop/fade button anymore.
   const cardPlaying = isLineupCardPlaying(pointerId);
+  const remaining = cardPlaying ? cardRemainingSeconds(pointerId) : null;
+  const caption = cardPlaying
+    ? (remaining !== null ? `${formatCountdown(remaining)} — tap to stop` : 'tap to stop')
+    : 'tap anywhere to play';
   const card = h('button', { class: 'nowup-card' + (cardPlaying ? ' playing' : ''), onclick: () => {
     if (cardPlaying) stopCurrent(true);
     else playClip(pointerId, { lineup: true });
@@ -550,7 +597,7 @@ function renderLineupTab() {
     h('div', { class: 'nowup-name', text: name.toUpperCase() }),
     pos ? h('div', { class: 'nowup-counter', text: `${pos.position} of ${pos.total}` }) : null,
     cardPlaying ? h('div', { class: 'nowup-stop-icon' }) : h('div', { class: 'nowup-play-icon' }),
-    h('div', { class: 'nowup-caption', text: cardPlaying ? 'tap to stop' : 'tap anywhere to play' }),
+    h('div', { class: 'nowup-caption', text: caption }),
   ]);
   body.appendChild(card);
 

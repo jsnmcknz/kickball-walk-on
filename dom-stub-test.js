@@ -257,12 +257,25 @@ async function main() {
   assert(hooks.getPlayingId() === 'alice', 'alice clip is playing: ' + hooks.getPlayingId());
   console.log('7. Tap NOW UP plays but defers the advance, pointer still =', hooks.getPointer());
 
+  // On-card countdown: the fake clip's decoded duration is always 1s and
+  // the fake audio clock never advances, so the caption should read a
+  // steady "0:01" while playing -- confirms the countdown is wired up and
+  // reading off the (fake) audio clock rather than throwing or showing
+  // stale/idle text.
+  const captionWhilePlaying = findByClassContaining('nowup-caption', 'tap');
+  assert(captionWhilePlaying.textContent === '0:01 — tap to stop',
+    'countdown shows in the caption while playing: ' + captionWhilePlaying.textContent);
+  console.log('7a. Countdown renders on the card while playing: OK');
+
   // While playing, the card itself is the stop control (no separate
   // Stop/fade button anymore) -- tapping it again stops the clip, and like
   // any explicit stop, that resolves the turn and advances the card.
   findByClassContaining('nowup-card', 'ALICE').dispatch('click');
   assert(hooks.getPointer() === 'charlie', 'tapping the playing card stops it and advances: ' + hooks.getPointer());
   assert(hooks.getPlayingId() === null, 'playingId clears on tap-to-stop: ' + hooks.getPlayingId());
+  const captionAfterStop = findByClassContaining('nowup-caption', 'tap');
+  assert(captionAfterStop.textContent === 'tap anywhere to play',
+    'countdown clears and idle caption returns after stop: ' + captionAfterStop.textContent);
   console.log('7b. Tapping the card while playing stops the clip and advances: OK');
 
   // A clip simply allowed to finish on its own advances the same way.
