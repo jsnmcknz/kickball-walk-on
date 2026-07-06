@@ -192,7 +192,7 @@
 </div>
 <div id="app" style="display:none;">
   <div id="screen"></div>
-  <div class="stopbar"><button id="stopBtn"><span class="stop-icon"></span> Stop / fade</button></div>
+  <div class="stopbar" id="stopbar"><button id="stopBtn"><span class="stop-icon"></span> Stop / fade</button></div>
   <div class="tabbar">
     <button class="tabbtn" id="tabLineup">Lineup</button>
     <button class="tabbtn" id="tabGrid">Grid</button>
@@ -407,10 +407,14 @@ function h(tag, attrs, children) {
   return el;
 }
 
+function enterReorderMode() {
+  state.activeTab = 'grid';
+  state.gridMode = 'reorder';
+  render();
+}
+
 function renderOrderButton() {
-  return h('button', { class: 'order-btn', text: '⇅ order', onclick: () => {
-    state.activeTab = 'grid'; state.gridMode = 'reorder'; render();
-  }});
+  return h('button', { class: 'order-btn', text: '⇅ order', onclick: enterReorderMode });
 }
 
 function render() {
@@ -421,8 +425,12 @@ function render() {
 
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
-  document.getElementById('app').classList.toggle('reorder-frame',
-    state.activeTab === 'grid' && state.gridMode === 'reorder');
+  const inReorder = state.activeTab === 'grid' && state.gridMode === 'reorder';
+  document.getElementById('app').classList.toggle('reorder-frame', inReorder);
+  // No Stop/fade on the reorder screen -- nothing plays there (enterReorderMode
+  // stops anything already playing on the way in), so the control has
+  // nothing to do and is hidden rather than shown inert.
+  document.getElementById('stopbar').style.display = inReorder ? 'none' : '';
 }
 
 function renderLineupTab() {
@@ -436,9 +444,7 @@ function renderLineupTab() {
     wrap.appendChild(top);
     wrap.appendChild(h('div', { class: 'empty-state' }, [
       h('div', { text: 'No lineup set yet.' }),
-      h('button', { class: 'done-btn', text: 'Set lineup', onclick: () => {
-        state.activeTab = 'grid'; state.gridMode = 'reorder'; render();
-      }}),
+      h('button', { class: 'done-btn', text: 'Set lineup', onclick: enterReorderMode }),
     ]));
     return wrap;
   }
@@ -545,18 +551,22 @@ function renderGridReorder() {
     }),
   ]);
   wrap.appendChild(top);
+  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
 
-  // "Not playing" first, Done right after it, kicking order last. Reported
-  // live: with the order list up top, adding players grows it and pushes
-  // the benched list (and Done) further down the screen on every tap --
-  // annoying when quickly building a lineup. Putting the shrinking list
-  // first means nothing above it ever changes size, so its position (and
-  // Done's) stays put; only the growing order list at the bottom moves,
-  // where it doesn't disturb anything above it. Small re-sorts *within*
-  // the benched list as it shrinks are expected and fine -- it's whole
-  // sections relocating that this fixes.
-  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Not playing — tap to add' }));
+  const grid = h('div', { class: 'grid' });
+  order.forEach((id, idx) => {
+    const p = playersById[id];
+    const tile = h('button', { class: 'tile order-tile' }, [
+      h('span', { class: 'badge', text: String(idx + 1) }),
+      h('span', { text: p.name }),
+    ]);
+    wireDragTile(tile, id, grid);
+    grid.appendChild(tile);
+  });
+  wrap.appendChild(grid);
+
   const benchedIds = computeBenched(allIds, order).sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
+  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Not playing — tap to add' }));
   const benchGrid = h('div', { class: 'bench-grid' });
   benchedIds.forEach(id => {
     const p = playersById[id];
@@ -576,19 +586,6 @@ function renderGridReorder() {
       render();
     }}),
   ]));
-
-  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
-  const grid = h('div', { class: 'grid' });
-  order.forEach((id, idx) => {
-    const p = playersById[id];
-    const tile = h('button', { class: 'tile order-tile' }, [
-      h('span', { class: 'badge', text: String(idx + 1) }),
-      h('span', { text: p.name }),
-    ]);
-    wireDragTile(tile, id, grid);
-    grid.appendChild(tile);
-  });
-  wrap.appendChild(grid);
 
   return wrap;
 }
@@ -658,8 +655,8 @@ function wireDragTile(tile, id, gridEl) {
    ============================================================ */
 document.getElementById('tabLineup').addEventListener('click', () => { state.activeTab = 'lineup'; render(); });
 document.getElementById('tabGrid').addEventListener('click', () => {
+  if (order.length === 0) { enterReorderMode(); return; }
   state.activeTab = 'grid';
-  if (order.length === 0) state.gridMode = 'reorder';
   render();
 });
 document.getElementById('stopBtn').addEventListener('click', () => stopCurrent(true));

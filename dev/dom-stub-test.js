@@ -130,6 +130,7 @@ global.__hooks = {
   getOrder: function() { return order; },
   getPointer: function() { return pointerId; },
   getLastGameOrder: function() { return lastGameOrder; },
+  getPlayingId: function() { return playingId; },
 };
 `;
 
@@ -288,31 +289,23 @@ async function main() {
   assert(rawLast && JSON.parse(rawLast).length === 3, 'lastGameOrder persisted: ' + rawLast);
   console.log('15. localStorage persistence round-trip: OK');
 
-  // Section-ordering regression: reported live -- with the order list on
-  // top, growing it pushed the benched list (and Done) further down the
-  // screen on every add. Fix: benched list and Done come first in the DOM,
-  // the (growing) order list comes last, so nothing above the benched
-  // section ever changes size. Verify that DOM order directly.
+  // Reorder mode has no Stop/fade control, but a clip already playing when
+  // you enter it (e.g. previewed in Grid play mode) must keep playing --
+  // explicitly requested: clips are short (<15s) and stopping them isn't
+  // worth the friction. Verify entering reorder mode does NOT touch
+  // playback.
   document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'reorder';
+  hooks.getState().gridMode = 'play';
   render();
-  const screenChildrenClasses = [];
-  (function walkTop(node, depth) {
-    if (depth > 2) return;
-    (node._children || []).forEach(c => {
-      if (c.className) screenChildrenClasses.push(c.className);
-      walkTop(c, depth + 1);
-    });
-  })(screen, 0);
-  const benchIdx = screenChildrenClasses.indexOf('bench-heading');
-  const doneIdx = screenChildrenClasses.indexOf('done-wrap');
-  const orderGridHintIdx = screenChildrenClasses.indexOf('grid-hint');
-  assert(benchIdx !== -1 && doneIdx !== -1 && orderGridHintIdx !== -1,
-    'expected sections not found: ' + screenChildrenClasses.join(', '));
-  assert(benchIdx < doneIdx && doneIdx < orderGridHintIdx,
-    'benched list and Done must come before the (growing) kicking-order section: ' +
-    screenChildrenClasses.join(', '));
-  console.log('16. Benched list + Done precede the growing order list in the DOM: OK');
+  const anyGridTile = findByText('Alice') || findByText('Charlie') || findByText('Bob');
+  anyGridTile.dispatch('click'); // start something playing via Grid override
+  const playingBefore = hooks.getPlayingId();
+  assert(playingBefore !== null, 'sanity: something is playing before entering reorder');
+  findByText('order').click(); // the order-btn text is "⇅ order"
+  assert(hooks.getState().gridMode === 'reorder', 'entered reorder mode');
+  assert(hooks.getPlayingId() === playingBefore,
+    'entering reorder mode must NOT stop a clip already playing');
+  console.log('16. Entering reorder mode leaves an in-progress clip playing: OK');
 
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }
