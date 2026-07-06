@@ -301,6 +301,13 @@ const buffers = {}; // playerId -> AudioBuffer
 const unavailable = new Set(); // playerId -> decode failed
 let currentSource = null;
 let currentGain = null;
+// Tracks a lineup-triggered clip (played from the NOW UP card) whose pointer
+// advance hasn't happened yet -- the card intentionally keeps showing the
+// same name until this clip actually finishes (or is stopped), so the
+// currently-playing song and the currently-shown name never disagree.
+// Overrides played from the Grid tab never touch this.
+let pendingLineupSource = null;
+let pendingLineupStartPointer = null;
 
 function b64ToArrayBuffer(b64) {
   const bin = atob(b64);
@@ -323,31 +330,68 @@ async function decodeAll() {
   }));
 }
 
-function stopCurrent(fade) {
-  if (!currentSource) return;
-  if (fade && currentGain) {
-    const now = ctx.currentTime;
-    const fadeSec = (DATA.fadeOutMs || 1500) / 1000;
-    currentGain.gain.cancelScheduledValues(now);
-    currentGain.gain.setValueAtTime(currentGain.gain.value, now);
-    currentGain.gain.linearRampToValueAtTime(0.0001, now + fadeSec);
-    const src = currentSource;
-    setTimeout(() => { try { src.stop(); } catch (e) {} }, DATA.fadeOutMs + 60);
-  } else {
-    try { currentSource.stop(); } catch (e) {}
+// If `source` was the lineup clip we're waiting on, advance the lineup
+// pointer now (but only if the operator hasn't already manually moved the
+// pointer elsewhere via skip/back/on-deck-jump while it was playing -- a
+// manual move already resolved this turn, so a second advance would skip
+// someone).
+function finishLineupIfPending(source) {
+  if (pendingLineupSource !== source) return;
+  pendingLineupSource = null;
+  if (pendingLineupStartPointer !== null && pointerId === pendingLineupStartPointer) {
+    pointerId = nextPointer(order, pointerId);
+    persistPointer();
   }
+  pendingLineupStartPointer = null;
+}
+
+// `opts.advanceIfPending` (default true) controls whether this stop counts
+// as "finishing the turn" for a pending lineup advance:
+//  - Stop/fade button (explicit, nothing replacing the clip): yes, advance.
+//  - playClip's own pre-emptive stop of whatever was already playing right
+//    before it starts a new clip: no -- the new clip (even a same-person
+//    retap) takes over pending-advance bookkeeping itself immediately
+//    after, so the interrupted one shouldn't also try to advance.
+function stopCurrent(fade, opts) {
+  opts = opts || {};
+  const advanceIfPending = opts.advanceIfPending !== false;
+  if (!currentSource) return;
+  const src = currentSource;
+  const srcGain = currentGain;
+  // Clear bookkeeping *before* actually stopping the node. Stopping a
+  // source fires its 'ended' handler -- immediately in some environments,
+  // always eventually in real browsers -- and that handler is written to
+  // no-op once currentSource no longer points at it. This function is the
+  // sole decider of whether *this* stop counts as finishing the turn.
   currentSource = null;
   currentGain = null;
   playingId = null;
+  if (fade && srcGain) {
+    const now = ctx.currentTime;
+    const fadeSec = (DATA.fadeOutMs || 1500) / 1000;
+    srcGain.gain.cancelScheduledValues(now);
+    srcGain.gain.setValueAtTime(srcGain.gain.value, now);
+    srcGain.gain.linearRampToValueAtTime(0.0001, now + fadeSec);
+    setTimeout(() => { try { src.stop(); } catch (e) {} }, DATA.fadeOutMs + 60);
+  } else {
+    try { src.stop(); } catch (e) {}
+  }
+  if (advanceIfPending) {
+    finishLineupIfPending(src);
+  } else if (pendingLineupSource === src) {
+    pendingLineupSource = null;
+    pendingLineupStartPointer = null;
+  }
   render();
 }
 
 let playingId = null;
 
-async function playClip(playerId) {
+async function playClip(playerId, opts) {
+  opts = opts || {};
   if (unavailable.has(playerId)) return;
   if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
-  stopCurrent(false);
+  stopCurrent(false, { advanceIfPending: false });
   const buffer = buffers[playerId];
   if (!buffer) return;
   const source = ctx.createBufferSource();
@@ -356,12 +400,23 @@ async function playClip(playerId) {
   gain.gain.value = 1;
   source.connect(gain).connect(ctx.destination);
   source.onended = () => {
-    if (currentSource === source) { currentSource = null; currentGain = null; playingId = null; render(); }
+    if (currentSource === source) {
+      currentSource = null; currentGain = null; playingId = null;
+      finishLineupIfPending(source);
+      render();
+    }
   };
   source.start();
   currentSource = source;
   currentGain = gain;
   playingId = playerId;
+  if (opts.lineup) {
+    pendingLineupSource = source;
+    pendingLineupStartPointer = playerId;
+  } else {
+    pendingLineupSource = null;
+    pendingLineupStartPointer = null;
+  }
   render();
 }
 
@@ -460,10 +515,10 @@ function renderLineupTab() {
   const body = h('div', { class: 'lineup-body' });
   const name = playersById[pointerId] ? playersById[pointerId].name : '—';
   const card = h('button', { class: 'nowup-card', onclick: () => {
-    playClip(pointerId);
-    pointerId = nextPointer(order, pointerId);
-    persistPointer();
-    render();
+    // Advancing to the next kicker's name happens once this clip actually
+    // finishes (see finishLineupIfPending) -- not immediately on tap -- so
+    // the card never shows a name that doesn't match what's playing.
+    playClip(pointerId, { lineup: true });
   }}, [
     h('div', { class: 'nowup-label', text: 'Now up' }),
     h('div', { class: 'nowup-name', text: name.toUpperCase() }),
