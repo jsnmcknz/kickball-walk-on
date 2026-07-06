@@ -239,6 +239,16 @@ async function main() {
   assert(hooks.getPointer() === 'alice', 'pointer defaults to first in order: ' + hooks.getPointer());
   console.log('6. Lineup tab shows NOW UP =', hooks.getPointer());
 
+  // The "x of y" breadcrumb moved from the header onto the card itself
+  // (2026-07-06) -- confirm it actually renders there now, and that the
+  // header's old counter slot is gone.
+  const cardCounter = findByClassContaining('nowup-counter', 'of');
+  assert(cardCounter, 'position counter renders on the card');
+  assert(cardCounter.textContent === '1 of 3', 'position counter text: ' + cardCounter.textContent);
+  assert(!document.getElementById('screen').querySelectorAll('.counter').length,
+    'old header counter element is gone');
+  console.log('6b. Position counter lives on the card, not the header: OK');
+
   // Tapping NOW UP must NOT advance the pointer/card immediately -- the
   // card should keep showing whoever's song is actually playing until that
   // clip really ends, so the on-screen name and the audio never disagree.
