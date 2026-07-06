@@ -1,0 +1,25 @@
+{
+  "team": "Pickles' Party Palace",
+  "players": [
+    { "id": "charlie", "name": "Charlie", "clips": ["Charlie-01.m4a"] },
+    { "id": "clayton", "name": "Clayton", "clips": ["Clayton-01.m4a"] },
+    { "id": "elias", "name": "Elias", "clips": ["Elias-01.mp3"] },
+    { "id": "franny", "name": "Franny", "clips": ["Franny-01.m4a"] },
+    { "id": "jason", "name": "Jason", "clips": ["Jason-01.m4a"] },
+    { "id": "kirsten", "name": "Kirsten", "clips": ["Kirsten-01.m4a"] },
+    { "id": "marcel", "name": "Marcel", "clips": ["Marcel-01.m4a"] },
+    { "id": "mark", "name": "Mark", "clips": ["Mark-01.m4a"] },
+    { "id": "megan", "name": "Megan", "clips": ["Megan-01.m4a"] },
+    { "id": "mike", "name": "Mike", "clips": ["Mike-01.m4a"] },
+    { "id": "ming", "name": "Ming", "clips": ["Ming-01.mp3"] },
+    { "id": "penny", "name": "Penny", "clips": ["Penny-01.m4a"] },
+    { "id": "pouriya", "name": "Pouriya", "clips": ["Pouriya-01.m4a"] },
+    { "id": "will", "name": "Will", "clips": ["Will-01.m4a"] },
+    { "id": "winson", "name": "Winson", "clips": ["Winson-01.m4a"] }
+  ],
+  "settings": {
+    "clipsDir": "source/clips",
+    "fadeOutMs": 1500,
+    "theme": "dark"
+  }
+}

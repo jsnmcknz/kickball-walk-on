@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="__TEAM_NAME__">
+<meta name="robots" content="noindex, nofollow">
+<title>__TEAM_NAME__ — Walk-On Music</title>
+<style>
+  :root {
+    --bg: #101215;
+    --tile: #1d2126;
+    --tile-border: #33383e;
+    --row-rule: #2c3036;
+    --text: #e8eae6;
+    --muted: #8f948f;
+    --olive: #565848;
+    --pickle: #B5BA6B;
+    --badge-text: #2C2E20;
+    --olive-label: #D8DBBE;
+    --plum-border: #7A5C82;
+    --plum-text: #CBA9DD;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-weight: 400; overscroll-behavior-y: contain;
+  }
+  button { font-family: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #screen { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
+
+  /* ---- shared header ---- */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; }
+  .wordmark { letter-spacing: 0.12em; text-transform: uppercase; color: var(--pickle); font-size: 13px; font-weight: 500; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .counter { color: var(--muted); font-size: 13px; }
+  .order-btn, .done-btn, .recall-btn {
+    background: transparent; border: 1px solid var(--tile-border); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500;
+  }
+  .order-btn:active, .done-btn:active, .recall-btn:active { opacity: 0.7; }
+
+  /* ---- lineup tab ---- */
+  .lineup-body { padding: 8px 16px 16px; }
+  .nowup-card {
+    width: 100%; text-align: left; border: none; border-radius: 18px;
+    background: var(--olive); color: var(--olive-label);
+    padding: 26px 22px; min-height: 34vh; display: flex; flex-direction: column;
+    justify-content: center; margin-top: 6px;
+  }
+  .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.85; }
+  .nowup-name {
+    color: var(--text); text-transform: uppercase; font-weight: 500;
+    font-size: clamp(40px, 12vw, 64px); line-height: 1.05; margin: 10px 0 2px;
+    word-break: break-word;
+  }
+  .nowup-caption { font-size: 13px; opacity: 0.8; }
+  .navbtns { display: flex; gap: 10px; margin-top: 14px; }
+  .navbtn {
+    flex: 1; background: var(--tile); border: 1px solid var(--tile-border); color: var(--text);
+    border-radius: 12px; padding: 16px 8px; font-size: 15px; font-weight: 500;
+  }
+  .navbtn:active { opacity: 0.7; }
+  .ondeck { margin-top: 22px; }
+  .ondeck-label { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .ondeck-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ondeck-chip {
+    display: flex; align-items: center; gap: 6px; background: var(--tile);
+    border: 1px solid var(--tile-border); border-radius: 999px; padding: 8px 14px;
+    font-size: 14px; color: var(--text);
+  }
+  .ondeck-chip .badge { background: var(--pickle); color: var(--badge-text); }
+  .empty-state { padding: 40px 16px; text-align: center; color: var(--muted); }
+  .empty-state .done-btn { margin-top: 14px; background: var(--pickle); border-color: var(--pickle); color: var(--badge-text); font-weight: 500; }
+
+  /* ---- badges ---- */
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  /* ---- grid (shared) ---- */
+  .grid-hint { color: var(--muted); font-size: 12px; padding: 0 16px 10px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--row-rule); border-top: 1px solid var(--row-rule); }
+  .tile {
+    position: relative; background: var(--tile); border: 1px solid var(--tile-border);
+    color: var(--text); font-size: 15px; font-weight: 500; padding: 20px 8px;
+    min-height: 66px; display: flex; align-items: center; justify-content: center;
+    text-align: center; touch-action: manipulation;
+  }
+  .tile:active { opacity: 0.85; }
+  .tile.playing { border-color: var(--pickle); color: var(--pickle); }
+  .tile.playing .speaker { margin-left: 4px; }
+  .tile.guest { border-style: dashed; color: var(--muted); }
+  .tile.unavailable { color: var(--muted); opacity: 0.5; }
+
+  /* ---- reorder mode ---- */
+  .reorder-banner {
+    margin: 6px 16px 4px; padding: 10px 14px; border: 1px solid var(--pickle);
+    border-radius: 10px; color: var(--pickle); text-transform: uppercase;
+    letter-spacing: 0.06em; font-size: 13px; font-weight: 500;
+  }
+  .reorder-actions { padding: 0 16px 10px; }
+  .recall-btn { width: 100%; }
+  .recall-btn:disabled { opacity: 0.4; }
+  .order-tile { touch-action: none; }
+  .order-tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
+  .order-tile.dragging { z-index: 5; box-shadow: 0 6px 16px rgba(0,0,0,0.5); border-color: var(--pickle); }
+  .bench-heading { color: var(--muted); font-size: 12px; padding: 16px 16px 8px; }
+  .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--row-rule); border-top: 1px solid var(--row-rule); }
+  .bench-tile { border-style: dashed; color: var(--muted); }
+  .done-wrap { padding: 16px; }
+  .done-full {
+    width: 100%; background: var(--pickle); color: var(--badge-text); border: none;
+    border-radius: 12px; padding: 16px; font-size: 16px; font-weight: 500;
+  }
+  .done-full:active { opacity: 0.85; }
+
+  /* ---- persistent chrome ---- */
+  .stopbar { padding: 8px 16px; flex-shrink: 0; }
+  .stopbar button {
+    width: 100%; padding: 14px; border-radius: 10px; background: transparent;
+    border: 1px solid var(--plum-border); color: var(--plum-text); font-size: 15px; font-weight: 500;
+  }
+  .stopbar button:active { opacity: 0.7; }
+  .tabbar { display: flex; border-top: 1px solid var(--row-rule); flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .tabbtn {
+    flex: 1; background: var(--bg); border: none; color: var(--muted);
+    padding: 12px 8px; font-size: 14px; font-weight: 500;
+  }
+  .tabbtn.active { background: var(--olive); color: var(--text); }
+
+  .loading-screen {
+    position: fixed; inset: 0; background: var(--bg); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    flex-direction: column; gap: 10px;
+  }
+  .loading-screen .wordmark { font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="loading" class="loading-screen">
+  <div class="wordmark">__TEAM_NAME__</div>
+  <div>Loading walk-up songs…</div>
+</div>
+<div id="app" style="display:none;">
+  <div id="screen"></div>
+  <div class="stopbar"><button id="stopBtn">Stop / fade</button></div>
+  <div class="tabbar">
+    <button class="tabbtn" id="tabLineup">Lineup</button>
+    <button class="tabbtn" id="tabGrid">Grid</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const DATA = __PAYLOAD_JSON__;
+const STORAGE_PREFIX = 'kickball_v1_';
+
+/* ============================================================
+   Pure state-transition functions (unit tested in isolation --
+   see test-lineup-logic.js in the project's dev history).
+   ============================================================ */
+function computeBenched(allIds, order) {
+  const inOrder = new Set(order);
+  return allIds.filter(id => !inOrder.has(id));
+}
+function benchPlayer(order, id) {
+  return order.filter(x => x !== id);
+}
+function addToOrder(order, id) {
+  if (order.includes(id)) return order.slice();
+  return [...order, id];
+}
+function moveInOrder(order, id, toIndex) {
+  const cur = order.filter(x => x !== id);
+  const clamped = Math.max(0, Math.min(toIndex, cur.length));
+  cur.splice(clamped, 0, id);
+  return cur;
+}
+function resolvePointer(order, pointerId) {
+  if (pointerId !== null && order.includes(pointerId)) return pointerId;
+  return order.length > 0 ? order[0] : null;
+}
+function nextPointer(order, pointerId) {
+  if (order.length === 0) return null;
+  const i = order.indexOf(pointerId);
+  if (i === -1) return order[0];
+  return order[(i + 1) % order.length];
+}
+function prevPointer(order, pointerId) {
+  if (order.length === 0) return null;
+  const i = order.indexOf(pointerId);
+  if (i === -1) return order[0];
+  return order[(i - 1 + order.length) % order.length];
+}
+function onDeckIds(order, pointerId, count) {
+  count = count || 3;
+  if (order.length <= 1) return [];
+  const i = order.indexOf(pointerId);
+  const start = i === -1 ? 0 : i;
+  const n = Math.min(count, order.length - 1);
+  const out = [];
+  for (let k = 1; k <= n; k++) out.push(order[(start + k) % order.length]);
+  return out;
+}
+function positionLabel(order, pointerId) {
+  if (order.length === 0) return null;
+  const i = order.indexOf(pointerId);
+  if (i === -1) return null;
+  return { position: i + 1, total: order.length };
+}
+
+/* ============================================================
+   Persistence
+   ============================================================ */
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
+  } catch (e) { return fallback; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value)); }
+  catch (e) { /* storage full/unavailable -- non-fatal, in-memory state still works this session */ }
+}
+
+/* ============================================================
+   App state
+   ============================================================ */
+const playersById = {};
+DATA.players.forEach(p => { playersById[p.id] = p; });
+const allIds = DATA.players.map(p => p.id);
+
+let order = loadJSON('order', []).filter(id => playersById[id]); // drop any stale/unknown ids
+let pointerId = resolvePointer(order, loadJSON('pointer', null));
+let lastGameOrder = loadJSON('lastGameOrder', null);
+
+const hasSavedOrder = order.length > 0;
+let state = {
+  activeTab: hasSavedOrder ? 'lineup' : 'grid',
+  gridMode: hasSavedOrder ? 'play' : 'reorder', // first-launch routing: no saved order -> reorder mode
+};
+
+function persistOrder() { saveJSON('order', order); }
+function persistPointer() { saveJSON('pointer', pointerId); }
+
+/* ============================================================
+   Audio engine
+   ============================================================ */
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const buffers = {}; // playerId -> AudioBuffer
+const unavailable = new Set(); // playerId -> decode failed
+let currentSource = null;
+let currentGain = null;
+
+function b64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function decodeAll() {
+  await Promise.all(DATA.players.map(async p => {
+    const clip = p.clips[0];
+    if (!clip) { unavailable.add(p.id); return; }
+    try {
+      const arrBuf = b64ToArrayBuffer(clip.data);
+      buffers[p.id] = await ctx.decodeAudioData(arrBuf);
+    } catch (e) {
+      console.error('Failed to decode clip for', p.id, e);
+      unavailable.add(p.id);
+    }
+  }));
+}
+
+function stopCurrent(fade) {
+  if (!currentSource) return;
+  if (fade && currentGain) {
+    const now = ctx.currentTime;
+    const fadeSec = (DATA.fadeOutMs || 1500) / 1000;
+    currentGain.gain.cancelScheduledValues(now);
+    currentGain.gain.setValueAtTime(currentGain.gain.value, now);
+    currentGain.gain.linearRampToValueAtTime(0.0001, now + fadeSec);
+    const src = currentSource;
+    setTimeout(() => { try { src.stop(); } catch (e) {} }, DATA.fadeOutMs + 60);
+  } else {
+    try { currentSource.stop(); } catch (e) {}
+  }
+  currentSource = null;
+  currentGain = null;
+  playingId = null;
+  render();
+}
+
+let playingId = null;
+
+async function playClip(playerId) {
+  if (unavailable.has(playerId)) return;
+  if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+  stopCurrent(false);
+  const buffer = buffers[playerId];
+  if (!buffer) return;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = 1;
+  source.connect(gain).connect(ctx.destination);
+  source.onended = () => {
+    if (currentSource === source) { currentSource = null; currentGain = null; playingId = null; render(); }
+  };
+  source.start();
+  currentSource = source;
+  currentGain = gain;
+  playingId = playerId;
+  render();
+}
+
+/* ============================================================
+   Wake Lock (best-effort -- phone auto-lock is set to Never as
+   the primary defense; this is belt-and-suspenders, see
+   01-Architecture.md "Known risks")
+   ============================================================ */
+let wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) { /* non-fatal */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+});
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+const screenEl = document.getElementById('screen');
+
+function h(tag, attrs, children) {
+  const el = document.createElement(tag);
+  attrs = attrs || {};
+  for (const k in attrs) {
+    if (k === 'class') el.className = attrs[k];
+    else if (k === 'text') el.textContent = attrs[k];
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), attrs[k]);
+    else el.setAttribute(k, attrs[k]);
+  }
+  (children || []).forEach(c => { if (c) el.appendChild(c); });
+  return el;
+}
+
+function renderOrderButton() {
+  return h('button', { class: 'order-btn', text: 'Order ▤', onclick: () => {
+    state.activeTab = 'grid'; state.gridMode = 'reorder'; render();
+  }});
+}
+
+function render() {
+  screenEl.innerHTML = '';
+  if (state.activeTab === 'lineup') screenEl.appendChild(renderLineupTab());
+  else if (state.gridMode === 'reorder') screenEl.appendChild(renderGridReorder());
+  else screenEl.appendChild(renderGridPlay());
+
+  document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
+  document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
+}
+
+function renderLineupTab() {
+  const wrap = h('div', {});
+  const top = h('div', { class: 'topbar' }, [
+    h('div', { class: 'wordmark', text: DATA.team }),
+  ]);
+
+  if (order.length === 0) {
+    top.appendChild(h('div', { class: 'topbar-right' }, [renderOrderButton()]));
+    wrap.appendChild(top);
+    wrap.appendChild(h('div', { class: 'empty-state' }, [
+      h('div', { text: 'No lineup set yet.' }),
+      h('button', { class: 'done-btn', text: 'Set lineup', onclick: () => {
+        state.activeTab = 'grid'; state.gridMode = 'reorder'; render();
+      }}),
+    ]));
+    return wrap;
+  }
+
+  const pos = positionLabel(order, pointerId);
+  const right = h('div', { class: 'topbar-right' }, [
+    h('div', { class: 'counter', text: pos ? `${pos.position} of ${pos.total}` : '' }),
+    renderOrderButton(),
+  ]);
+  top.appendChild(right);
+  wrap.appendChild(top);
+
+  const body = h('div', { class: 'lineup-body' });
+  const name = playersById[pointerId] ? playersById[pointerId].name : '—';
+  const card = h('button', { class: 'nowup-card', onclick: () => {
+    playClip(pointerId);
+    pointerId = nextPointer(order, pointerId);
+    persistPointer();
+    render();
+  }}, [
+    h('div', { class: 'nowup-label', text: 'Now up' }),
+    h('div', { class: 'nowup-name', text: name.toUpperCase() }),
+    h('div', { class: 'nowup-caption', text: 'tap anywhere to play' }),
+  ]);
+  body.appendChild(card);
+
+  const nav = h('div', { class: 'navbtns' }, [
+    h('button', { class: 'navbtn', text: '⏮ back', onclick: () => {
+      pointerId = prevPointer(order, pointerId); persistPointer(); render();
+    }}),
+    h('button', { class: 'navbtn', text: 'skip ⏭', onclick: () => {
+      pointerId = nextPointer(order, pointerId); persistPointer(); render();
+    }}),
+  ]);
+  body.appendChild(nav);
+
+  const deckIds = onDeckIds(order, pointerId, 3);
+  if (deckIds.length > 0) {
+    const ondeck = h('div', { class: 'ondeck' }, [
+      h('div', { class: 'ondeck-label', text: 'On deck — tap to jump' }),
+    ]);
+    const row = h('div', { class: 'ondeck-row' });
+    deckIds.forEach(id => {
+      const posInOrder = order.indexOf(id) + 1;
+      row.appendChild(h('button', { class: 'ondeck-chip', onclick: () => {
+        pointerId = id; persistPointer(); render();
+      }}, [
+        h('span', { class: 'badge', text: String(posInOrder) }),
+        h('span', { text: playersById[id].name }),
+      ]));
+    });
+    ondeck.appendChild(row);
+    body.appendChild(ondeck);
+  }
+
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function renderGridPlay() {
+  const wrap = h('div', {});
+  const top = h('div', { class: 'topbar' }, [
+    h('div', { class: 'wordmark', text: DATA.team }),
+    h('div', { class: 'topbar-right' }, [renderOrderButton()]),
+  ]);
+  wrap.appendChild(top);
+  wrap.appendChild(h('div', { class: 'grid-hint', text: 'A → Z by row' }));
+
+  const grid = h('div', { class: 'grid' });
+  const sorted = [...DATA.players].sort((a, b) => a.name.localeCompare(b.name));
+  sorted.forEach(p => {
+    const isPlaying = playingId === p.id;
+    const isUnavailable = unavailable.has(p.id);
+    const cls = 'tile' + (isPlaying ? ' playing' : '') + (isUnavailable ? ' unavailable' : '');
+    grid.appendChild(h('button', { class: cls, onclick: () => playClip(p.id) }, [
+      h('span', { text: p.name }),
+      isPlaying ? h('span', { class: 'speaker', text: '🔊' }) : null,
+    ]));
+  });
+  grid.appendChild(h('button', { class: 'tile guest', onclick: () => {} }, [
+    h('span', { text: 'GUEST' }),
+  ]));
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function renderGridReorder() {
+  const wrap = h('div', {});
+  wrap.appendChild(h('div', { class: 'reorder-banner', text: 'Editing order' }));
+  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
+
+  const actions = h('div', { class: 'reorder-actions' }, [
+    h('button', {
+      class: 'recall-btn',
+      text: "Use last game's lineup",
+      disabled: !lastGameOrder || lastGameOrder.length === 0 ? 'disabled' : null,
+      onclick: () => {
+        if (!lastGameOrder || lastGameOrder.length === 0) return;
+        order = lastGameOrder.filter(id => playersById[id]);
+        pointerId = resolvePointer(order, pointerId);
+        persistOrder(); persistPointer(); render();
+      },
+    }),
+  ]);
+  wrap.appendChild(actions);
+
+  const grid = h('div', { class: 'grid' });
+  order.forEach((id, idx) => {
+    const p = playersById[id];
+    const tile = h('button', { class: 'tile order-tile' }, [
+      h('span', { class: 'badge', text: String(idx + 1) }),
+      h('span', { text: p.name }),
+    ]);
+    wireDragTile(tile, id, grid);
+    grid.appendChild(tile);
+  });
+  wrap.appendChild(grid);
+
+  const benchedIds = computeBenched(allIds, order).sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
+  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Not playing — tap to add' }));
+  const benchGrid = h('div', { class: 'bench-grid' });
+  benchedIds.forEach(id => {
+    const p = playersById[id];
+    benchGrid.appendChild(h('button', { class: 'tile bench-tile', onclick: () => {
+      order = addToOrder(order, id);
+      pointerId = resolvePointer(order, pointerId);
+      persistOrder(); persistPointer(); render();
+    }}, [h('span', { text: p.name })]));
+  });
+  wrap.appendChild(benchGrid);
+
+  wrap.appendChild(h('div', { class: 'done-wrap' }, [
+    h('button', { class: 'done-full', text: 'Done', onclick: () => {
+      lastGameOrder = order.slice();
+      saveJSON('lastGameOrder', lastGameOrder);
+      state.gridMode = 'play';
+      render();
+    }}),
+  ]));
+
+  return wrap;
+}
+
+/* ---- drag-to-reorder (Pointer Events; tap-vs-drag disambiguated by
+   movement distance -- see 01-Architecture.md "Interaction algebra":
+   drag is never required, tap-out/tap-in alone can reach any order). */
+const DRAG_THRESHOLD_PX = 10;
+
+function wireDragTile(tile, id, gridEl) {
+  let startX = 0, startY = 0, dragging = false, moved = false;
+
+  tile.addEventListener('pointerdown', (e) => {
+    startX = e.clientX; startY = e.clientY; moved = false; dragging = false;
+    try { tile.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+
+  tile.addEventListener('pointermove', (e) => {
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+      dragging = true; moved = true;
+      tile.classList.add('dragging');
+    }
+    if (dragging) {
+      e.preventDefault();
+      // Find which tile in the order grid we're currently hovering.
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const hoverTile = target ? target.closest('.order-tile') : null;
+      if (hoverTile && hoverTile !== tile && hoverTile.parentElement === gridEl) {
+        const rect = hoverTile.getBoundingClientRect();
+        const before = e.clientY < rect.top + rect.height / 2;
+        gridEl.insertBefore(tile, before ? hoverTile : hoverTile.nextSibling);
+      }
+    }
+  });
+
+  tile.addEventListener('pointerup', (e) => {
+    try { tile.releasePointerCapture(e.pointerId); } catch (err) {}
+    tile.classList.remove('dragging');
+    if (!moved) {
+      // Tap (no meaningful movement): bench this player.
+      order = benchPlayer(order, id);
+      pointerId = resolvePointer(order, pointerId);
+      persistOrder(); persistPointer(); render();
+      return;
+    }
+    // Drag ended: read the tiles' final DOM order back into `order`.
+    const newOrder = Array.from(gridEl.querySelectorAll('.order-tile')).map(t => t._playerId);
+    if (newOrder.length === order.length) {
+      order = newOrder;
+      pointerId = resolvePointer(order, pointerId);
+      persistOrder(); persistPointer();
+    }
+    render();
+  });
+
+  tile.addEventListener('pointercancel', () => {
+    tile.classList.remove('dragging');
+    render(); // re-sync DOM from state in case a drag was interrupted mid-gesture
+  });
+
+  tile._playerId = id;
+}
+
+/* ============================================================
+   Tab bar + stop button wiring
+   ============================================================ */
+document.getElementById('tabLineup').addEventListener('click', () => { state.activeTab = 'lineup'; render(); });
+document.getElementById('tabGrid').addEventListener('click', () => {
+  state.activeTab = 'grid';
+  if (order.length === 0) state.gridMode = 'reorder';
+  render();
+});
+document.getElementById('stopBtn').addEventListener('click', () => stopCurrent(true));
+
+/* ============================================================
+   Boot
+   ============================================================ */
+decodeAll().then(() => {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  requestWakeLock();
+  render();
+}).catch(err => {
+  console.error('Fatal error decoding clips', err);
+  document.getElementById('loading').textContent = 'Something went wrong loading the songs. Try reloading.';
+});
+
+/* Register the service worker so the app keeps working with zero network
+   at the park -- Add to Home Screen alone only bookmarks a URL; without
+   this, a relaunch with no connectivity has nothing to re-fetch. Requires
+   a secure context (https:// or localhost), which GitHub Pages provides.
+   Non-fatal if unsupported -- the app still runs, just without the
+   offline-relaunch guarantee. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.error('Service worker registration failed', err);
+    });
+  });
+}
+</script>
+</body>
+</html>
