@@ -157,12 +157,16 @@ def build(manifest_path: Path, out_path: Path):
         "players": players_out,
     }
 
-    # Content-hash cache id: changes iff the actual audio/roster changes, so
-    # the service worker knows to drop old caches and refetch on next
-    # online launch (see sw.template.js and the documented update flow).
-    cache_id = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:10]
-
     html = render_html(payload)
+
+    # Content-hash cache id: hashed from the *final rendered HTML*, not just
+    # the manifest/audio payload -- a code fix to app.template.html changes
+    # index.html's bytes just as much as a roster change does, and both
+    # need to bust the service worker's cache the same way. Hashing only
+    # the payload was a real bug caught during the first build session: it
+    # meant a shipped code fix would never actually reach an already-cached
+    # phone via the normal "reopen on Wi-Fi" update flow.
+    cache_id = hashlib.sha256(html.encode()).hexdigest()[:10]
     sw_js = render_sw(cache_id)
 
     # Published to repo root by default: GitHub Pages' "deploy from a

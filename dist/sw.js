@@ -13,7 +13,7 @@
 // the new index.html automatically (matches the documented update flow:
 // "re-open the app on Wi-Fi once to pick up the new version").
 
-const CACHE_NAME = 'kickball-79f7c5acde';
+const CACHE_NAME = 'kickball-01982fd415';
 const PRECACHE_URLS = ['./', './index.html'];
 
 self.addEventListener('install', (event) => {

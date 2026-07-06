@@ -39,7 +39,12 @@ class FakeElement {
   addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
   removeEventListener() {}
   dispatch(type, evt) { (this._listeners[type] || []).forEach(fn => fn(evt || {})); }
-  click() { this.dispatch('click', {}); }
+  // Real disabled buttons block both user clicks AND programmatic .click()
+  // calls -- mirror that here so a regression on the disabled-state bug
+  // (setAttribute('disabled', null) still disables, see app.template.html
+  // h()) would make this harness's click() silently no-op, same as a real
+  // browser, instead of masking the bug like the old stub did.
+  click() { if (this.disabled) return; this.dispatch('click', {}); }
   querySelectorAll(sel) {
     const cls = sel.replace('.', '');
     const out = [];
@@ -170,6 +175,11 @@ async function main() {
     el.dispatch('pointerup', { clientX: 0, clientY: 0, pointerId: 1 });
   }
 
+  const recallBtnAtBoot = findByText("Use last game's lineup");
+  assert(recallBtnAtBoot.disabled === true,
+    'recall button must be disabled before any lineup has ever been finalized');
+  console.log('1b. Recall button correctly disabled at first launch: OK');
+
   findByText('Alice').click();
   findByText('Bob').click();
   findByText('Charlie').click();
@@ -192,6 +202,22 @@ async function main() {
   assert(JSON.stringify(hooks.getLastGameOrder()) === JSON.stringify(['alice', 'charlie', 'bob']),
     'lastGameOrder snapshot: ' + hooks.getLastGameOrder());
   console.log('5. Done -> play mode + snapshot: OK');
+
+  // Regression test for the exact bug reported live: the recall button
+  // must actually become enabled once a snapshot exists, not just
+  // "clickable in a test that ignores disabled state." This is the check
+  // that would have caught setAttribute('disabled', null) still disabling
+  // the button permanently.
+  document.getElementById('tabGrid').click();
+  hooks.getState().gridMode = 'reorder';
+  render();
+  const recallBtnAfterDone = findByText("Use last game's lineup");
+  assert(recallBtnAfterDone.disabled === false,
+    'recall button must be enabled right after Done saves a snapshot');
+  console.log('5b. Recall button enabled immediately after Done: OK');
+  document.getElementById('tabGrid').click();
+  hooks.getState().gridMode = 'play';
+  render();
 
   document.getElementById('tabLineup').click();
   assert(hooks.getState().activeTab === 'lineup', 'tab switch to lineup');
@@ -246,7 +272,10 @@ async function main() {
   simulateTap(findByText('Bob'));
   simulateTap(findByText('Dana'));
   assert(hooks.getOrder().length === 0, 'everyone benched: ' + hooks.getOrder());
-  findByText("Use last game's lineup").click();
+  const recallBtnNow = findByText("Use last game's lineup");
+  assert(recallBtnNow.disabled === false,
+    'recall button must still be enabled even when the live order is empty');
+  recallBtnNow.click();
   assert(JSON.stringify(hooks.getOrder()) === JSON.stringify(['alice', 'charlie', 'bob']),
     'recall restores last finalized lineup: ' + hooks.getOrder());
   console.log('14. Recall last game lineup: OK, order =', hooks.getOrder());

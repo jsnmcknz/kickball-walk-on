@@ -351,6 +351,13 @@ function h(tag, attrs, children) {
   for (const k in attrs) {
     if (k === 'class') el.className = attrs[k];
     else if (k === 'text') el.textContent = attrs[k];
+    else if (k === 'disabled') {
+      // Boolean HTML attribute: presence disables, regardless of value --
+      // so it must only be set when truthy, never set (not even to
+      // "null"/"false" strings) when falsy. setAttribute('disabled', null)
+      // was the bug: it still disables the element, permanently.
+      if (attrs[k]) el.setAttribute('disabled', '');
+    }
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), attrs[k]);
     else el.setAttribute(k, attrs[k]);
   }
@@ -483,7 +490,7 @@ function renderGridReorder() {
     h('button', {
       class: 'recall-btn',
       text: "Use last game's lineup",
-      disabled: !lastGameOrder || lastGameOrder.length === 0 ? 'disabled' : null,
+      disabled: !lastGameOrder || lastGameOrder.length === 0,
       onclick: () => {
         if (!lastGameOrder || lastGameOrder.length === 0) return;
         order = lastGameOrder.filter(id => playersById[id]);
