@@ -75,20 +75,20 @@
   .lineup-body { padding: 8px 16px 16px; }
   .nowup-card {
     width: 100%; text-align: center; border: none; border-radius: 18px;
-    background: var(--olive); color: var(--olive-label);
+    background: var(--pickle); color: var(--badge-text);
     padding: 26px 22px; min-height: 32vh; display: flex; flex-direction: column;
     align-items: center; justify-content: center; margin-top: 6px;
   }
-  .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.85; }
+  .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.75; }
   .nowup-name {
-    color: var(--text); text-transform: uppercase; font-weight: 500;
+    color: var(--badge-text); text-transform: uppercase; font-weight: 500;
     font-size: clamp(36px, 11vw, 56px); line-height: 1.05; margin: 8px 0 12px;
     word-break: break-word;
   }
   .nowup-play-icon {
     width: 0; height: 0; margin-bottom: 12px;
     border-top: 15px solid transparent; border-bottom: 15px solid transparent;
-    border-left: 24px solid var(--pickle);
+    border-left: 24px solid var(--badge-text);
   }
   .nowup-caption { font-size: 13px; opacity: 0.8; }
   .navbtns { display: flex; gap: 12px; margin-top: 14px; }
@@ -141,12 +141,11 @@
   /* ---- reorder mode ---- */
   .reorder-actions { padding: 0 16px 10px; }
   .order-tile { touch-action: none; }
-  .tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
+  .order-tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
   .order-tile.dragging { z-index: 5; box-shadow: 0 6px 16px rgba(0,0,0,0.5); border-color: var(--pickle); }
   .bench-heading { color: var(--muted); font-size: 12px; padding: 16px 16px 8px; }
   .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
   .bench-tile { border-style: dashed; color: var(--muted); }
-  .roster-active { border-color: var(--pickle); color: var(--pickle); }
   .done-wrap { padding: 16px; }
   .done-full {
     width: 100%; background: var(--pickle); color: var(--badge-text); border: none;
@@ -546,41 +545,26 @@ function renderGridReorder() {
     }),
   ]);
   wrap.appendChild(top);
-  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
 
-  const grid = h('div', { class: 'grid' });
-  order.forEach((id, idx) => {
-    const p = playersById[id];
-    const tile = h('button', { class: 'tile order-tile' }, [
-      h('span', { class: 'badge', text: String(idx + 1) }),
-      h('span', { text: p.name }),
-    ]);
-    wireDragTile(tile, id, grid);
-    grid.appendChild(tile);
-  });
-  wrap.appendChild(grid);
-
-  // Full roster in a fixed alphabetical grid -- unlike the order grid above
-  // (which intentionally reflows to show sequence), these positions never
-  // move as membership changes, so tap targets stay put while quickly
-  // toggling several players in a row. Reported live: the old
-  // shrinking/growing "not playing" list reshuffled after every tap,
-  // making the next intended tap land on whoever slid into that spot.
-  const rosterIdsAlpha = [...allIds].sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
-  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Full roster · tap to bench or add' }));
+  // "Not playing" first, Done right after it, kicking order last. Reported
+  // live: with the order list up top, adding players grows it and pushes
+  // the benched list (and Done) further down the screen on every tap --
+  // annoying when quickly building a lineup. Putting the shrinking list
+  // first means nothing above it ever changes size, so its position (and
+  // Done's) stays put; only the growing order list at the bottom moves,
+  // where it doesn't disturb anything above it. Small re-sorts *within*
+  // the benched list as it shrinks are expected and fine -- it's whole
+  // sections relocating that this fixes.
+  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Not playing — tap to add' }));
+  const benchedIds = computeBenched(allIds, order).sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
   const benchGrid = h('div', { class: 'bench-grid' });
-  rosterIdsAlpha.forEach(id => {
+  benchedIds.forEach(id => {
     const p = playersById[id];
-    const inOrder = order.includes(id);
-    const cls = 'tile' + (inOrder ? ' roster-active' : ' bench-tile');
-    const children = inOrder
-      ? [h('span', { class: 'badge', text: String(order.indexOf(id) + 1) }), h('span', { text: p.name })]
-      : [h('span', { text: p.name })];
-    benchGrid.appendChild(h('button', { class: cls, onclick: () => {
-      order = inOrder ? benchPlayer(order, id) : addToOrder(order, id);
+    benchGrid.appendChild(h('button', { class: 'tile bench-tile', onclick: () => {
+      order = addToOrder(order, id);
       pointerId = resolvePointer(order, pointerId);
       persistOrder(); persistPointer(); render();
-    }}, children));
+    }}, [h('span', { text: p.name })]));
   });
   wrap.appendChild(benchGrid);
 
@@ -592,6 +576,19 @@ function renderGridReorder() {
       render();
     }}),
   ]));
+
+  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
+  const grid = h('div', { class: 'grid' });
+  order.forEach((id, idx) => {
+    const p = playersById[id];
+    const tile = h('button', { class: 'tile order-tile' }, [
+      h('span', { class: 'badge', text: String(idx + 1) }),
+      h('span', { text: p.name }),
+    ]);
+    wireDragTile(tile, id, grid);
+    grid.appendChild(tile);
+  });
+  wrap.appendChild(grid);
 
   return wrap;
 }

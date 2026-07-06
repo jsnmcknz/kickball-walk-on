@@ -288,41 +288,31 @@ async function main() {
   assert(rawLast && JSON.parse(rawLast).length === 3, 'lastGameOrder persisted: ' + rawLast);
   console.log('15. localStorage persistence round-trip: OK');
 
-  // Roster grid positional stability: reported live -- the old "not
-  // playing" list shrank/reflowed on every tap, moving tap targets under
-  // the operator's thumb. The fix makes the roster grid a fixed
-  // alphabetical layout where only the tile's *state* toggles, never its
-  // position. Verify the DOM order of the roster grid's tiles by name
-  // never changes regardless of who's benched vs. active.
+  // Section-ordering regression: reported live -- with the order list on
+  // top, growing it pushed the benched list (and Done) further down the
+  // screen on every add. Fix: benched list and Done come first in the DOM,
+  // the (growing) order list comes last, so nothing above the benched
+  // section ever changes size. Verify that DOM order directly.
   document.getElementById('tabGrid').click();
   hooks.getState().gridMode = 'reorder';
   render();
-  function findBenchGrid() {
-    let found = null;
-    const walk = (node) => {
-      if (found) return;
-      if (node.classList && node.classList.contains('bench-grid')) found = node;
-      (node._children || []).forEach(walk);
-    };
-    walk(screen);
-    return found;
-  }
-  function rosterNames() {
-    return findBenchGrid()._children.map(t => t.textContent.replace(/^\d+/, ''));
-  }
-  function findInBenchGrid(text) {
-    return findBenchGrid()._children.find(t => t.textContent.includes(text));
-  }
-
-  const before = rosterNames();
-  assert(before.length === 5, 'roster grid always shows the full 5-player test roster: ' + before);
-  findInBenchGrid('Alice').click(); // Alice is currently in-order -> this taps her out (bench)
-  const after = rosterNames();
-  assert(JSON.stringify(before) === JSON.stringify(after),
-    'roster grid tile positions must not change when membership changes: ' +
-    JSON.stringify(before) + ' vs ' + JSON.stringify(after));
-  assert(!hooks.getOrder().includes('alice'), 'tapping Alice in the roster grid benched her: ' + hooks.getOrder());
-  console.log('16. Roster grid positions stable across membership changes: OK');
+  const screenChildrenClasses = [];
+  (function walkTop(node, depth) {
+    if (depth > 2) return;
+    (node._children || []).forEach(c => {
+      if (c.className) screenChildrenClasses.push(c.className);
+      walkTop(c, depth + 1);
+    });
+  })(screen, 0);
+  const benchIdx = screenChildrenClasses.indexOf('bench-heading');
+  const doneIdx = screenChildrenClasses.indexOf('done-wrap');
+  const orderGridHintIdx = screenChildrenClasses.indexOf('grid-hint');
+  assert(benchIdx !== -1 && doneIdx !== -1 && orderGridHintIdx !== -1,
+    'expected sections not found: ' + screenChildrenClasses.join(', '));
+  assert(benchIdx < doneIdx && doneIdx < orderGridHintIdx,
+    'benched list and Done must come before the (growing) kicking-order section: ' +
+    screenChildrenClasses.join(', '));
+  console.log('16. Benched list + Done precede the growing order list in the DOM: OK');
 
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }
