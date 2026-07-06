@@ -213,9 +213,10 @@ async function main() {
 
   findByText('Done').click();
   assert(hooks.getState().gridMode === 'play', 'Done exits to play mode');
+  assert(hooks.getState().activeTab === 'lineup', 'Done lands on the Lineup tab, not Grid: ' + hooks.getState().activeTab);
   assert(JSON.stringify(hooks.getLastGameOrder()) === JSON.stringify(['alice', 'charlie', 'bob']),
     'lastGameOrder snapshot: ' + hooks.getLastGameOrder());
-  console.log('5. Done -> play mode + snapshot: OK');
+  console.log('5. Done -> Lineup tab + snapshot: OK');
 
   // Regression test for the exact bug reported live: the recall button
   // must actually become enabled once a snapshot exists, not just
