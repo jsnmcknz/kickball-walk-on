@@ -70,11 +70,18 @@ class FakeElement {
   get style() { return {}; }
 }
 
+// Minimal listener registries so tests can actually fire document/window-
+// level events (visibilitychange, pagehide) rather than the old no-op
+// stub -- needed to exercise the "backgrounding stops playback" behavior.
+const docListeners = {};
+const winListeners = {};
 const registry = {};
 global.document = {
+  visibilityState: 'visible',
   createElement: (tag) => new FakeElement(tag),
   getElementById: (id) => registry[id] || (registry[id] = new FakeElement('div')),
-  addEventListener: () => {},
+  addEventListener: (type, fn) => { (docListeners[type] = docListeners[type] || []).push(fn); },
+  dispatchTo: (type) => (docListeners[type] || []).forEach(fn => fn()),
   elementFromPoint: () => null,
 };
 
@@ -102,7 +109,11 @@ class FakeAudioContext {
   createGain() { return new FakeGain(); }
   async resume() { this.state = 'running'; }
 }
-global.window = { AudioContext: FakeAudioContext };
+global.window = {
+  AudioContext: FakeAudioContext,
+  addEventListener: (type, fn) => { (winListeners[type] = winListeners[type] || []).push(fn); },
+  dispatchTo: (type) => (winListeners[type] || []).forEach(fn => fn()),
+};
 
 const players = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eli'].map(n => ({
   id: n.toLowerCase(), name: n, clips: [{ mime: 'audio/mp4', data: Buffer.from('x').toString('base64') }],
@@ -132,6 +143,7 @@ global.__hooks = {
   getLastGameOrder: function() { return lastGameOrder; },
   getPlayingId: function() { return playingId; },
   getCurrentSource: function() { return currentSource; },
+  stopCurrent: function(fade) { return stopCurrent(fade); },
 };
 `;
 
@@ -234,23 +246,25 @@ async function main() {
   assert(hooks.getPlayingId() === 'alice', 'alice clip is playing: ' + hooks.getPlayingId());
   console.log('7. Tap NOW UP plays but defers the advance, pointer still =', hooks.getPointer());
 
-  // Retapping the same still-current card mid-play should just restart the
-  // clip, not advance -- falls out naturally since the pointer hasn't moved.
+  // While playing, the card itself is the stop control (no separate
+  // Stop/fade button anymore) -- tapping it again stops the clip, and like
+  // any explicit stop, that resolves the turn and advances the card.
   findByClassContaining('nowup-card', 'ALICE').dispatch('click');
-  assert(hooks.getPointer() === 'alice', 'retap mid-play does not advance: ' + hooks.getPointer());
-  assert(hooks.getPlayingId() === 'alice', 'retap restarts the same clip: ' + hooks.getPlayingId());
-  console.log('7b. Retap of still-current card restarts without advancing: OK');
+  assert(hooks.getPointer() === 'charlie', 'tapping the playing card stops it and advances: ' + hooks.getPointer());
+  assert(hooks.getPlayingId() === null, 'playingId clears on tap-to-stop: ' + hooks.getPlayingId());
+  console.log('7b. Tapping the card while playing stops the clip and advances: OK');
 
-  // Now let the clip actually finish (simulate the browser firing 'ended').
+  // A clip simply allowed to finish on its own advances the same way.
+  findByClassContaining('nowup-card', 'CHARLIE').dispatch('click');
   hooks.getCurrentSource().onended();
-  assert(hooks.getPointer() === 'charlie', 'pointer advances once the clip actually ends: ' + hooks.getPointer());
+  assert(hooks.getPointer() === 'bob', 'pointer advances once the clip actually ends: ' + hooks.getPointer());
   assert(hooks.getPlayingId() === null, 'playingId clears when the clip ends: ' + hooks.getPlayingId());
   console.log('7c. Clip finishing naturally advances the pointer to', hooks.getPointer());
 
   findByText('skip ⏭').click();
-  assert(hooks.getPointer() === 'bob', 'skip advances: ' + hooks.getPointer());
+  assert(hooks.getPointer() === 'alice', 'skip advances: ' + hooks.getPointer());
   findByText('⏮ back').click();
-  assert(hooks.getPointer() === 'charlie', 'back returns: ' + hooks.getPointer());
+  assert(hooks.getPointer() === 'bob', 'back returns: ' + hooks.getPointer());
   console.log('8. Skip/back nav: OK, pointer =', hooks.getPointer());
 
   const chip = findByClassContaining('ondeck-chip', 'Alice');
@@ -267,17 +281,18 @@ async function main() {
   assert(hooks.getPointer() === 'alice', 'pointer undisturbed by late arrival: ' + hooks.getPointer());
   console.log('10. Late arrival mid-game does not disturb pointer: OK');
 
-  // Stop/fade on a lineup clip must also advance the card -- otherwise
-  // manually ending a turn early would leave the card stuck showing the
-  // just-stopped kicker with no way to move on except re-tapping them.
+  // Tapping the playing card to stop it advances the card same as letting
+  // it finish -- otherwise manually ending a turn early would leave the
+  // card stuck showing the just-stopped kicker with no way to move on
+  // except re-tapping them.
   document.getElementById('tabLineup').click();
   assert(hooks.getPointer() === 'alice', 'pointer still alice going into this check: ' + hooks.getPointer());
   findByClassContaining('nowup-card', 'ALICE').dispatch('click');
   assert(hooks.getPlayingId() === 'alice', 'alice lineup clip playing: ' + hooks.getPlayingId());
-  document.getElementById('stopBtn').click();
-  assert(hooks.getPointer() === 'charlie', 'Stop/fade on a lineup clip advances same as natural end: ' + hooks.getPointer());
-  assert(hooks.getPlayingId() === null, 'playingId clears on stop: ' + hooks.getPlayingId());
-  console.log('10b. Stop/fade on a lineup clip advances the pointer: OK');
+  findByClassContaining('nowup-card', 'ALICE').dispatch('click'); // tap again -> now the stop control
+  assert(hooks.getPointer() === 'charlie', 'tap-to-stop on a lineup clip advances same as natural end: ' + hooks.getPointer());
+  assert(hooks.getPlayingId() === null, 'playingId clears on tap-to-stop: ' + hooks.getPlayingId());
+  console.log('10b. Tap-to-stop on a lineup clip advances the pointer: OK');
 
   // A manual skip/back/on-deck-jump while a clip is still playing already
   // resolves that turn -- the deferred auto-advance must not pile a second
@@ -291,15 +306,17 @@ async function main() {
   assert(hooks.getPlayingId() === null, 'playingId clears when the stale clip ends: ' + hooks.getPlayingId());
   console.log('10c. Manual skip during playback is not double-counted by the deferred auto-advance: OK');
 
-  document.getElementById('stopBtn').click();
-  console.log('11. Stop/fade with nothing playing: OK (no throw)');
+  hooks.stopCurrent(true);
+  console.log('11. Calling stopCurrent with nothing playing: OK (no throw)');
 
   document.getElementById('tabGrid').click();
   hooks.getState().gridMode = 'play';
   render();
-  const gridTile = findByText('Alice');
-  gridTile.dispatch('click');
-  console.log('12. Grid play-mode override tap: OK (no throw)');
+  findByText('Alice').dispatch('click'); // override play
+  assert(hooks.getPlayingId() === 'alice', 'grid override tap plays: ' + hooks.getPlayingId());
+  findByText('Alice').dispatch('click'); // tap the now-playing tile again -- it's the stop control now
+  assert(hooks.getPlayingId() === null, 'tapping a playing grid tile stops it: ' + hooks.getPlayingId());
+  console.log('12. Grid play-mode override tap + tap-to-stop: OK');
 
   const guestTile = findByClassContaining('tile guest', 'Guest') || findByClassContaining('guest', 'Guest');
   assert(guestTile, 'guest tile renders');
@@ -331,11 +348,11 @@ async function main() {
   assert(rawLast && JSON.parse(rawLast).length === 3, 'lastGameOrder persisted: ' + rawLast);
   console.log('15. localStorage persistence round-trip: OK');
 
-  // Reorder mode has no Stop/fade control, but a clip already playing when
-  // you enter it (e.g. previewed in Grid play mode) must keep playing --
-  // explicitly requested: clips are short (<15s) and stopping them isn't
-  // worth the friction. Verify entering reorder mode does NOT touch
-  // playback.
+  // Reorder-mode tiles don't play or stop anything, but a clip already
+  // playing when you enter reorder mode (e.g. previewed in Grid play mode)
+  // must keep playing -- explicitly requested: clips are short (<15s) and
+  // stopping them isn't worth the friction. Verify entering reorder mode
+  // does NOT touch playback.
   document.getElementById('tabGrid').click();
   hooks.getState().gridMode = 'play';
   render();
@@ -348,6 +365,29 @@ async function main() {
   assert(hooks.getPlayingId() === playingBefore,
     'entering reorder mode must NOT stop a clip already playing');
   console.log('16. Entering reorder mode leaves an in-progress clip playing: OK');
+
+  // iOS forcibly interrupts audio when the app is backgrounded -- a real
+  // platform limitation, not something to work around. Simulate that by
+  // firing visibilitychange with the page hidden, and confirm we treat it
+  // as an explicit stop: playback clears, and since this was the lineup
+  // clip, the card advances just like tapping to stop or letting it finish.
+  document.getElementById('tabLineup').click();
+  const pointerBeforeBg = hooks.getPointer();
+  findByClassContaining('nowup-card', '').dispatch('click'); // start the lineup clip
+  assert(hooks.getPlayingId() === pointerBeforeBg, 'lineup clip playing before backgrounding: ' + hooks.getPlayingId());
+  document.visibilityState = 'hidden';
+  document.dispatchTo('visibilitychange');
+  const orderNow = hooks.getOrder();
+  const expectedNext = orderNow[(orderNow.indexOf(pointerBeforeBg) + 1) % orderNow.length];
+  assert(hooks.getPlayingId() === null, 'backgrounding stops playback: ' + hooks.getPlayingId());
+  assert(hooks.getPointer() === expectedNext, 'backgrounding advances the card like any other stop: ' + hooks.getPointer());
+  document.visibilityState = 'visible';
+  console.log('17. Backgrounding the app stops playback and advances the card: OK');
+
+  // pagehide is a defensive backstop for actual navigation/close -- must
+  // never throw, even with nothing playing.
+  window.dispatchTo('pagehide');
+  console.log('18. pagehide with nothing playing: OK (no throw)');
 
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }

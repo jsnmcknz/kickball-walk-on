@@ -22,6 +22,7 @@
     --olive-label: #D8DBBE;
     --plum-border: #7A5C82;
     --plum-text: #CBA9DD;
+    --plum-fill: #4A3C52;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -91,6 +92,15 @@
     border-left: 24px solid var(--badge-text);
   }
   .nowup-caption { font-size: 13px; opacity: 0.8; }
+  /* Playing state: the card itself becomes the stop control (no separate
+     Stop/fade button) -- plum accent signals "tap to stop" the same way
+     pickle signals "tap to play" elsewhere. */
+  .nowup-card.playing { background: var(--plum-fill); color: var(--plum-text); }
+  .nowup-card.playing .nowup-name { color: var(--plum-text); }
+  .nowup-stop-icon {
+    width: 22px; height: 22px; margin-bottom: 12px;
+    border: 3px solid var(--plum-text); border-radius: 4px;
+  }
   .navbtns { display: flex; gap: 12px; margin-top: 14px; }
   .navbtn {
     flex: 1; background: var(--tile); border: 1px solid var(--tile-border); color: var(--text);
@@ -129,7 +139,10 @@
     text-align: center; touch-action: manipulation;
   }
   .tile:active { opacity: 0.85; }
-  .tile.playing { border-color: var(--pickle); color: var(--pickle); }
+  /* Playing state: the tile itself becomes the stop control -- same plum
+     accent as the NOW UP card's playing state, for one consistent
+     "plum = tap to stop" signal across both tabs. */
+  .tile.playing { border-color: var(--plum-border); color: var(--plum-text); background: var(--plum-fill); }
   .tile.playing .speaker { margin-left: 4px; }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
   .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
@@ -152,16 +165,6 @@
     border-radius: 12px; padding: 16px; font-size: 16px; font-weight: 500;
   }
   .done-full:active { opacity: 0.85; }
-
-  /* ---- persistent chrome ---- */
-  .stopbar { padding: 8px 16px; flex-shrink: 0; }
-  .stopbar button {
-    width: 100%; padding: 14px; border-radius: 10px; background: transparent;
-    border: 1px solid var(--plum-border); color: var(--plum-text); font-size: 15px; font-weight: 500;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-  }
-  .stopbar button:active { opacity: 0.7; }
-  .stop-icon { width: 10px; height: 10px; border: 1.5px solid var(--plum-text); border-radius: 2px; }
 
   /* Segmented-control style tab bar: one pill container, active side gets
      a solid olive "slider" fill, inactive side is plain text in the same
@@ -192,7 +195,6 @@
 </div>
 <div id="app" style="display:none;">
   <div id="screen"></div>
-  <div class="stopbar" id="stopbar"><button id="stopBtn"><span class="stop-icon"></span> Stop / fade</button></div>
   <div class="tabbar">
     <button class="tabbtn" id="tabLineup">Lineup</button>
     <button class="tabbtn" id="tabGrid">Grid</button>
@@ -345,6 +347,16 @@ function finishLineupIfPending(source) {
   pendingLineupStartPointer = null;
 }
 
+// True when the clip actively playing right now *is* the lineup clip for
+// the given (currently-displayed) pointer -- i.e. the NOW UP card should
+// render as "tap to stop" rather than "tap to play". False if nothing's
+// playing, if what's playing is a Grid override, or if a manual skip/back/
+// on-deck-jump has already moved the pointer away from whoever's clip is
+// still actually playing (see finishLineupIfPending).
+function isLineupCardPlaying(id) {
+  return currentSource !== null && pendingLineupSource === currentSource && pendingLineupStartPointer === id;
+}
+
 // `opts.advanceIfPending` (default true) controls whether this stop counts
 // as "finishing the turn" for a pending lineup advance:
 //  - Stop/fade button (explicit, nothing replacing the clip): yes, advance.
@@ -420,6 +432,21 @@ async function playClip(playerId, opts) {
   render();
 }
 
+// iOS forcibly interrupts a backgrounded/standalone web app's AudioContext
+// -- confirmed platform behavior, not something a web app can override, so
+// audio can never actually keep playing once the app leaves the
+// foreground (home button/gesture, app switcher, screen lock). Left alone,
+// the paused clip can also resume unexpectedly later and leave the lineup
+// pointer stuck on a kicker who already went. So: treat leaving the
+// foreground as an explicit stop -- same "this ends the turn" handling as
+// tapping to stop -- rather than leaving a half-finished clip in limbo.
+// visibilitychange covers backgrounding; pagehide is a defensive backstop
+// for actual navigation/close (harmless no-op if already stopped).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') stopCurrent(false);
+});
+window.addEventListener('pagehide', () => stopCurrent(false));
+
 /* ============================================================
    Wake Lock (best-effort -- phone auto-lock is set to Never as
    the primary defense; this is belt-and-suspenders, see
@@ -482,10 +509,6 @@ function render() {
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
   const inReorder = state.activeTab === 'grid' && state.gridMode === 'reorder';
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
-  // No Stop/fade on the reorder screen -- nothing plays there (enterReorderMode
-  // stops anything already playing on the way in), so the control has
-  // nothing to do and is hidden rather than shown inert.
-  document.getElementById('stopbar').style.display = inReorder ? 'none' : '';
 }
 
 function renderLineupTab() {
@@ -514,16 +537,20 @@ function renderLineupTab() {
 
   const body = h('div', { class: 'lineup-body' });
   const name = playersById[pointerId] ? playersById[pointerId].name : '—';
-  const card = h('button', { class: 'nowup-card', onclick: () => {
-    // Advancing to the next kicker's name happens once this clip actually
-    // finishes (see finishLineupIfPending) -- not immediately on tap -- so
-    // the card never shows a name that doesn't match what's playing.
-    playClip(pointerId, { lineup: true });
+  // Advancing to the next kicker's name happens once this clip actually
+  // finishes or is stopped (see finishLineupIfPending) -- not immediately
+  // on tap -- so the card never shows a name that doesn't match what's
+  // playing. While it's playing, the card itself is the stop control:
+  // there's no separate Stop/fade button anymore.
+  const cardPlaying = isLineupCardPlaying(pointerId);
+  const card = h('button', { class: 'nowup-card' + (cardPlaying ? ' playing' : ''), onclick: () => {
+    if (cardPlaying) stopCurrent(true);
+    else playClip(pointerId, { lineup: true });
   }}, [
     h('div', { class: 'nowup-label', text: 'Now up' }),
     h('div', { class: 'nowup-name', text: name.toUpperCase() }),
-    h('div', { class: 'nowup-play-icon' }),
-    h('div', { class: 'nowup-caption', text: 'tap anywhere to play' }),
+    cardPlaying ? h('div', { class: 'nowup-stop-icon' }) : h('div', { class: 'nowup-play-icon' }),
+    h('div', { class: 'nowup-caption', text: cardPlaying ? 'tap to stop' : 'tap anywhere to play' }),
   ]);
   body.appendChild(card);
 
@@ -575,9 +602,16 @@ function renderGridPlay() {
     const isPlaying = playingId === p.id;
     const isUnavailable = unavailable.has(p.id);
     const cls = 'tile' + (isPlaying ? ' playing' : '') + (isUnavailable ? ' unavailable' : '');
-    grid.appendChild(h('button', { class: cls, onclick: () => playClip(p.id) }, [
+    // Same tap-to-stop pattern as the NOW UP card: a playing tile is its
+    // own stop control (works whether the clip is this Grid override or a
+    // still-playing lineup clip for the same player -- stopCurrent handles
+    // either case correctly).
+    grid.appendChild(h('button', { class: cls, onclick: () => {
+      if (isPlaying) stopCurrent(true);
+      else playClip(p.id);
+    }}, [
       h('span', { text: p.name }),
-      isPlaying ? h('span', { class: 'speaker', text: '🔊' }) : null,
+      isPlaying ? h('span', { class: 'speaker', text: '⏹' }) : null,
     ]));
   });
   wrap.appendChild(grid);
@@ -706,7 +740,7 @@ function wireDragTile(tile, id, gridEl) {
 }
 
 /* ============================================================
-   Tab bar + stop button wiring
+   Tab bar wiring
    ============================================================ */
 document.getElementById('tabLineup').addEventListener('click', () => { state.activeTab = 'lineup'; render(); });
 document.getElementById('tabGrid').addEventListener('click', () => {
@@ -714,7 +748,6 @@ document.getElementById('tabGrid').addEventListener('click', () => {
   state.activeTab = 'grid';
   render();
 });
-document.getElementById('stopBtn').addEventListener('click', () => stopCurrent(true));
 
 /* ============================================================
    Boot
