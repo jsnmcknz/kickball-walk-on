@@ -30,48 +30,81 @@
     font-weight: 400; overscroll-behavior-y: contain;
   }
   button { font-family: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; }
-  #app { display: flex; flex-direction: column; height: 100%; }
+
+  /* The whole app renders as a rounded card inset from the physical screen
+     edges (per the locked mockups), not edge-to-edge. Using fixed
+     positioning with all four insets means the box's size is computed
+     automatically from the insets -- no manual height/margin math needed.
+     max() keeps a minimum 12px gutter even where the safe-area inset is 0
+     (older non-notch phones), and grows past it on notched phones so the
+     frame never sits under the status bar or home indicator. */
+  #app {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 12px; right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column;
+    background: var(--bg);
+    border: 1px solid var(--tile-border);
+    border-radius: 24px;
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+  #app.reorder-frame { border-color: var(--pickle); }
   #screen { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
 
   /* ---- shared header ---- */
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; }
-  .wordmark { letter-spacing: 0.12em; text-transform: uppercase; color: var(--pickle); font-size: 13px; font-weight: 500; }
-  .topbar-right { display: flex; align-items: center; gap: 10px; }
-  .counter { color: var(--muted); font-size: 13px; }
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 16px 8px; gap: 10px; }
+  .wordmark { letter-spacing: 0.1em; text-transform: uppercase; color: var(--pickle); font-size: 12px; font-weight: 500; line-height: 1.3; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .counter { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.3; }
   .order-btn, .done-btn, .recall-btn {
     background: transparent; border: 1px solid var(--tile-border); color: var(--text);
-    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500;
+    border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 500;
+    display: flex; align-items: center; justify-content: center; gap: 4px; text-align: center;
   }
   .order-btn:active, .done-btn:active, .recall-btn:active { opacity: 0.7; }
+  .icon-btn { width: 36px; height: 36px; padding: 0; border-radius: 10px; font-size: 16px; }
+  .reorder-banner-pill {
+    border: 1px solid var(--pickle); color: var(--pickle); border-radius: 10px;
+    padding: 6px 12px; font-size: 12px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.06em; display: inline-block;
+  }
 
   /* ---- lineup tab ---- */
   .lineup-body { padding: 8px 16px 16px; }
   .nowup-card {
-    width: 100%; text-align: left; border: none; border-radius: 18px;
+    width: 100%; text-align: center; border: none; border-radius: 18px;
     background: var(--olive); color: var(--olive-label);
-    padding: 26px 22px; min-height: 34vh; display: flex; flex-direction: column;
-    justify-content: center; margin-top: 6px;
+    padding: 26px 22px; min-height: 32vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; margin-top: 6px;
   }
   .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.85; }
   .nowup-name {
     color: var(--text); text-transform: uppercase; font-weight: 500;
-    font-size: clamp(40px, 12vw, 64px); line-height: 1.05; margin: 10px 0 2px;
+    font-size: clamp(36px, 11vw, 56px); line-height: 1.05; margin: 8px 0 12px;
     word-break: break-word;
   }
+  .nowup-play-icon {
+    width: 0; height: 0; margin-bottom: 12px;
+    border-top: 15px solid transparent; border-bottom: 15px solid transparent;
+    border-left: 24px solid var(--text); opacity: 0.9;
+  }
   .nowup-caption { font-size: 13px; opacity: 0.8; }
-  .navbtns { display: flex; gap: 10px; margin-top: 14px; }
+  .navbtns { display: flex; gap: 12px; margin-top: 14px; }
   .navbtn {
     flex: 1; background: var(--tile); border: 1px solid var(--tile-border); color: var(--text);
     border-radius: 12px; padding: 16px 8px; font-size: 15px; font-weight: 500;
+    text-align: center;
   }
   .navbtn:active { opacity: 0.7; }
   .ondeck { margin-top: 22px; }
   .ondeck-label { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-  .ondeck-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ondeck-row { display: flex; gap: 8px; }
   .ondeck-chip {
-    display: flex; align-items: center; gap: 6px; background: var(--tile);
-    border: 1px solid var(--tile-border); border-radius: 999px; padding: 8px 14px;
-    font-size: 14px; color: var(--text);
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 12px;
+    padding: 10px 6px; font-size: 13px; color: var(--text);
   }
   .ondeck-chip .badge { background: var(--pickle); color: var(--badge-text); }
   .empty-state { padding: 40px 16px; text-align: center; color: var(--muted); }
@@ -84,35 +117,34 @@
     flex-shrink: 0;
   }
 
-  /* ---- grid (shared) ---- */
+  /* ---- grid (shared): individually rounded tiles with real gaps, not a
+     hairline-divided table. ---- */
   .grid-hint { color: var(--muted); font-size: 12px; padding: 0 16px 10px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--row-rule); border-top: 1px solid var(--row-rule); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
   .tile {
     position: relative; background: var(--tile); border: 1px solid var(--tile-border);
-    color: var(--text); font-size: 15px; font-weight: 500; padding: 20px 8px;
-    min-height: 66px; display: flex; align-items: center; justify-content: center;
+    border-radius: 14px;
+    color: var(--text); font-size: 14px; font-weight: 500; padding: 16px 6px;
+    min-height: 60px; display: flex; align-items: center; justify-content: center;
     text-align: center; touch-action: manipulation;
   }
   .tile:active { opacity: 0.85; }
   .tile.playing { border-color: var(--pickle); color: var(--pickle); }
   .tile.playing .speaker { margin-left: 4px; }
-  .tile.guest { border-style: dashed; color: var(--muted); }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
+  .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
+  .tile.guest {
+    border-style: dashed; color: var(--muted); width: 45%; min-height: 44px;
+    padding: 10px 6px;
+  }
 
   /* ---- reorder mode ---- */
-  .reorder-banner {
-    margin: 6px 16px 4px; padding: 10px 14px; border: 1px solid var(--pickle);
-    border-radius: 10px; color: var(--pickle); text-transform: uppercase;
-    letter-spacing: 0.06em; font-size: 13px; font-weight: 500;
-  }
   .reorder-actions { padding: 0 16px 10px; }
-  .recall-btn { width: 100%; }
-  .recall-btn:disabled { opacity: 0.4; }
   .order-tile { touch-action: none; }
   .order-tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
   .order-tile.dragging { z-index: 5; box-shadow: 0 6px 16px rgba(0,0,0,0.5); border-color: var(--pickle); }
   .bench-heading { color: var(--muted); font-size: 12px; padding: 16px 16px 8px; }
-  .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--row-rule); border-top: 1px solid var(--row-rule); }
+  .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
   .bench-tile { border-style: dashed; color: var(--muted); }
   .done-wrap { padding: 16px; }
   .done-full {
@@ -126,12 +158,22 @@
   .stopbar button {
     width: 100%; padding: 14px; border-radius: 10px; background: transparent;
     border: 1px solid var(--plum-border); color: var(--plum-text); font-size: 15px; font-weight: 500;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
   .stopbar button:active { opacity: 0.7; }
-  .tabbar { display: flex; border-top: 1px solid var(--row-rule); flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .stop-icon { width: 10px; height: 10px; border: 1.5px solid var(--plum-text); border-radius: 2px; }
+
+  /* Segmented-control style tab bar: one pill container, active side gets
+     a solid olive "slider" fill, inactive side is plain text in the same
+     pill -- not two separate bordered buttons. */
+  .tabbar {
+    display: flex; gap: 4px; flex-shrink: 0;
+    margin: 8px 16px 12px; padding: 4px;
+    background: var(--tile); border-radius: 999px;
+  }
   .tabbtn {
-    flex: 1; background: var(--bg); border: none; color: var(--muted);
-    padding: 12px 8px; font-size: 14px; font-weight: 500;
+    flex: 1; background: transparent; border: none; color: var(--muted);
+    border-radius: 999px; padding: 10px 8px; font-size: 14px; font-weight: 500;
   }
   .tabbtn.active { background: var(--olive); color: var(--text); }
 
@@ -150,7 +192,7 @@
 </div>
 <div id="app" style="display:none;">
   <div id="screen"></div>
-  <div class="stopbar"><button id="stopBtn">Stop / fade</button></div>
+  <div class="stopbar"><button id="stopBtn"><span class="stop-icon"></span> Stop / fade</button></div>
   <div class="tabbar">
     <button class="tabbtn" id="tabLineup">Lineup</button>
     <button class="tabbtn" id="tabGrid">Grid</button>
@@ -366,7 +408,7 @@ function h(tag, attrs, children) {
 }
 
 function renderOrderButton() {
-  return h('button', { class: 'order-btn', text: 'Order ▤', onclick: () => {
+  return h('button', { class: 'order-btn', text: '⇅ order', onclick: () => {
     state.activeTab = 'grid'; state.gridMode = 'reorder'; render();
   }});
 }
@@ -379,6 +421,8 @@ function render() {
 
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
+  document.getElementById('app').classList.toggle('reorder-frame',
+    state.activeTab === 'grid' && state.gridMode === 'reorder');
 }
 
 function renderLineupTab() {
@@ -417,6 +461,7 @@ function renderLineupTab() {
   }}, [
     h('div', { class: 'nowup-label', text: 'Now up' }),
     h('div', { class: 'nowup-name', text: name.toUpperCase() }),
+    h('div', { class: 'nowup-play-icon' }),
     h('div', { class: 'nowup-caption', text: 'tap anywhere to play' }),
   ]);
   body.appendChild(card);
@@ -474,22 +519,22 @@ function renderGridPlay() {
       isPlaying ? h('span', { class: 'speaker', text: '🔊' }) : null,
     ]));
   });
-  grid.appendChild(h('button', { class: 'tile guest', onclick: () => {} }, [
-    h('span', { text: 'GUEST' }),
-  ]));
   wrap.appendChild(grid);
+  wrap.appendChild(h('div', { class: 'guest-wrap' }, [
+    h('button', { class: 'tile guest', onclick: () => {} }, [
+      h('span', { text: 'Guest' }),
+    ]),
+  ]));
   return wrap;
 }
 
 function renderGridReorder() {
   const wrap = h('div', {});
-  wrap.appendChild(h('div', { class: 'reorder-banner', text: 'Editing order' }));
-  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
-
-  const actions = h('div', { class: 'reorder-actions' }, [
+  const top = h('div', { class: 'topbar' }, [
+    h('div', { class: 'reorder-banner-pill', text: 'Editing order' }),
     h('button', {
       class: 'recall-btn',
-      text: "Use last game's lineup",
+      text: "🕐 last game",
       disabled: !lastGameOrder || lastGameOrder.length === 0,
       onclick: () => {
         if (!lastGameOrder || lastGameOrder.length === 0) return;
@@ -499,7 +544,8 @@ function renderGridReorder() {
       },
     }),
   ]);
-  wrap.appendChild(actions);
+  wrap.appendChild(top);
+  wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
 
   const grid = h('div', { class: 'grid' });
   order.forEach((id, idx) => {
@@ -527,7 +573,7 @@ function renderGridReorder() {
   wrap.appendChild(benchGrid);
 
   wrap.appendChild(h('div', { class: 'done-wrap' }, [
-    h('button', { class: 'done-full', text: 'Done', onclick: () => {
+    h('button', { class: 'done-full', text: '✓ Done', onclick: () => {
       lastGameOrder = order.slice();
       saveJSON('lastGameOrder', lastGameOrder);
       state.gridMode = 'play';

@@ -175,7 +175,7 @@ async function main() {
     el.dispatch('pointerup', { clientX: 0, clientY: 0, pointerId: 1 });
   }
 
-  const recallBtnAtBoot = findByText("Use last game's lineup");
+  const recallBtnAtBoot = findByText('last game');
   assert(recallBtnAtBoot.disabled === true,
     'recall button must be disabled before any lineup has ever been finalized');
   console.log('1b. Recall button correctly disabled at first launch: OK');
@@ -211,7 +211,7 @@ async function main() {
   document.getElementById('tabGrid').click();
   hooks.getState().gridMode = 'reorder';
   render();
-  const recallBtnAfterDone = findByText("Use last game's lineup");
+  const recallBtnAfterDone = findByText('last game');
   assert(recallBtnAfterDone.disabled === false,
     'recall button must be enabled right after Done saves a snapshot');
   console.log('5b. Recall button enabled immediately after Done: OK');
@@ -258,7 +258,7 @@ async function main() {
   gridTile.dispatch('click');
   console.log('12. Grid play-mode override tap: OK (no throw)');
 
-  const guestTile = findByClassContaining('tile guest', 'GUEST') || findByClassContaining('guest', 'GUEST');
+  const guestTile = findByClassContaining('tile guest', 'Guest') || findByClassContaining('guest', 'Guest');
   assert(guestTile, 'guest tile renders');
   guestTile.click();
   console.log('13. Guest tile tap is a safe no-op: OK');
@@ -272,7 +272,7 @@ async function main() {
   simulateTap(findByText('Bob'));
   simulateTap(findByText('Dana'));
   assert(hooks.getOrder().length === 0, 'everyone benched: ' + hooks.getOrder());
-  const recallBtnNow = findByText("Use last game's lineup");
+  const recallBtnNow = findByText('last game');
   assert(recallBtnNow.disabled === false,
     'recall button must still be enabled even when the live order is empty');
   recallBtnNow.click();
