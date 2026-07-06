@@ -17,7 +17,7 @@
     --text: #e8eae6;
     --muted: #8f948f;
     --olive: #565848;
-    --pickle: #B5BA6B;
+    --pickle: #abb163;
     --badge-text: #2C2E20;
     --olive-label: #D8DBBE;
     --plum-border: #7A5C82;
@@ -88,7 +88,7 @@
   .nowup-play-icon {
     width: 0; height: 0; margin-bottom: 12px;
     border-top: 15px solid transparent; border-bottom: 15px solid transparent;
-    border-left: 24px solid var(--text); opacity: 0.9;
+    border-left: 24px solid var(--pickle);
   }
   .nowup-caption { font-size: 13px; opacity: 0.8; }
   .navbtns { display: flex; gap: 12px; margin-top: 14px; }
@@ -141,11 +141,12 @@
   /* ---- reorder mode ---- */
   .reorder-actions { padding: 0 16px 10px; }
   .order-tile { touch-action: none; }
-  .order-tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
+  .tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
   .order-tile.dragging { z-index: 5; box-shadow: 0 6px 16px rgba(0,0,0,0.5); border-color: var(--pickle); }
   .bench-heading { color: var(--muted); font-size: 12px; padding: 16px 16px 8px; }
   .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
   .bench-tile { border-style: dashed; color: var(--muted); }
+  .roster-active { border-color: var(--pickle); color: var(--pickle); }
   .done-wrap { padding: 16px; }
   .done-full {
     width: 100%; background: var(--pickle); color: var(--badge-text); border: none;
@@ -559,16 +560,27 @@ function renderGridReorder() {
   });
   wrap.appendChild(grid);
 
-  const benchedIds = computeBenched(allIds, order).sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
-  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Not playing — tap to add' }));
+  // Full roster in a fixed alphabetical grid -- unlike the order grid above
+  // (which intentionally reflows to show sequence), these positions never
+  // move as membership changes, so tap targets stay put while quickly
+  // toggling several players in a row. Reported live: the old
+  // shrinking/growing "not playing" list reshuffled after every tap,
+  // making the next intended tap land on whoever slid into that spot.
+  const rosterIdsAlpha = [...allIds].sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
+  wrap.appendChild(h('div', { class: 'bench-heading', text: 'Full roster · tap to bench or add' }));
   const benchGrid = h('div', { class: 'bench-grid' });
-  benchedIds.forEach(id => {
+  rosterIdsAlpha.forEach(id => {
     const p = playersById[id];
-    benchGrid.appendChild(h('button', { class: 'tile bench-tile', onclick: () => {
-      order = addToOrder(order, id);
+    const inOrder = order.includes(id);
+    const cls = 'tile' + (inOrder ? ' roster-active' : ' bench-tile');
+    const children = inOrder
+      ? [h('span', { class: 'badge', text: String(order.indexOf(id) + 1) }), h('span', { text: p.name })]
+      : [h('span', { text: p.name })];
+    benchGrid.appendChild(h('button', { class: cls, onclick: () => {
+      order = inOrder ? benchPlayer(order, id) : addToOrder(order, id);
       pointerId = resolvePointer(order, pointerId);
       persistOrder(); persistPointer(); render();
-    }}, [h('span', { text: p.name })]));
+    }}, children));
   });
   wrap.appendChild(benchGrid);
 

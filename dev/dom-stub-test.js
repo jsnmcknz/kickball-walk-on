@@ -288,6 +288,42 @@ async function main() {
   assert(rawLast && JSON.parse(rawLast).length === 3, 'lastGameOrder persisted: ' + rawLast);
   console.log('15. localStorage persistence round-trip: OK');
 
+  // Roster grid positional stability: reported live -- the old "not
+  // playing" list shrank/reflowed on every tap, moving tap targets under
+  // the operator's thumb. The fix makes the roster grid a fixed
+  // alphabetical layout where only the tile's *state* toggles, never its
+  // position. Verify the DOM order of the roster grid's tiles by name
+  // never changes regardless of who's benched vs. active.
+  document.getElementById('tabGrid').click();
+  hooks.getState().gridMode = 'reorder';
+  render();
+  function findBenchGrid() {
+    let found = null;
+    const walk = (node) => {
+      if (found) return;
+      if (node.classList && node.classList.contains('bench-grid')) found = node;
+      (node._children || []).forEach(walk);
+    };
+    walk(screen);
+    return found;
+  }
+  function rosterNames() {
+    return findBenchGrid()._children.map(t => t.textContent.replace(/^\d+/, ''));
+  }
+  function findInBenchGrid(text) {
+    return findBenchGrid()._children.find(t => t.textContent.includes(text));
+  }
+
+  const before = rosterNames();
+  assert(before.length === 5, 'roster grid always shows the full 5-player test roster: ' + before);
+  findInBenchGrid('Alice').click(); // Alice is currently in-order -> this taps her out (bench)
+  const after = rosterNames();
+  assert(JSON.stringify(before) === JSON.stringify(after),
+    'roster grid tile positions must not change when membership changes: ' +
+    JSON.stringify(before) + ' vs ' + JSON.stringify(after));
+  assert(!hooks.getOrder().includes('alice'), 'tapping Alice in the roster grid benched her: ' + hooks.getOrder());
+  console.log('16. Roster grid positions stable across membership changes: OK');
+
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }
 
