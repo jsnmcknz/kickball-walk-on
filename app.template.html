@@ -16,7 +16,7 @@
     --row-rule: #2c3036;
     --text: #e8eae6;
     --muted: #8f948f;
-    --olive: #565848;
+    --olive: #536840; /* "deep moss" -- active-tab fill, re-derived from --pickle (same hue/sat, darker) when the accent moved to moss (2026-07-06 round 3; was shirt olive #565848, which clashed yellow against the new green) */
     --pickle: #82A167; /* "moss" -- cooler/dimmer than the original #abb163, which read too yellow/bright live (changed 2026-07-06 post-game-1; 4.8:1 on badge text) */
     --badge-text: #2C2E20;
     --olive-label: #D8DBBE;
@@ -145,8 +145,13 @@
     border-radius: 14px;
     color: var(--text); font-size: 14px; font-weight: 500; padding: 16px 6px;
     min-height: 60px; display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; /* lets the playing tile's countdown wrap to its own line */
     text-align: center; touch-action: manipulation;
   }
+  /* Countdown on a playing grid tile: same "lives on the stop control"
+     pattern as the NOW UP card's caption (extended to the grid 2026-07-06
+     per Jason's request after game 1). */
+  .tile-countdown { width: 100%; font-size: 11px; opacity: 0.85; margin-top: 4px; }
   .tile:active { opacity: 0.85; }
   /* Playing state: the tile itself becomes the stop control -- same plum
      accent as the NOW UP card's playing state, for one consistent
@@ -213,7 +218,7 @@
   <div id="screen"></div>
   <div class="tabbar">
     <button class="tabbtn" id="tabLineup">Next Up</button>
-    <button class="tabbtn" id="tabGrid">Soundboard</button>
+    <button class="tabbtn" id="tabGrid">All Songs</button>
   </div>
 </div>
 
@@ -334,15 +339,15 @@ let currentStartTime = null;
 let currentDuration = null;
 // Drives the countdown while something plays; render()'s own bookkeeping
 // (below) starts/stops it, so nothing else needs to remember to manage it.
-// The tick updates ONLY the caption's text node -- it must never call
+// The tick updates ONLY the countdown's text node -- it must never call
 // render(): a full innerHTML teardown 5x/sec means any tap whose
 // pointerdown/pointerup straddles a tick lands on a detached node and the
 // click silently vanishes (intermittent "dead taps", worst on tap-to-stop,
-// which only ever happens while ticking). render() re-captures these refs
-// on every pass; they're null whenever the countdown isn't on screen.
+// which only ever happens while ticking). Each render pass installs a
+// fresh update closure for whichever countdown is on screen (NOW UP card
+// caption or a playing grid tile), or leaves it null if none is.
 let tickInterval = null;
-let liveCountdownEl = null;
-let liveCountdownId = null;
+let liveCountdownUpdate = null;
 // Double-tap protection: an excited operator's double-tap would otherwise
 // read as play + instant tap-to-stop -- song plays for a beat, lineup
 // advances past the kicker. Taps-to-stop inside this window are ignored;
@@ -396,13 +401,21 @@ function isLineupCardPlaying(id) {
   return currentSource !== null && pendingLineupSource === currentSource && pendingLineupStartPointer === id;
 }
 
+// Seconds left in whatever is playing right now (lineup clip or grid
+// override), or null if nothing is. Reads straight off the audio clock
+// (ctx.currentTime) rather than a wall-clock timer, so it can't drift
+// from what's actually audible.
+function currentRemainingSeconds() {
+  if (!currentSource || currentStartTime === null || currentDuration === null) return null;
+  return Math.max(0, currentDuration - (ctx.currentTime - currentStartTime));
+}
+
 // Seconds left in the clip currently showing on the card, or null if the
 // card isn't the thing playing (idle, or what's playing is a Grid
-// override). Reads straight off the audio clock (ctx.currentTime) rather
-// than a wall-clock timer, so it can't drift from what's actually audible.
+// override).
 function cardRemainingSeconds(id) {
-  if (!isLineupCardPlaying(id) || currentStartTime === null || currentDuration === null) return null;
-  return Math.max(0, currentDuration - (ctx.currentTime - currentStartTime));
+  if (!isLineupCardPlaying(id)) return null;
+  return currentRemainingSeconds();
 }
 
 function formatCountdown(seconds) {
@@ -560,18 +573,25 @@ function renderOrderButton() {
   return h('button', { class: 'order-btn', text: '⇅ order', onclick: enterReorderMode });
 }
 
-// Updates just the countdown text in place. See the liveCountdownEl note
-// above for why this must not be a full render().
+// Updates just the countdown text in place. See the liveCountdownUpdate
+// note above for why this must not be a full render().
 function tickCountdown() {
-  if (!liveCountdownEl || liveCountdownId === null) return;
-  const remaining = cardRemainingSeconds(liveCountdownId);
-  if (remaining === null) return;
-  liveCountdownEl.textContent = formatCountdown(remaining) + ' — tap to stop';
+  if (liveCountdownUpdate) liveCountdownUpdate();
 }
 
 function render() {
-  liveCountdownEl = null;
-  liveCountdownId = null;
+  liveCountdownUpdate = null;
+  // Defensive sweep: a drag whose pointer stream dies mid-gesture (seen
+  // on-device at game 1: WebKit can stop delivering pointer events after
+  // the captured tile has been moved in the DOM repeatedly) can strand
+  // its ghost and placeholder styling. Any render -- e.g. tapping Done,
+  // or any other tap -- clears strays, so a broken drag can never leave
+  // permanent debris on screen.
+  const appEl = document.getElementById('app');
+  appEl.querySelectorAll('.drag-ghost').forEach(g => {
+    if (g.parentElement) g.parentElement.removeChild(g);
+  });
+  appEl.querySelectorAll('.drag-placeholder').forEach(t => t.classList.remove('drag-placeholder'));
   screenEl.innerHTML = '';
   if (state.activeTab === 'lineup') screenEl.appendChild(renderLineupTab());
   else if (state.gridMode === 'reorder') screenEl.appendChild(renderGridReorder());
@@ -643,8 +663,11 @@ function renderLineupTab() {
     captionEl,
   ]);
   if (cardPlaying && remaining !== null) {
-    liveCountdownEl = captionEl;
-    liveCountdownId = pointerId;
+    const pid = pointerId;
+    liveCountdownUpdate = () => {
+      const r = cardRemainingSeconds(pid);
+      if (r !== null) captionEl.textContent = formatCountdown(r) + ' — tap to stop';
+    };
   }
   body.appendChild(card);
 
@@ -700,6 +723,17 @@ function renderGridPlay() {
     // own stop control (works whether the clip is this Grid override or a
     // still-playing lineup clip for the same player -- stopCurrent handles
     // either case correctly).
+    // A playing tile carries its own countdown (second line, kept live by
+    // the same text-node-only tick as the NOW UP card's caption).
+    let countdownEl = null;
+    if (isPlaying) {
+      const r = currentRemainingSeconds();
+      countdownEl = h('span', { class: 'tile-countdown', text: r !== null ? formatCountdown(r) : '' });
+      liveCountdownUpdate = () => {
+        const rr = currentRemainingSeconds();
+        if (rr !== null) countdownEl.textContent = formatCountdown(rr);
+      };
+    }
     grid.appendChild(h('button', { class: cls, onclick: () => {
       if (isPlaying) {
         if (Date.now() - playStartedAtMs < STOP_TAP_GRACE_MS) return; // double-tap guard
@@ -709,6 +743,7 @@ function renderGridPlay() {
     }}, [
       h('span', { text: p.name }),
       isPlaying ? h('span', { class: 'speaker', text: '⏹' }) : null,
+      countdownEl,
     ]));
   });
   wrap.appendChild(grid);
@@ -724,17 +759,33 @@ function renderGridReorder() {
   const wrap = h('div', {});
   const top = h('div', { class: 'topbar' }, [
     h('div', { class: 'reorder-banner-pill', text: 'Editing order' }),
-    h('button', {
-      class: 'recall-btn',
-      text: "🕐 last game",
-      disabled: !lastGameOrder || lastGameOrder.length === 0,
-      onclick: () => {
-        if (!lastGameOrder || lastGameOrder.length === 0) return;
-        order = lastGameOrder.filter(id => playersById[id]);
-        pointerId = resolvePointer(order, pointerId);
-        persistOrder(); persistPointer(); render();
-      },
-    }),
+    h('div', { class: 'topbar-right' }, [
+      h('button', {
+        class: 'recall-btn',
+        text: "🕐 last game",
+        disabled: !lastGameOrder || lastGameOrder.length === 0,
+        onclick: () => {
+          if (!lastGameOrder || lastGameOrder.length === 0) return;
+          order = lastGameOrder.filter(id => playersById[id]);
+          pointerId = resolvePointer(order, pointerId);
+          persistOrder(); persistPointer(); render();
+        },
+      }),
+      // Start-fresh: bench everyone in one tap (added 2026-07-06 round 3).
+      // Reorder-mode only, so it costs the core walk-up flow nothing; if
+      // it's ever tapped by mistake, "last game" recall is the undo path
+      // for any lineup that was finalized with Done.
+      h('button', {
+        class: 'recall-btn',
+        text: '✕ clear',
+        disabled: order.length === 0,
+        onclick: () => {
+          order = [];
+          pointerId = null;
+          persistOrder(); persistPointer(); render();
+        },
+      }),
+    ]),
   ]);
   wrap.appendChild(top);
   wrap.appendChild(h('div', { class: 'grid-hint', text: 'Kicking order by row · drag to move · tap to bench' }));
@@ -829,10 +880,20 @@ function flipTiles(gridEl, exceptTile, mutate) {
   });
 }
 
+/* Once a drag is live, move/up/cancel handling shifts from the tile to
+   DOCUMENT-level listeners (hardened 2026-07-06 after game-1 round 2:
+   long drags left frozen ghosts on screen). Root cause: cleanup hung
+   entirely off pointerup firing on the dragged tile, and Safari can stop
+   delivering a captured pointer stream after the captured element has
+   been moved in the DOM several times -- which is exactly what a long
+   drag does. Document listeners survive any DOM churn on the tile; and
+   even if the whole event stream dies, render()'s drag-debris sweep
+   clears strays on the next tap anywhere. */
 function wireDragTile(tile, id, gridEl) {
   let startX = 0, startY = 0, dragging = false, moved = false;
   let ghost = null;
   let lastSwap = null;
+  let activePointer = null;
 
   function startGhost() {
     const rect = tile.getBoundingClientRect();
@@ -856,19 +917,9 @@ function wireDragTile(tile, id, gridEl) {
     tile.classList.remove('drag-placeholder');
   }
 
-  tile.addEventListener('pointerdown', (e) => {
-    startX = e.clientX; startY = e.clientY; moved = false; dragging = false;
-    try { tile.setPointerCapture(e.pointerId); } catch (err) {}
-  });
-
-  tile.addEventListener('pointermove', (e) => {
+  function handleMove(e) {
+    if (e.preventDefault) e.preventDefault();
     const dx = e.clientX - startX, dy = e.clientY - startY;
-    if (!dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
-      dragging = true; moved = true;
-      startGhost();
-    }
-    if (!dragging) return;
-    e.preventDefault();
     if (ghost) ghost.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
     // The ghost is pointer-events:none, so this sees the grid underneath.
     const target = document.elementFromPoint(e.clientX, e.clientY);
@@ -889,19 +940,27 @@ function wireDragTile(tile, id, gridEl) {
     } else if (!hoverTile || hoverTile === tile) {
       lastSwap = null;
     }
-  });
+  }
 
-  tile.addEventListener('pointerup', (e) => {
-    try { tile.releasePointerCapture(e.pointerId); } catch (err) {}
+  function detachDocHandlers() {
+    document.removeEventListener('pointermove', onDocMove);
+    document.removeEventListener('pointerup', onDocUp);
+    document.removeEventListener('pointercancel', onDocCancel);
+  }
+
+  // Commit the drag. Idempotent (dragging flag) because in a real browser
+  // the same pointerup can reach both a tile listener and these document
+  // listeners via bubbling.
+  function finishDrag() {
+    if (!dragging) return;
+    dragging = false;
+    detachDocHandlers();
     endGhost();
-    if (!moved) {
-      // Tap (no meaningful movement): bench this player.
-      order = benchPlayer(order, id);
-      pointerId = resolvePointer(order, pointerId);
-      persistOrder(); persistPointer(); render();
-      return;
-    }
-    // Drag ended: read the tiles' final DOM order back into `order`.
+    // If some other tap rebuilt the UI mid-drag (e.g. a second finger hit
+    // Done), the old grid is detached -- committing its order would
+    // resurrect stale state. Just re-render and drop this drag.
+    if (tile.isConnected === false) { render(); return; }
+    // Read the tiles' final DOM order back into `order`.
     const newOrder = Array.from(gridEl.querySelectorAll('.order-tile')).map(t => t._playerId);
     if (newOrder.length === order.length) {
       order = newOrder;
@@ -909,11 +968,52 @@ function wireDragTile(tile, id, gridEl) {
       persistOrder(); persistPointer();
     }
     render();
+  }
+
+  function cancelDrag() {
+    if (!dragging) return;
+    dragging = false;
+    detachDocHandlers();
+    endGhost();
+    render(); // re-sync DOM from state -- the interrupted drag is discarded
+  }
+
+  function onDocMove(e) { if (e.pointerId === activePointer) handleMove(e); }
+  function onDocUp(e) { if (e.pointerId === activePointer) finishDrag(); }
+  function onDocCancel(e) { if (e.pointerId === activePointer) cancelDrag(); }
+
+  tile.addEventListener('pointerdown', (e) => {
+    startX = e.clientX; startY = e.clientY; moved = false; dragging = false;
+    activePointer = e.pointerId;
+    try { tile.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+
+  tile.addEventListener('pointermove', (e) => {
+    if (dragging) { if (e.preventDefault) e.preventDefault(); return; } // document handlers own the drag
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+      dragging = true; moved = true;
+      startGhost();
+      document.addEventListener('pointermove', onDocMove);
+      document.addEventListener('pointerup', onDocUp);
+      document.addEventListener('pointercancel', onDocCancel);
+      handleMove(e);
+    }
+  });
+
+  tile.addEventListener('pointerup', (e) => {
+    try { tile.releasePointerCapture(e.pointerId); } catch (err) {}
+    if (dragging) return; // finishDrag runs via the document listener for this same event
+    if (!moved) {
+      // Tap (no meaningful movement): bench this player.
+      order = benchPlayer(order, id);
+      pointerId = resolvePointer(order, pointerId);
+      persistOrder(); persistPointer(); render();
+    }
   });
 
   tile.addEventListener('pointercancel', () => {
-    endGhost();
-    render(); // re-sync DOM from state in case a drag was interrupted mid-gesture
+    if (!dragging) render(); // drag path cleans up via the document listener
   });
 
   tile._playerId = id;
@@ -927,7 +1027,7 @@ document.getElementById('tabLineup').addEventListener('click', () => { state.act
 // order was empty made the play grid unreachable in exactly the moment
 // firm principle 5 exists for (chaos, no lineup, operator just needs
 // songs). First-launch routing is handled once, at boot, by the initial
-// state -- after that the Soundboard tab always shows whatever grid mode
+// state -- after that the All Songs tab always shows whatever grid mode
 // you were last in.
 document.getElementById('tabGrid').addEventListener('click', () => {
   state.activeTab = 'grid';

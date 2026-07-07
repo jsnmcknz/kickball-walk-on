@@ -38,6 +38,11 @@ class FakeElement {
   setAttribute(k, v) { if (k === 'disabled') this.disabled = true; }
   addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
   removeEventListener() {}
+  removeChild(child) {
+    const i = this._children.indexOf(child);
+    if (i !== -1) { this._children.splice(i, 1); child.parentElement = null; }
+    return child;
+  }
   dispatch(type, evt) { (this._listeners[type] || []).forEach(fn => fn(evt || {})); }
   // Real disabled buttons block both user clicks AND programmatic .click()
   // calls -- mirror that here so a regression on the disabled-state bug
@@ -81,6 +86,11 @@ global.document = {
   createElement: (tag) => new FakeElement(tag),
   getElementById: (id) => registry[id] || (registry[id] = new FakeElement('div')),
   addEventListener: (type, fn) => { (docListeners[type] = docListeners[type] || []).push(fn); },
+  removeEventListener: (type, fn) => {
+    const arr = docListeners[type] || [];
+    const i = arr.indexOf(fn);
+    if (i !== -1) arr.splice(i, 1);
+  },
   dispatchTo: (type) => (docListeners[type] || []).forEach(fn => fn()),
   elementFromPoint: () => null,
 };
@@ -356,6 +366,10 @@ async function main() {
   render();
   findByText('Alice').dispatch('click'); // override play
   assert(hooks.getPlayingId() === 'alice', 'grid override tap plays: ' + hooks.getPlayingId());
+  // The playing tile carries its own countdown line (fake clock: steady 0:01),
+  // same text-node tick pattern as the card caption.
+  const tileCountdown = findByClassContaining('tile-countdown', '0:01');
+  assert(tileCountdown, 'playing grid tile shows a countdown');
   findByText('Alice').dispatch('click'); // immediate retap -> inside grace window, must be ignored
   assert(hooks.getPlayingId() === 'alice', 'grid tile double-tap guard holds: ' + hooks.getPlayingId());
   hooks.backdatePlayStart(1000);
@@ -454,7 +468,28 @@ async function main() {
     'empty order must not hijack the Soundboard tab into reorder mode: '
     + hooks.getState().activeTab + '/' + hooks.getState().gridMode);
   assert(findByText('Alice'), 'play grid renders (and is playable) with an empty order');
-  console.log('19. Soundboard stays reachable with an empty order (grid never blocks): OK');
+  console.log('19. All Songs tab stays reachable with an empty order (grid never blocks): OK');
+  // ...and no drag debris (ghosts/placeholders) survives a render pass.
+  const appDebris = document.getElementById('app').querySelectorAll('.drag-ghost').length
+    + document.getElementById('app').querySelectorAll('.drag-placeholder').length;
+  assert(appDebris === 0, 'render sweep leaves no drag debris: ' + appDebris);
+  console.log('20. Drag-debris sweep in render(): OK');
+
+  // Clear button: one tap benches everyone; disabled once the order is
+  // already empty; "last game" recall still restores the finalized lineup.
+  hooks.getState().gridMode = 'reorder';
+  render();
+  findByText('last game').click(); // restore a lineup to clear
+  assert(hooks.getOrder().length === 3, 'recall before clear: ' + hooks.getOrder());
+  const clearBtn = findByText('clear');
+  assert(clearBtn && clearBtn.disabled === false, 'clear enabled while order is non-empty');
+  clearBtn.click();
+  assert(hooks.getOrder().length === 0, 'clear empties the order: ' + hooks.getOrder());
+  assert(hooks.getPointer() === null, 'pointer resets with the cleared order: ' + hooks.getPointer());
+  assert(findByText('clear').disabled === true, 'clear disabled once order is empty');
+  findByText('last game').click();
+  assert(hooks.getOrder().length === 3, 'recall still restores after a clear: ' + hooks.getOrder());
+  console.log('21. Clear button empties the order (recall remains the undo): OK');
 
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }
