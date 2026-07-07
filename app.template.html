@@ -123,7 +123,13 @@
      is the loudest thing on the card" rule. */
   .nowup-card.playing .nowup-name { color: var(--card-pop); }
   .nowup-stop-icon {
-    width: 22px; height: 22px; margin-bottom: 12px;
+    width: 22px; height: 22px;
+    /* Same vertical footprint as the 30px play triangle (4 + 22 + 16 =
+       0 + 30 + 12): border-box makes this square 8px shorter than the
+       border-drawn triangle, and the card's centered flex stack was
+       re-centering on the swap -- the name visibly dropped a few px when
+       play flipped to stop (2026-07-07, Jason, on-device). */
+    margin: 4px 0 16px;
     border: 3px solid var(--plum-text); border-radius: 4px;
   }
   .navbtns { display: flex; gap: 12px; margin-top: 14px; }
@@ -182,7 +188,9 @@
      the NOW UP card's stack (name -> stop icon -> countdown) so both stop
      controls read as one pattern (2026-07-06 round 4; was inline after
      the name). */
-  .tile.playing .speaker { width: 100%; line-height: 1; }
+  /* A few px of air above/below the stop icon (2026-07-07, Jason): the
+     name/icon/countdown stack read cramped inside the fixed-height tile. */
+  .tile.playing .speaker { width: 100%; line-height: 1; margin: 4px 0; }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
   .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
   .tile.guest {
@@ -984,6 +992,21 @@ function renderGridReorder() {
   });
   wrap.appendChild(grid);
 
+  // Done sits ABOVE the "Not playing" bench (2026-07-07, Jason): with a
+  // full lineup the bench pushed Done below the fold, and the most common
+  // exit action shouldn't need a scroll to reach.
+  wrap.appendChild(h('div', { class: 'done-wrap' }, [
+    h('button', { class: 'done-full', text: '✓ Done', onclick: () => {
+      lastGameOrder = order.slice();
+      saveJSON('lastGameOrder', lastGameOrder);
+      // Land on the Lineup/play-card screen -- that's the screen an
+      // operator actually needs once the lineup is locked in.
+      state.editing = false;
+      state.activeTab = 'lineup';
+      render();
+    }}),
+  ]));
+
   const benchedIds = computeBenched(allIds, order).sort((a, b) => playersById[a].name.localeCompare(playersById[b].name));
   wrap.appendChild(h('div', { class: 'bench-heading', text: 'Not playing — tap to add' }));
   const benchGrid = h('div', { class: 'bench-grid' });
@@ -996,18 +1019,6 @@ function renderGridReorder() {
     }}, [h('span', { text: p.name })]));
   });
   wrap.appendChild(benchGrid);
-
-  wrap.appendChild(h('div', { class: 'done-wrap' }, [
-    h('button', { class: 'done-full', text: '✓ Done', onclick: () => {
-      lastGameOrder = order.slice();
-      saveJSON('lastGameOrder', lastGameOrder);
-      // Land on the Lineup/play-card screen -- that's the screen an
-      // operator actually needs once the lineup is locked in.
-      state.editing = false;
-      state.activeTab = 'lineup';
-      render();
-    }}),
-  ]));
 
   return wrap;
 }
