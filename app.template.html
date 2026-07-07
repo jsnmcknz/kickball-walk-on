@@ -97,13 +97,18 @@
   .nowup-card {
     width: 100%; text-align: center; border: none; border-radius: 18px;
     background: var(--pickle); color: var(--badge-text);
-    padding: 26px 22px; min-height: 32vh; display: flex; flex-direction: column;
+    /* 40vh ≈ square on the team phone (was 32vh) -- bigger tap target,
+       more presence (Jason, 2026-07-07, on-device). */
+    padding: 26px 22px; min-height: 40vh; display: flex; flex-direction: column;
     align-items: center; justify-content: center; margin-top: 6px;
   }
   .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.75; }
   .nowup-name {
     color: var(--card-pop); text-transform: uppercase; font-weight: 500;
-    font-size: clamp(36px, 11vw, 56px); line-height: 1.05; margin: 8px 0 4px;
+    /* Top margin 8 -> 4: all-caps glyphs carry no descenders, so the line
+       box's extra headroom made the name sit visually low between the
+       label and counter (Jason, 2026-07-07, on-device). */
+    font-size: clamp(36px, 11vw, 56px); line-height: 1.05; margin: 4px 0 8px;
     word-break: break-word;
   }
   /* Moved down from the header (2026-07-06) -- was crowding the wordmark
@@ -190,7 +195,7 @@
      the name). */
   /* A few px of air above/below the stop icon (2026-07-07, Jason): the
      name/icon/countdown stack read cramped inside the fixed-height tile. */
-  .tile.playing .speaker { width: 100%; line-height: 1; margin: 3px 0 4px; /* 1px less on top: the glyph's own headroom made equal margins read unequal (Jason, on-device) */ }
+  .tile.playing .speaker { width: 100%; line-height: 1; margin: 3px 0 5px; /* asymmetric on purpose: the glyph's own headroom makes equal margins read unequal -- tuned on-device to 3 top / 5 bottom (Jason, 2026-07-07) */ }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
   .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
   .tile.guest {
