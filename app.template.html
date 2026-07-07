@@ -157,7 +157,11 @@
      accent as the NOW UP card's playing state, for one consistent
      "plum = tap to stop" signal across both tabs. */
   .tile.playing { border-color: var(--plum-border); color: var(--plum-text); background: var(--plum-fill); }
-  .tile.playing .speaker { margin-left: 4px; }
+  /* Stop icon sits on its own line between name and countdown -- mirrors
+     the NOW UP card's stack (name -> stop icon -> countdown) so both stop
+     controls read as one pattern (2026-07-06 round 4; was inline after
+     the name). */
+  .tile.playing .speaker { width: 100%; margin-top: 2px; }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
   .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
   .tile.guest {
