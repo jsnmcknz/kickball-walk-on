@@ -190,7 +190,7 @@
      the name). */
   /* A few px of air above/below the stop icon (2026-07-07, Jason): the
      name/icon/countdown stack read cramped inside the fixed-height tile. */
-  .tile.playing .speaker { width: 100%; line-height: 1; margin: 4px 0; }
+  .tile.playing .speaker { width: 100%; line-height: 1; margin: 3px 0 4px; /* 1px less on top: the glyph's own headroom made equal margins read unequal (Jason, on-device) */ }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
   .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
   .tile.guest {
