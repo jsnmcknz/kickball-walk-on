@@ -7,11 +7,13 @@
 // self-contained single-file design (01-Architecture.md, firm principle 2)
 // actually hold at runtime, not just at build time.
 //
-// CACHE_NAME is derived from a hash of the manifest+clips payload (see
-// build.py), so every real content change gets a new cache name -- old
-// caches are deleted on activate, and the next online launch re-fetches
-// the new index.html automatically (matches the documented update flow:
-// "re-open the app on Wi-Fi once to pick up the new version").
+// CACHE_NAME is derived from a hash of the full rendered index.html (see
+// build.py -- hashing only the manifest+clips payload was a real bug: a
+// code-only fix would never bust an already-cached phone), so every real
+// change gets a new cache name -- old caches are deleted on activate, and
+// the next online launch re-fetches the new index.html automatically
+// (matches the documented update flow: "re-open the app on Wi-Fi once to
+// pick up the new version").
 
 const CACHE_NAME = 'kickball-__CACHE_ID__';
 const PRECACHE_URLS = ['./', './index.html'];

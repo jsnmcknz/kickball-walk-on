@@ -17,14 +17,21 @@
     --text: #e8eae6;
     --muted: #8f948f;
     --olive: #565848;
-    --pickle: #abb163;
+    --pickle: #82A167; /* "moss" -- cooler/dimmer than the original #abb163, which read too yellow/bright live (changed 2026-07-06 post-game-1; 4.8:1 on badge text) */
     --badge-text: #2C2E20;
     --olive-label: #D8DBBE;
     --plum-border: #7A5C82;
     --plum-text: #CBA9DD;
     --plum-fill: #4A3C52;
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* user-select/touch-callout off globally: this is a kiosk soundboard with
+     no text entry anywhere, and iOS otherwise treats reorder drags as text-
+     selection gestures (blue highlight ranges, loupe, selection handles --
+     seen live at game 1, 2026-07-06). */
+  * {
+    box-sizing: border-box; -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
   html, body {
     height: 100%; margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -157,7 +164,14 @@
   .reorder-actions { padding: 0 16px 10px; }
   .order-tile { touch-action: none; }
   .order-tile .badge { background: var(--pickle); color: var(--badge-text); position: absolute; top: 6px; left: 6px; }
-  .order-tile.dragging { z-index: 5; box-shadow: 0 6px 16px rgba(0,0,0,0.5); border-color: var(--pickle); }
+  /* While dragging, the original tile stays in the grid as a dimmed
+     placeholder (it's what actually gets reordered); a fixed-position
+     ghost copy follows the finger. */
+  .order-tile.drag-placeholder { opacity: 0.35; border-style: dashed; }
+  .drag-ghost {
+    box-shadow: 0 6px 16px rgba(0,0,0,0.5); border-color: var(--pickle);
+    opacity: 0.95; z-index: 10;
+  }
   .bench-heading { color: var(--muted); font-size: 12px; padding: 16px 16px 8px; }
   .bench-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
   .bench-tile { border-style: dashed; color: var(--muted); }
@@ -198,8 +212,8 @@
 <div id="app" style="display:none;">
   <div id="screen"></div>
   <div class="tabbar">
-    <button class="tabbtn" id="tabLineup">Lineup</button>
-    <button class="tabbtn" id="tabGrid">Grid</button>
+    <button class="tabbtn" id="tabLineup">Next Up</button>
+    <button class="tabbtn" id="tabGrid">Soundboard</button>
   </div>
 </div>
 
@@ -318,10 +332,23 @@ let pendingLineupStartPointer = null;
 // could drift out of sync with what's actually playing.
 let currentStartTime = null;
 let currentDuration = null;
-// Drives the countdown by re-rendering a few times a second while
-// something plays; render()'s own bookkeeping (below) starts/stops this,
-// so nothing else needs to remember to manage it.
+// Drives the countdown while something plays; render()'s own bookkeeping
+// (below) starts/stops it, so nothing else needs to remember to manage it.
+// The tick updates ONLY the caption's text node -- it must never call
+// render(): a full innerHTML teardown 5x/sec means any tap whose
+// pointerdown/pointerup straddles a tick lands on a detached node and the
+// click silently vanishes (intermittent "dead taps", worst on tap-to-stop,
+// which only ever happens while ticking). render() re-captures these refs
+// on every pass; they're null whenever the countdown isn't on screen.
 let tickInterval = null;
+let liveCountdownEl = null;
+let liveCountdownId = null;
+// Double-tap protection: an excited operator's double-tap would otherwise
+// read as play + instant tap-to-stop -- song plays for a beat, lineup
+// advances past the kicker. Taps-to-stop inside this window are ignored;
+// backgrounding and every other stop path are unaffected.
+const STOP_TAP_GRACE_MS = 400;
+let playStartedAtMs = 0;
 
 function b64ToArrayBuffer(b64) {
   const bin = atob(b64);
@@ -455,6 +482,7 @@ async function playClip(playerId, opts) {
   playingId = playerId;
   currentStartTime = ctx.currentTime;
   currentDuration = buffer.duration;
+  playStartedAtMs = Date.now();
   if (opts.lineup) {
     pendingLineupSource = source;
     pendingLineupStartPointer = playerId;
@@ -532,7 +560,18 @@ function renderOrderButton() {
   return h('button', { class: 'order-btn', text: '⇅ order', onclick: enterReorderMode });
 }
 
+// Updates just the countdown text in place. See the liveCountdownEl note
+// above for why this must not be a full render().
+function tickCountdown() {
+  if (!liveCountdownEl || liveCountdownId === null) return;
+  const remaining = cardRemainingSeconds(liveCountdownId);
+  if (remaining === null) return;
+  liveCountdownEl.textContent = formatCountdown(remaining) + ' — tap to stop';
+}
+
 function render() {
+  liveCountdownEl = null;
+  liveCountdownId = null;
   screenEl.innerHTML = '';
   if (state.activeTab === 'lineup') screenEl.appendChild(renderLineupTab());
   else if (state.gridMode === 'reorder') screenEl.appendChild(renderGridReorder());
@@ -543,13 +582,13 @@ function render() {
   const inReorder = state.activeTab === 'grid' && state.gridMode === 'reorder';
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
 
-  // Keep the on-card countdown live: start a re-render tick the moment
-  // something starts playing, stop it the moment nothing is. Living here
-  // (rather than in playClip/stopCurrent) means every path that starts or
-  // ends playback automatically keeps this in sync just by calling
-  // render(), which they all already do.
+  // Keep the on-card countdown live: start the tick the moment something
+  // starts playing, stop it the moment nothing is. Living here (rather
+  // than in playClip/stopCurrent) means every path that starts or ends
+  // playback automatically keeps this in sync just by calling render(),
+  // which they all already do.
   if (currentSource && !tickInterval) {
-    tickInterval = setInterval(render, 200);
+    tickInterval = setInterval(tickCountdown, 200);
   } else if (!currentSource && tickInterval) {
     clearInterval(tickInterval);
     tickInterval = null;
@@ -589,16 +628,24 @@ function renderLineupTab() {
   const caption = cardPlaying
     ? (remaining !== null ? `${formatCountdown(remaining)} — tap to stop` : 'tap to stop')
     : 'tap anywhere to play';
+  const captionEl = h('div', { class: 'nowup-caption', text: caption });
   const card = h('button', { class: 'nowup-card' + (cardPlaying ? ' playing' : ''), onclick: () => {
-    if (cardPlaying) stopCurrent(true);
+    if (cardPlaying) {
+      if (Date.now() - playStartedAtMs < STOP_TAP_GRACE_MS) return; // double-tap guard
+      stopCurrent(true);
+    }
     else playClip(pointerId, { lineup: true });
   }}, [
     h('div', { class: 'nowup-label', text: 'Now up' }),
     h('div', { class: 'nowup-name', text: name.toUpperCase() }),
     pos ? h('div', { class: 'nowup-counter', text: `${pos.position} of ${pos.total}` }) : null,
     cardPlaying ? h('div', { class: 'nowup-stop-icon' }) : h('div', { class: 'nowup-play-icon' }),
-    h('div', { class: 'nowup-caption', text: caption }),
+    captionEl,
   ]);
+  if (cardPlaying && remaining !== null) {
+    liveCountdownEl = captionEl;
+    liveCountdownId = pointerId;
+  }
   body.appendChild(card);
 
   const nav = h('div', { class: 'navbtns' }, [
@@ -654,7 +701,10 @@ function renderGridPlay() {
     // still-playing lineup clip for the same player -- stopCurrent handles
     // either case correctly).
     grid.appendChild(h('button', { class: cls, onclick: () => {
-      if (isPlaying) stopCurrent(true);
+      if (isPlaying) {
+        if (Date.now() - playStartedAtMs < STOP_TAP_GRACE_MS) return; // double-tap guard
+        stopCurrent(true);
+      }
       else playClip(p.id);
     }}, [
       h('span', { text: p.name }),
@@ -731,11 +781,80 @@ function renderGridReorder() {
 
 /* ---- drag-to-reorder (Pointer Events; tap-vs-drag disambiguated by
    movement distance -- see 01-Architecture.md "Interaction algebra":
-   drag is never required, tap-out/tap-in alone can reach any order). */
+   drag is never required, tap-out/tap-in alone can reach any order).
+
+   Rebuilt 2026-07-06 after game-1 feedback ("nearly unusable"). Three
+   compounding defects in the first version: (1) nothing followed the
+   finger -- the tile only teleported when a reshuffle fired, so there was
+   no sense of holding anything; (2) the before/after drop test compared
+   Y midpoints, which is meaningless between tiles in the same row of a
+   3-column grid, so horizontal moves were coin flips; (3) nothing
+   suppressed text selection, so iOS treated drags as selection gestures
+   (blue ranges + loupe -- see the global user-select:none in the CSS).
+
+   Now: on drag start, a fixed-position ghost copy of the tile follows the
+   finger (pointer-events:none, so elementFromPoint sees through it to the
+   grid); the original tile stays in the grid as a dimmed placeholder and
+   is what actually gets reordered. Hovering another tile moves the
+   placeholder by reading-order logic -- dragging forward inserts after
+   the hovered tile, dragging backward inserts before it -- and displaced
+   tiles FLIP-animate into their new slots so the shuffle reads as motion,
+   not a text swap. */
 const DRAG_THRESHOLD_PX = 10;
+
+// Measure every order tile, run the DOM mutation, then animate each moved
+// tile from its old position to its new one (FLIP). The dragged/placeholder
+// tile is excluded -- it should snap, not glide, since the ghost is what
+// the eye is following.
+function flipTiles(gridEl, exceptTile, mutate) {
+  const tiles = Array.from(gridEl.querySelectorAll('.order-tile'));
+  const before = new Map();
+  tiles.forEach(t => before.set(t, t.getBoundingClientRect()));
+  mutate();
+  tiles.forEach(t => {
+    if (t === exceptTile) return;
+    const b = before.get(t), a = t.getBoundingClientRect();
+    const dx = b.left - a.left, dy = b.top - a.top;
+    if (!dx && !dy) return;
+    t.style.transition = 'none';
+    t.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        t.style.transition = 'transform 150ms ease';
+        t.style.transform = '';
+      }));
+    } else {
+      t.style.transition = ''; t.style.transform = '';
+    }
+  });
+}
 
 function wireDragTile(tile, id, gridEl) {
   let startX = 0, startY = 0, dragging = false, moved = false;
+  let ghost = null;
+  let lastSwap = null;
+
+  function startGhost() {
+    const rect = tile.getBoundingClientRect();
+    ghost = tile.cloneNode(true);
+    ghost.classList.add('drag-ghost');
+    ghost.style.position = 'fixed';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.height = rect.height + 'px';
+    ghost.style.margin = '0';
+    ghost.style.pointerEvents = 'none';
+    document.getElementById('app').appendChild(ghost);
+    tile.classList.add('drag-placeholder');
+  }
+
+  function endGhost() {
+    if (ghost && ghost.parentElement) ghost.parentElement.removeChild(ghost);
+    ghost = null;
+    lastSwap = null;
+    tile.classList.remove('drag-placeholder');
+  }
 
   tile.addEventListener('pointerdown', (e) => {
     startX = e.clientX; startY = e.clientY; moved = false; dragging = false;
@@ -746,24 +865,35 @@ function wireDragTile(tile, id, gridEl) {
     const dx = e.clientX - startX, dy = e.clientY - startY;
     if (!dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
       dragging = true; moved = true;
-      tile.classList.add('dragging');
+      startGhost();
     }
-    if (dragging) {
-      e.preventDefault();
-      // Find which tile in the order grid we're currently hovering.
-      const target = document.elementFromPoint(e.clientX, e.clientY);
-      const hoverTile = target ? target.closest('.order-tile') : null;
-      if (hoverTile && hoverTile !== tile && hoverTile.parentElement === gridEl) {
-        const rect = hoverTile.getBoundingClientRect();
-        const before = e.clientY < rect.top + rect.height / 2;
-        gridEl.insertBefore(tile, before ? hoverTile : hoverTile.nextSibling);
+    if (!dragging) return;
+    e.preventDefault();
+    if (ghost) ghost.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    // The ghost is pointer-events:none, so this sees the grid underneath.
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    const hoverTile = target ? target.closest('.order-tile') : null;
+    if (hoverTile && hoverTile !== tile && hoverTile.parentElement === gridEl) {
+      // Only reorder when the hovered tile changes -- prevents flip-flop
+      // jitter while the finger sits on a boundary.
+      if (hoverTile !== lastSwap) {
+        lastSwap = hoverTile;
+        const tiles = Array.from(gridEl.querySelectorAll('.order-tile'));
+        const from = tiles.indexOf(tile), to = tiles.indexOf(hoverTile);
+        if (from !== -1 && to !== -1 && from !== to) {
+          flipTiles(gridEl, tile, () => {
+            gridEl.insertBefore(tile, from < to ? hoverTile.nextSibling : hoverTile);
+          });
+        }
       }
+    } else if (!hoverTile || hoverTile === tile) {
+      lastSwap = null;
     }
   });
 
   tile.addEventListener('pointerup', (e) => {
     try { tile.releasePointerCapture(e.pointerId); } catch (err) {}
-    tile.classList.remove('dragging');
+    endGhost();
     if (!moved) {
       // Tap (no meaningful movement): bench this player.
       order = benchPlayer(order, id);
@@ -782,7 +912,7 @@ function wireDragTile(tile, id, gridEl) {
   });
 
   tile.addEventListener('pointercancel', () => {
-    tile.classList.remove('dragging');
+    endGhost();
     render(); // re-sync DOM from state in case a drag was interrupted mid-gesture
   });
 
@@ -793,8 +923,13 @@ function wireDragTile(tile, id, gridEl) {
    Tab bar wiring
    ============================================================ */
 document.getElementById('tabLineup').addEventListener('click', () => { state.activeTab = 'lineup'; render(); });
+// No empty-order special case here: forcing reorder mode whenever the
+// order was empty made the play grid unreachable in exactly the moment
+// firm principle 5 exists for (chaos, no lineup, operator just needs
+// songs). First-launch routing is handled once, at boot, by the initial
+// state -- after that the Soundboard tab always shows whatever grid mode
+// you were last in.
 document.getElementById('tabGrid').addEventListener('click', () => {
-  if (order.length === 0) { enterReorderMode(); return; }
   state.activeTab = 'grid';
   render();
 });

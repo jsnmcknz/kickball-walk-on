@@ -44,7 +44,7 @@ def load_manifest(path: Path) -> dict:
     if not path.exists():
         raise BuildError(f"Manifest not found: {path}")
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         raise BuildError(f"Manifest is not valid JSON: {e}")
 
@@ -174,8 +174,8 @@ def build(manifest_path: Path, out_path: Path):
     # already spoken for by the ops walkthroughs (01-Architecture.md).
     # Root it is -- pass --out dist/index.html for a local-only test copy.
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html)
-    (out_path.parent / "sw.js").write_text(sw_js)
+    out_path.write_text(html, encoding="utf-8")
+    (out_path.parent / "sw.js").write_text(sw_js, encoding="utf-8")
 
     mb = total_processed_bytes / (1024 * 1024)
     out_mb = out_path.stat().st_size / (1024 * 1024)
@@ -191,8 +191,12 @@ SW_TEMPLATE_PATH = Path(__file__).parent / "sw.template.js"
 def render_html(payload: dict) -> str:
     if not TEMPLATE_PATH.exists():
         raise BuildError(f"Template not found: {TEMPLATE_PATH}")
-    template = TEMPLATE_PATH.read_text()
-    html = template.replace("__PAYLOAD_JSON__", json.dumps(payload))
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    # Escape "</" so no player/team string can terminate the <script> tag
+    # early (json.dumps doesn't escape forward slashes). "<\/" is identical
+    # to "</" once JSON-parsed, so the payload is unchanged.
+    payload_json = json.dumps(payload).replace("</", "<\\/")
+    html = template.replace("__PAYLOAD_JSON__", payload_json)
     html = html.replace("__TEAM_NAME__", payload["team"])
     return html
 
@@ -200,7 +204,7 @@ def render_html(payload: dict) -> str:
 def render_sw(cache_id: str) -> str:
     if not SW_TEMPLATE_PATH.exists():
         raise BuildError(f"Service worker template not found: {SW_TEMPLATE_PATH}")
-    return SW_TEMPLATE_PATH.read_text().replace("__CACHE_ID__", cache_id)
+    return SW_TEMPLATE_PATH.read_text(encoding="utf-8").replace("__CACHE_ID__", cache_id)
 
 
 def main():

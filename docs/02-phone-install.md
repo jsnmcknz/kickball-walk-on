@@ -31,6 +31,7 @@ Open the **Settings** app:
 
 - **Display & Brightness → Auto-Lock → Never.** This is the primary defense against the screen sleeping mid-game — more reliable than the app's own wake-lock trick, which isn't guaranteed to work on every iOS version.
 - **Sounds & Haptics → Ringer and Alerts** — turn the volume up (or just use the physical volume buttons once the app is open and something's playing).
+- **Ring/Silent switch → Ring** (the small switch on the phone's left edge — orange showing means Silent). **The silent switch completely mutes this app's audio** (confirmed on the team phone): it plays sound through the browser's Web Audio system, which iOS silences in Silent mode even though regular music apps keep playing. If the soundboard ever goes mysteriously quiet, check this switch first.
 - **Focus → Do Not Disturb → On** (or swipe down from the top-right corner and tap the crescent moon). Stops notifications from popping up over the app mid-game.
 
 ## 4. Guided Access (locks the phone to just this app)
@@ -47,4 +48,5 @@ The phone is now locked into just this app — the Home button/gesture, Control 
 
 - Confirm the phone has enough battery (Guided Access + always-on screen will drain it faster than normal use).
 - Confirm auto-lock is still set to Never (should persist, but worth a glance).
+- **Check the ring/silent switch is on Ring** (no orange showing). Silent mode mutes the app entirely — see section 3.
 - If you made roster changes since the last game, open the app once on Wi-Fi *before* Guided Access locks it in, so the service worker picks up the update (see the "Updating later" section of the GitHub Pages doc).

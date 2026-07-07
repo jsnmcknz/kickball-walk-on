@@ -144,6 +144,12 @@ global.__hooks = {
   getPlayingId: function() { return playingId; },
   getCurrentSource: function() { return currentSource; },
   stopCurrent: function(fade) { return stopCurrent(fade); },
+  // The double-tap guard ignores taps-to-stop within STOP_TAP_GRACE_MS of
+  // play start. Tests run play + stop in the same millisecond, so any test
+  // that intends a *deliberate* stop-tap must first backdate the play
+  // timestamp past the grace window -- which also keeps the guard itself
+  // honest (an untimely stop-tap with no backdate must be a no-op).
+  backdatePlayStart: function(ms) { playStartedAtMs -= ms; },
 };
 `;
 
@@ -267,9 +273,20 @@ async function main() {
     'countdown shows in the caption while playing: ' + captionWhilePlaying.textContent);
   console.log('7a. Countdown renders on the card while playing: OK');
 
+  // Double-tap guard: a second tap landing within the grace window (an
+  // excited operator's double-tap) must NOT stop the clip or advance the
+  // pointer -- otherwise a double-tap plays a quarter-second of song and
+  // skips the kicker.
+  findByClassContaining('nowup-card', 'ALICE').dispatch('click');
+  assert(hooks.getPlayingId() === 'alice', 'still playing after an immediate second tap: ' + hooks.getPlayingId());
+  assert(hooks.getPointer() === 'alice', 'pointer unmoved by an immediate second tap: ' + hooks.getPointer());
+  console.log('7a2. Double-tap within the grace window is ignored: OK');
+
   // While playing, the card itself is the stop control (no separate
-  // Stop/fade button anymore) -- tapping it again stops the clip, and like
-  // any explicit stop, that resolves the turn and advances the card.
+  // Stop/fade button anymore) -- tapping it again (past the grace window)
+  // stops the clip, and like any explicit stop, that resolves the turn and
+  // advances the card.
+  hooks.backdatePlayStart(1000);
   findByClassContaining('nowup-card', 'ALICE').dispatch('click');
   assert(hooks.getPointer() === 'charlie', 'tapping the playing card stops it and advances: ' + hooks.getPointer());
   assert(hooks.getPlayingId() === null, 'playingId clears on tap-to-stop: ' + hooks.getPlayingId());
@@ -313,6 +330,7 @@ async function main() {
   assert(hooks.getPointer() === 'alice', 'pointer still alice going into this check: ' + hooks.getPointer());
   findByClassContaining('nowup-card', 'ALICE').dispatch('click');
   assert(hooks.getPlayingId() === 'alice', 'alice lineup clip playing: ' + hooks.getPlayingId());
+  hooks.backdatePlayStart(1000); // past the double-tap grace window
   findByClassContaining('nowup-card', 'ALICE').dispatch('click'); // tap again -> now the stop control
   assert(hooks.getPointer() === 'charlie', 'tap-to-stop on a lineup clip advances same as natural end: ' + hooks.getPointer());
   assert(hooks.getPlayingId() === null, 'playingId clears on tap-to-stop: ' + hooks.getPlayingId());
@@ -338,9 +356,12 @@ async function main() {
   render();
   findByText('Alice').dispatch('click'); // override play
   assert(hooks.getPlayingId() === 'alice', 'grid override tap plays: ' + hooks.getPlayingId());
+  findByText('Alice').dispatch('click'); // immediate retap -> inside grace window, must be ignored
+  assert(hooks.getPlayingId() === 'alice', 'grid tile double-tap guard holds: ' + hooks.getPlayingId());
+  hooks.backdatePlayStart(1000);
   findByText('Alice').dispatch('click'); // tap the now-playing tile again -- it's the stop control now
   assert(hooks.getPlayingId() === null, 'tapping a playing grid tile stops it: ' + hooks.getPlayingId());
-  console.log('12. Grid play-mode override tap + tap-to-stop: OK');
+  console.log('12. Grid play-mode override tap + double-tap guard + tap-to-stop: OK');
 
   const guestTile = findByClassContaining('tile guest', 'Guest') || findByClassContaining('guest', 'Guest');
   assert(guestTile, 'guest tile renders');
@@ -412,6 +433,28 @@ async function main() {
   // never throw, even with nothing playing.
   window.dispatchTo('pagehide');
   console.log('18. pagehide with nothing playing: OK (no throw)');
+
+  // Firm principle 5 regression: with an EMPTY order, the Soundboard tab
+  // must still reach the play grid. The old handler forced reorder mode
+  // whenever order.length === 0, making manual playback unreachable in
+  // exactly the chaos scenario the grid exists for. First-launch routing
+  // is boot-time state, not a tab-tap special case.
+  document.getElementById('tabGrid').click();
+  hooks.getState().gridMode = 'reorder';
+  render();
+  simulateTap(findByText('Alice'));
+  simulateTap(findByText('Charlie'));
+  simulateTap(findByText('Bob'));
+  simulateTap(findByText('Dana'));
+  assert(hooks.getOrder().length === 0, 'everyone benched again: ' + hooks.getOrder());
+  hooks.getState().gridMode = 'play';
+  document.getElementById('tabLineup').click();
+  document.getElementById('tabGrid').click(); // and back to the Soundboard tab
+  assert(hooks.getState().activeTab === 'grid' && hooks.getState().gridMode === 'play',
+    'empty order must not hijack the Soundboard tab into reorder mode: '
+    + hooks.getState().activeTab + '/' + hooks.getState().gridMode);
+  assert(findByText('Alice'), 'play grid renders (and is playable) with an empty order');
+  console.log('19. Soundboard stays reachable with an empty order (grid never blocks): OK');
 
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }
