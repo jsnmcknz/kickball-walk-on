@@ -157,16 +157,20 @@ def build(manifest_path: Path, out_path: Path):
         "players": players_out,
     }
 
-    html = render_html(payload)
-
-    # Content-hash cache id: hashed from the *final rendered HTML*, not just
-    # the manifest/audio payload -- a code fix to app.template.html changes
-    # index.html's bytes just as much as a roster change does, and both
-    # need to bust the service worker's cache the same way. Hashing only
-    # the payload was a real bug caught during the first build session: it
-    # meant a shipped code fix would never actually reach an already-cached
-    # phone via the normal "reopen on Wi-Fi" update flow.
-    cache_id = hashlib.sha256(html.encode()).hexdigest()[:10]
+    # Content-hash cache id, computed from the build INPUTS (template text +
+    # rendered payload JSON) rather than the final HTML. Two reasons:
+    # (1) same cache-busting guarantee -- a code fix to app.template.html or
+    #     any roster/clip change alters the inputs exactly as much as the
+    #     output, so the service worker cache still busts on every real
+    #     change (hashing only the payload was a real bug caught during the
+    #     first build session: shipped code fixes never reached cached
+    #     phones);
+    # (2) hashing the inputs lets the id be INJECTED INTO THE PAGE ITSELF
+    #     (__BUILD_ID__, shown in the field-debug readout) -- hashing the
+    #     final HTML can't do that, since embedding the hash would change
+    #     the hash. Added 2026-07-07: game 1's fixes were invisible ("am I
+    #     on the new version?" had no answer without visual changes).
+    html, cache_id = render_html(payload)
     sw_js = render_sw(cache_id)
 
     # Published to repo root by default: GitHub Pages' "deploy from a
@@ -188,7 +192,8 @@ TEMPLATE_PATH = Path(__file__).parent / "app.template.html"
 SW_TEMPLATE_PATH = Path(__file__).parent / "sw.template.js"
 
 
-def render_html(payload: dict) -> str:
+def render_html(payload: dict) -> tuple:
+    """Returns (html, build_id). build_id doubles as the SW cache id."""
     if not TEMPLATE_PATH.exists():
         raise BuildError(f"Template not found: {TEMPLATE_PATH}")
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -196,9 +201,11 @@ def render_html(payload: dict) -> str:
     # early (json.dumps doesn't escape forward slashes). "<\/" is identical
     # to "</" once JSON-parsed, so the payload is unchanged.
     payload_json = json.dumps(payload).replace("</", "<\\/")
+    build_id = hashlib.sha256((template + payload_json).encode()).hexdigest()[:10]
     html = template.replace("__PAYLOAD_JSON__", payload_json)
     html = html.replace("__TEAM_NAME__", payload["team"])
-    return html
+    html = html.replace("__BUILD_ID__", build_id)
+    return html, build_id
 
 
 def render_sw(cache_id: str) -> str:

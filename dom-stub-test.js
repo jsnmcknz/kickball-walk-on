@@ -176,8 +176,8 @@ async function main() {
   await decodeAll();
   render();
   console.log('1. Boot + first render: OK');
-  assert(hooks.getState().activeTab === 'grid' && hooks.getState().gridMode === 'reorder',
-    'first-launch routing (no saved order -> reorder mode)');
+  assert(hooks.getState().activeTab === 'lineup' && hooks.getState().editing === true,
+    'first-launch routing (no saved order -> Next Up opens in the order editor)');
 
   const screen = document.getElementById('screen');
   function findByText(text) {
@@ -232,7 +232,7 @@ async function main() {
   console.log('4. Re-add appends at end: OK, order =', hooks.getOrder());
 
   findByText('Done').click();
-  assert(hooks.getState().gridMode === 'play', 'Done exits to play mode');
+  assert(hooks.getState().editing === false, 'Done exits the editor');
   assert(hooks.getState().activeTab === 'lineup', 'Done lands on the Lineup tab, not Grid: ' + hooks.getState().activeTab);
   assert(JSON.stringify(hooks.getLastGameOrder()) === JSON.stringify(['alice', 'charlie', 'bob']),
     'lastGameOrder snapshot: ' + hooks.getLastGameOrder());
@@ -243,15 +243,12 @@ async function main() {
   // "clickable in a test that ignores disabled state." This is the check
   // that would have caught setAttribute('disabled', null) still disabling
   // the button permanently.
-  document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'reorder';
-  render();
+  findByText('order').click(); // the editor is entered from the Next Up screen now
   const recallBtnAfterDone = findByText('last game');
   assert(recallBtnAfterDone.disabled === false,
     'recall button must be enabled right after Done saves a snapshot');
   console.log('5b. Recall button enabled immediately after Done: OK');
-  document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'play';
+  hooks.getState().editing = false;
   render();
 
   document.getElementById('tabLineup').click();
@@ -283,7 +280,7 @@ async function main() {
   // reading off the (fake) audio clock rather than throwing or showing
   // stale/idle text.
   const captionWhilePlaying = findByClassContaining('nowup-caption', 'tap');
-  assert(captionWhilePlaying.textContent === '0:01 — tap to stop',
+  assert(captionWhilePlaying.textContent === '0:01 — tap to fade out',
     'countdown shows in the caption while playing: ' + captionWhilePlaying.textContent);
   console.log('7a. Countdown renders on the card while playing: OK');
 
@@ -316,8 +313,8 @@ async function main() {
   assert(hooks.getPlayingId() === null, 'playingId clears when the clip ends: ' + hooks.getPlayingId());
   console.log('7c. Clip finishing naturally advances the pointer to', hooks.getPointer());
 
-  findByText('skip ⏭').click();
-  assert(hooks.getPointer() === 'alice', 'skip advances: ' + hooks.getPointer());
+  findByText('next ⏭').click();
+  assert(hooks.getPointer() === 'alice', 'next advances: ' + hooks.getPointer());
   findByText('⏮ back').click();
   assert(hooks.getPointer() === 'bob', 'back returns: ' + hooks.getPointer());
   console.log('8. Skip/back nav: OK, pointer =', hooks.getPointer());
@@ -328,8 +325,8 @@ async function main() {
   assert(hooks.getPointer() === 'alice', 'on-deck chip jump: ' + hooks.getPointer());
   console.log('9. On-deck chip jump: OK, pointer =', hooks.getPointer());
 
-  document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'reorder';
+  hooks.getState().activeTab = 'lineup';
+  hooks.getState().editing = true;
   render();
   findByText('Dana').click(); // benched tile tap -> late arrival added mid-game
   assert(hooks.getOrder().includes('dana'), 'late arrival added: ' + hooks.getOrder());
@@ -340,6 +337,7 @@ async function main() {
   // it finish -- otherwise manually ending a turn early would leave the
   // card stuck showing the just-stopped kicker with no way to move on
   // except re-tapping them.
+  hooks.getState().editing = false;
   document.getElementById('tabLineup').click();
   assert(hooks.getPointer() === 'alice', 'pointer still alice going into this check: ' + hooks.getPointer());
   findByClassContaining('nowup-card', 'ALICE').dispatch('click');
@@ -355,8 +353,8 @@ async function main() {
   // advance on top when the stale clip finally ends.
   findByClassContaining('nowup-card', 'CHARLIE').dispatch('click');
   assert(hooks.getPlayingId() === 'charlie', 'charlie lineup clip playing: ' + hooks.getPlayingId());
-  findByText('skip ⏭').click();
-  assert(hooks.getPointer() === 'bob', 'manual skip moves pointer during playback: ' + hooks.getPointer());
+  findByText('next ⏭').click();
+  assert(hooks.getPointer() === 'bob', 'manual next moves pointer during playback: ' + hooks.getPointer());
   hooks.getCurrentSource().onended();
   assert(hooks.getPointer() === 'bob', 'stale clip ending after a manual skip must not double-advance: ' + hooks.getPointer());
   assert(hooks.getPlayingId() === null, 'playingId clears when the stale clip ends: ' + hooks.getPlayingId());
@@ -365,9 +363,7 @@ async function main() {
   hooks.stopCurrent(true);
   console.log('11. Calling stopCurrent with nothing playing: OK (no throw)');
 
-  document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'play';
-  render();
+  document.getElementById('tabGrid').click(); // All Songs: modeless, always the play grid
   findByText('Alice').dispatch('click'); // override play
   assert(hooks.getPlayingId() === 'alice', 'grid override tap plays: ' + hooks.getPlayingId());
   // The playing tile carries its own countdown line (fake clock: steady 0:01),
@@ -387,8 +383,8 @@ async function main() {
   console.log('13. Guest tile tap is a safe no-op: OK');
 
   // "Use last game's lineup" recall
-  document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'reorder';
+  hooks.getState().activeTab = 'lineup';
+  hooks.getState().editing = true;
   render();
   simulateTap(findByText('Alice'));
   simulateTap(findByText('Charlie'));
@@ -416,15 +412,15 @@ async function main() {
   // must keep playing -- explicitly requested: clips are short (<15s) and
   // stopping them isn't worth the friction. Verify entering reorder mode
   // does NOT touch playback.
+  hooks.getState().editing = false;
   document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'play';
-  render();
   const anyGridTile = findByText('Alice') || findByText('Charlie') || findByText('Bob');
   anyGridTile.dispatch('click'); // start something playing via Grid override
   const playingBefore = hooks.getPlayingId();
   assert(playingBefore !== null, 'sanity: something is playing before entering reorder');
+  document.getElementById('tabLineup').click(); // the order button lives on Next Up only now
   findByText('order').click(); // the order-btn text is "⇅ order"
-  assert(hooks.getState().gridMode === 'reorder', 'entered reorder mode');
+  assert(hooks.getState().editing === true, 'entered the editor');
   assert(hooks.getPlayingId() === playingBefore,
     'entering reorder mode must NOT stop a clip already playing');
   console.log('16. Entering reorder mode leaves an in-progress clip playing: OK');
@@ -434,6 +430,7 @@ async function main() {
   // firing visibilitychange with the page hidden, and confirm we treat it
   // as an explicit stop: playback clears, and since this was the lineup
   // clip, the card advances just like tapping to stop or letting it finish.
+  hooks.getState().editing = false;
   document.getElementById('tabLineup').click();
   const pointerBeforeBg = hooks.getPointer();
   findByClassContaining('nowup-card', '').dispatch('click'); // start the lineup clip
@@ -452,27 +449,24 @@ async function main() {
   window.dispatchTo('pagehide');
   console.log('18. pagehide with nothing playing: OK (no throw)');
 
-  // Firm principle 5 regression: with an EMPTY order, the Soundboard tab
-  // must still reach the play grid. The old handler forced reorder mode
-  // whenever order.length === 0, making manual playback unreachable in
-  // exactly the chaos scenario the grid exists for. First-launch routing
-  // is boot-time state, not a tab-tap special case.
-  document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'reorder';
+  // Firm principle 5, restated for the 2026-07-07 routing: All Songs is
+  // MODELESS -- it must show the play grid with a full, partial, or empty
+  // order, even while an edit is in progress on the Next Up tab. And
+  // returning to Next Up must resume that in-progress edit.
+  hooks.getState().activeTab = 'lineup';
+  hooks.getState().editing = true;
   render();
   simulateTap(findByText('Alice'));
   simulateTap(findByText('Charlie'));
   simulateTap(findByText('Bob'));
   simulateTap(findByText('Dana'));
   assert(hooks.getOrder().length === 0, 'everyone benched again: ' + hooks.getOrder());
-  hooks.getState().gridMode = 'play';
-  document.getElementById('tabLineup').click();
-  document.getElementById('tabGrid').click(); // and back to the Soundboard tab
-  assert(hooks.getState().activeTab === 'grid' && hooks.getState().gridMode === 'play',
-    'empty order must not hijack the Soundboard tab into reorder mode: '
-    + hooks.getState().activeTab + '/' + hooks.getState().gridMode);
+  document.getElementById('tabGrid').click(); // straight out of the editor
+  assert(hooks.getState().activeTab === 'grid', 'All Songs tab reachable mid-edit');
   assert(findByText('Alice'), 'play grid renders (and is playable) with an empty order');
-  console.log('19. All Songs tab stays reachable with an empty order (grid never blocks): OK');
+  document.getElementById('tabLineup').click();
+  assert(hooks.getState().editing === true, 'returning to Next Up resumes the in-progress edit');
+  console.log('19. All Songs is modeless and never blocks; Next Up resumes the edit: OK');
   // ...and no drag debris (ghosts/placeholders) survives a render pass.
   const appDebris = document.getElementById('app').querySelectorAll('.drag-ghost').length
     + document.getElementById('app').querySelectorAll('.drag-placeholder').length;
@@ -481,7 +475,8 @@ async function main() {
 
   // Clear button: one tap benches everyone; disabled once the order is
   // already empty; "last game" recall still restores the finalized lineup.
-  hooks.getState().gridMode = 'reorder';
+  hooks.getState().activeTab = 'lineup';
+  hooks.getState().editing = true;
   render();
   findByText('last game').click(); // restore a lineup to clear
   assert(hooks.getOrder().length === 3, 'recall before clear: ' + hooks.getOrder());
@@ -501,6 +496,7 @@ async function main() {
   // tap on any not-running context must synchronously REPLACE the context
   // (reusing decoded buffers) and play: one tap, no reboot. This test would
   // have caught game 1's dead-after-sleep bug.
+  hooks.getState().editing = false;
   document.getElementById('tabLineup').click();
   const wedgedCtx = hooks.getCtx();
   wedgedCtx.state = 'interrupted';
@@ -521,8 +517,6 @@ async function main() {
   // rebuild once and replay the same clip automatically, and must NOT
   // retry-loop beyond that single replay.
   document.getElementById('tabGrid').click();
-  hooks.getState().gridMode = 'play';
-  render();
   findByText('Eli').dispatch('click'); // grid override play
   assert(hooks.getPlayingId() === 'eli', 'override playing: ' + hooks.getPlayingId());
   const ctxAtPlay = hooks.getCtx();

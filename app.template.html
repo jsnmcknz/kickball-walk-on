@@ -23,14 +23,28 @@
     --plum-border: #7A5C82;
     --plum-text: #CBA9DD;
     --plum-fill: #4A3C52;
+    /* NOW UP card "pop" layer (2026-07-07): the kicker's name + play icon
+       in white against the moss/plum card, while labels/captions stay in
+       the dark badge-text -- game 1 feedback was that the all-dark card
+       text read flat. White on moss is ~2.9:1 -- fine for the display-size
+       name, which is why ONLY the name and icon use it. */
+    --card-pop: #FFFFFF;
   }
   /* user-select/touch-callout off globally: this is a kiosk soundboard with
      no text entry anywhere, and iOS otherwise treats reorder drags as text-
      selection gestures (blue highlight ranges, loupe, selection handles --
-     seen live at game 1, 2026-07-06). */
+     seen live at game 1, 2026-07-06).
+     touch-action: manipulation globally too (2026-07-07): iOS has ignored
+     user-scalable=no since iOS 10, so rapid taps anywhere were read as
+     double-tap-zoom attempts -- while the gesture recognizer deliberated,
+     following taps (e.g. the tab buttons) were silently swallowed until a
+     scroll/fidget reset it. manipulation disables double-tap-zoom while
+     keeping scroll; .order-tile's touch-action:none still wins on
+     specificity for drags. */
   * {
     box-sizing: border-box; -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    touch-action: manipulation;
   }
   html, body {
     height: 100%; margin: 0; background: var(--bg); color: var(--text);
@@ -88,7 +102,7 @@
   }
   .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.75; }
   .nowup-name {
-    color: var(--badge-text); text-transform: uppercase; font-weight: 500;
+    color: var(--card-pop); text-transform: uppercase; font-weight: 500;
     font-size: clamp(36px, 11vw, 56px); line-height: 1.05; margin: 8px 0 4px;
     word-break: break-word;
   }
@@ -98,14 +112,16 @@
   .nowup-play-icon {
     width: 0; height: 0; margin-bottom: 12px;
     border-top: 15px solid transparent; border-bottom: 15px solid transparent;
-    border-left: 24px solid var(--badge-text);
+    border-left: 24px solid var(--card-pop);
   }
   .nowup-caption { font-size: 13px; opacity: 0.8; }
   /* Playing state: the card itself becomes the stop control (no separate
      Stop/fade button) -- plum accent signals "tap to stop" the same way
      pickle signals "tap to play" elsewhere. */
   .nowup-card.playing { background: var(--plum-fill); color: var(--plum-text); }
-  .nowup-card.playing .nowup-name { color: var(--plum-text); }
+  /* Name stays in the pop color in both states -- one consistent "the name
+     is the loudest thing on the card" rule. */
+  .nowup-card.playing .nowup-name { color: var(--card-pop); }
   .nowup-stop-icon {
     width: 22px; height: 22px; margin-bottom: 12px;
     border: 3px solid var(--plum-text); border-radius: 4px;
@@ -143,15 +159,20 @@
   .tile {
     position: relative; background: var(--tile); border: 1px solid var(--tile-border);
     border-radius: 14px;
-    color: var(--text); font-size: 14px; font-weight: 500; padding: 16px 6px;
-    min-height: 60px; display: flex; align-items: center; justify-content: center;
-    flex-wrap: wrap; /* lets the playing tile's countdown wrap to its own line */
-    text-align: center; touch-action: manipulation;
+    color: var(--text); font-size: 14px; font-weight: 500; padding: 8px 6px;
+    /* FIXED height, both states (2026-07-07, game-1 follow-up): the playing
+       tile's extra lines (stop icon + countdown) used to grow its row and
+       reshuffle the whole grid mid-game. Idle tiles got taller, the playing
+       tile's stack got tighter, and now nothing moves when playback starts
+       or stops. Column layout replaced the old flex-wrap hack. */
+    height: 78px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; text-align: center; touch-action: manipulation;
   }
   /* Countdown on a playing grid tile: same "lives on the stop control"
      pattern as the NOW UP card's caption (extended to the grid 2026-07-06
      per Jason's request after game 1). */
-  .tile-countdown { width: 100%; font-size: 11px; opacity: 0.85; margin-top: 4px; }
+  .tile-countdown { width: 100%; font-size: 11px; opacity: 0.85; line-height: 1; }
   .tile:active { opacity: 0.85; }
   /* Playing state: the tile itself becomes the stop control -- same plum
      accent as the NOW UP card's playing state, for one consistent
@@ -161,11 +182,12 @@
      the NOW UP card's stack (name -> stop icon -> countdown) so both stop
      controls read as one pattern (2026-07-06 round 4; was inline after
      the name). */
-  .tile.playing .speaker { width: 100%; margin-top: 2px; }
+  .tile.playing .speaker { width: 100%; line-height: 1; }
   .tile.unavailable { color: var(--muted); opacity: 0.5; }
   .guest-wrap { display: flex; justify-content: center; padding: 14px 16px 0; }
   .tile.guest {
-    border-style: dashed; color: var(--muted); width: 45%; min-height: 44px;
+    border-style: dashed; color: var(--muted); width: 45%;
+    height: auto; min-height: 44px; /* exempt from the fixed tile height */
     padding: 10px 6px;
   }
 
@@ -213,11 +235,18 @@
   .loading-screen .wordmark { font-size: 14px; }
 
   /* Hidden field-debug readout (5 quick taps on the wordmark). Never
-     intercepts taps -- display only. */
+     intercepts taps -- display only. Positioned absolute INSIDE the #app
+     card (which is position:fixed, so it's the containing block), floating
+     just above the tab bar on its own dark chip -- v1 of this used
+     position:fixed/bottom:4px, which landed in the 12px gutter BELOW the
+     card, under the home-indicator zone: functionally invisible
+     (2026-07-07, caught by Jason on-device). */
   .debug-panel {
-    position: fixed; bottom: 4px; left: 8px; right: 8px; z-index: 99;
-    font: 10px/1.4 ui-monospace, Menlo, monospace; color: var(--muted);
-    pointer-events: none; opacity: 0.85; text-align: left;
+    position: absolute; bottom: 64px; left: 10px; right: 10px; z-index: 99;
+    font: 11px/1.4 ui-monospace, Menlo, monospace; color: var(--text);
+    background: rgba(0, 0, 0, 0.72); border: 1px solid var(--tile-border);
+    border-radius: 8px; padding: 4px 8px;
+    pointer-events: none; text-align: left;
   }
 </style>
 </head>
@@ -320,9 +349,15 @@ let pointerId = resolvePointer(order, loadJSON('pointer', null));
 let lastGameOrder = loadJSON('lastGameOrder', null);
 
 const hasSavedOrder = order.length > 0;
+// Reorder mode moved under the LINEUP tab (2026-07-07, Jason's game-1
+// follow-up): All Songs is now a pure soundboard -- identical whether an
+// order exists or not, no route into editing from it at all. Editing is
+// entered only from the Next Up screen's order button, and highlights the
+// Next Up tab while active. `editing` persists across a mid-edit peek at
+// All Songs -- returning to Next Up resumes the editor; Done exits it.
 let state = {
-  activeTab: hasSavedOrder ? 'lineup' : 'grid',
-  gridMode: hasSavedOrder ? 'play' : 'reorder', // first-launch routing: no saved order -> reorder mode
+  activeTab: 'lineup',
+  editing: !hasSavedOrder, // first-launch routing: no saved order -> Next Up opens in the order editor
 };
 
 function persistOrder() { saveJSON('order', order); }
@@ -635,6 +670,10 @@ document.addEventListener('visibilitychange', () => {
    hidden; exists so a wedged-audio report from the field can say
    *what state the context was in* instead of "it broke".
    ============================================================ */
+// Injected by build.py; identical to the service worker's cache id, so the
+// readout answers "which build is this phone actually running?" -- the only
+// reliable way to confirm an update landed when a change has no visible UI.
+const BUILD_ID = '__BUILD_ID__';
 let debugPanel = null, debugTimer = null;
 let debugTapCount = 0, debugTapLastMs = 0;
 function noteAudioEvent(msg) {
@@ -644,7 +683,8 @@ function noteAudioEvent(msg) {
 function updateDebugPanel() {
   if (!debugPanel) return;
   debugPanel.textContent =
-    'audio: ' + ctx.state +
+    'build: ' + BUILD_ID +
+    ' · audio: ' + ctx.state +
     ' · rebuilds: ' + audioRebuilds +
     ' · clips: ' + Object.keys(buffers).length + '/' + DATA.players.length +
     ' · last: ' + lastAudioEvent;
@@ -700,8 +740,8 @@ function h(tag, attrs, children) {
 }
 
 function enterReorderMode() {
-  state.activeTab = 'grid';
-  state.gridMode = 'reorder';
+  state.activeTab = 'lineup';
+  state.editing = true;
   render();
 }
 
@@ -729,13 +769,15 @@ function render() {
   });
   appEl.querySelectorAll('.drag-placeholder').forEach(t => t.classList.remove('drag-placeholder'));
   screenEl.innerHTML = '';
-  if (state.activeTab === 'lineup') screenEl.appendChild(renderLineupTab());
-  else if (state.gridMode === 'reorder') screenEl.appendChild(renderGridReorder());
-  else screenEl.appendChild(renderGridPlay());
+  if (state.activeTab === 'lineup') {
+    screenEl.appendChild(state.editing ? renderGridReorder() : renderLineupTab());
+  } else {
+    screenEl.appendChild(renderGridPlay()); // All Songs: always the soundboard, no modes
+  }
 
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
-  const inReorder = state.activeTab === 'grid' && state.gridMode === 'reorder';
+  const inReorder = state.activeTab === 'lineup' && state.editing;
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
 
   // Keep the on-card countdown live: start the tick the moment something
@@ -781,8 +823,11 @@ function renderLineupTab() {
   // there's no separate Stop/fade button anymore.
   const cardPlaying = isLineupCardPlaying(pointerId);
   const remaining = cardPlaying ? cardRemainingSeconds(pointerId) : null;
+  // "fade out", not "stop": stopCurrent(true) really does ramp the clip
+  // down over fadeOutMs, and operators unfamiliar with the app hesitate
+  // to tap something they think will hard-cut the music (Jason, 2026-07-07).
   const caption = cardPlaying
-    ? (remaining !== null ? `${formatCountdown(remaining)} — tap to stop` : 'tap to stop')
+    ? (remaining !== null ? `${formatCountdown(remaining)} — tap to fade out` : 'tap to fade out')
     : 'tap anywhere to play';
   const captionEl = h('div', { class: 'nowup-caption', text: caption });
   const card = h('button', { class: 'nowup-card' + (cardPlaying ? ' playing' : ''), onclick: () => {
@@ -802,7 +847,7 @@ function renderLineupTab() {
     const pid = pointerId;
     liveCountdownUpdate = () => {
       const r = cardRemainingSeconds(pid);
-      if (r !== null) captionEl.textContent = formatCountdown(r) + ' — tap to stop';
+      if (r !== null) captionEl.textContent = formatCountdown(r) + ' — tap to fade out';
     };
   }
   body.appendChild(card);
@@ -811,7 +856,7 @@ function renderLineupTab() {
     h('button', { class: 'navbtn', text: '⏮ back', onclick: () => {
       pointerId = prevPointer(order, pointerId); persistPointer(); render();
     }}),
-    h('button', { class: 'navbtn', text: 'skip ⏭', onclick: () => {
+    h('button', { class: 'navbtn', text: 'next ⏭', onclick: () => {
       pointerId = nextPointer(order, pointerId); persistPointer(); render();
     }}),
   ]);
@@ -842,9 +887,10 @@ function renderLineupTab() {
 
 function renderGridPlay() {
   const wrap = h('div', {});
+  // No order button here (removed 2026-07-07): All Songs is a pure
+  // soundboard. Editing the order is a Next Up concern only.
   const top = h('div', { class: 'topbar' }, [
     renderWordmark(),
-    h('div', { class: 'topbar-right' }, [renderOrderButton()]),
   ]);
   wrap.appendChild(top);
   wrap.appendChild(h('div', { class: 'grid-hint', text: 'A → Z by row' }));
@@ -955,9 +1001,9 @@ function renderGridReorder() {
     h('button', { class: 'done-full', text: '✓ Done', onclick: () => {
       lastGameOrder = order.slice();
       saveJSON('lastGameOrder', lastGameOrder);
-      // Land on the Lineup/play-card screen, not the Grid view -- that's
-      // the screen an operator actually needs once the lineup is locked in.
-      state.gridMode = 'play';
+      // Land on the Lineup/play-card screen -- that's the screen an
+      // operator actually needs once the lineup is locked in.
+      state.editing = false;
       state.activeTab = 'lineup';
       render();
     }}),
@@ -1158,13 +1204,12 @@ function wireDragTile(tile, id, gridEl) {
 /* ============================================================
    Tab bar wiring
    ============================================================ */
+// Next Up shows the editor if an edit is in progress (state.editing),
+// otherwise the play card. All Songs is unconditionally the soundboard
+// (firm principle 5: the grid never blocks -- no modes, no special cases,
+// identical with a full, partial, or empty order). A mid-edit peek at All
+// Songs and back resumes the editor; only Done ends it.
 document.getElementById('tabLineup').addEventListener('click', () => { state.activeTab = 'lineup'; render(); });
-// No empty-order special case here: forcing reorder mode whenever the
-// order was empty made the play grid unreachable in exactly the moment
-// firm principle 5 exists for (chaos, no lineup, operator just needs
-// songs). First-launch routing is handled once, at boot, by the initial
-// state -- after that the All Songs tab always shows whatever grid mode
-// you were last in.
 document.getElementById('tabGrid').addEventListener('click', () => {
   state.activeTab = 'grid';
   render();
