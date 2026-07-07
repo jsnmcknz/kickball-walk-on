@@ -211,6 +211,14 @@
     flex-direction: column; gap: 10px;
   }
   .loading-screen .wordmark { font-size: 14px; }
+
+  /* Hidden field-debug readout (5 quick taps on the wordmark). Never
+     intercepts taps -- display only. */
+  .debug-panel {
+    position: fixed; bottom: 4px; left: 8px; right: 8px; z-index: 99;
+    font: 10px/1.4 ui-monospace, Menlo, monospace; color: var(--muted);
+    pointer-events: none; opacity: 0.85; text-align: left;
+  }
 </style>
 </head>
 <body>
@@ -323,8 +331,42 @@ function persistPointer() { saveJSON('pointer', pointerId); }
 /* ============================================================
    Audio engine
    ============================================================ */
-const ctx = new (window.AudioContext || window.webkitAudioContext)();
-const buffers = {}; // playerId -> AudioBuffer
+/* Audio context lifecycle (reworked 2026-07-07 after game 1). iOS quirk:
+   when the screen locks, WebKit parks the context in a nonstandard
+   'interrupted' state -- NOT 'suspended', which was the only state the
+   old code checked -- and resume() from 'interrupted' is unreliable:
+   long-standing reports of it no-oping forever on user input
+   (WebAudio/web-audio-api#2585). This was game 1's "app is dead after
+   the phone slept, reboot required": play taps fired into a stopped
+   context (silence) and the countdown read a frozen ctx.currentTime.
+   So the app never bets on resume(): a context that isn't running at
+   play-tap time is torn down and replaced *synchronously inside the
+   same tap* -- a context created during a user gesture starts running
+   on iOS. Decoded AudioBuffers are context-independent, so the rebuilt
+   context reuses them: recovery is the same one tap, no re-decode, no
+   reboot. The old context is close()d so WebKit's cap on live contexts
+   is never approached. (Buffer reuse across contexts: verify on-device
+   during the 2h soak test -- flagged, not assumed.) */
+let ctx = null;
+let audioRebuilds = 0;        // field-debug readout
+let lastAudioEvent = 'boot';  // field-debug readout
+function createAudioContext() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  // Created outside a gesture (boot) this starts 'suspended'; created
+  // inside one it starts 'running'. The synchronous resume() nudge is
+  // free either way.
+  if (ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }
+  try { ctx.onstatechange = function () { updateDebugPanel(); }; } catch (e) {}
+}
+function rebuildAudioContext(reason) {
+  const old = ctx;
+  try { const p = old.close(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  createAudioContext();
+  audioRebuilds++;
+  noteAudioEvent('rebuild: ' + reason);
+}
+createAudioContext();
+const buffers = {}; // playerId -> AudioBuffer (survive context rebuilds)
 const unavailable = new Set(); // playerId -> decode failed
 let currentSource = null;
 let currentGain = null;
@@ -476,7 +518,21 @@ let playingId = null;
 async function playClip(playerId, opts) {
   opts = opts || {};
   if (unavailable.has(playerId)) return;
-  if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+  // Wedged-context recovery -- see the audio-lifecycle note at the top of
+  // this section. Everything from here down to source.start() must stay
+  // synchronous: an await would leave the user-gesture call stack and iOS
+  // would refuse to start the replacement context. 'suspended' and
+  // 'interrupted' both take this path; a healthy running context skips it.
+  if (ctx.state !== 'running') {
+    if (opts._watchdogRetry) {
+      // Watchdog replays run outside a gesture, where a fresh context
+      // can't be unlocked -- the watchdog already rebuilt; just nudge.
+      // If this still fails, the next real tap heals in-gesture.
+      try { ctx.resume(); } catch (e) {}
+    } else {
+      rebuildAudioContext(ctx.state + ' at tap');
+    }
+  }
   stopCurrent(false, { advanceIfPending: false });
   const buffer = buffers[playerId];
   if (!buffer) return;
@@ -507,7 +563,28 @@ async function playClip(playerId, opts) {
     pendingLineupSource = null;
     pendingLineupStartPointer = null;
   }
+  armAudioWatchdog(source, playerId, opts);
   render();
+}
+
+// Belt-and-suspenders behind the in-gesture rebuild: if the context still
+// isn't running shortly after a play started (a rebuild path that couldn't
+// unlock, or a state change that raced the tap), rebuild once more and
+// replay the same clip automatically. One retry per tap only -- a second
+// failure waits for the next tap rather than looping. The check is
+// ctx.state alone (not currentTime advancement): if WebKit reports
+// 'running', audio is running.
+const AUDIO_WATCHDOG_MS = 600;
+function armAudioWatchdog(source, playerId, opts) {
+  setTimeout(function () {
+    if (currentSource !== source) return; // finished, stopped, or replaced
+    if (ctx.state === 'running') return;  // healthy
+    noteAudioEvent('watchdog saw ' + ctx.state);
+    if (!opts._watchdogRetry) {
+      rebuildAudioContext('watchdog');
+      playClip(playerId, Object.assign({}, opts, { _watchdogRetry: true }));
+    }
+  }, AUDIO_WATCHDOG_MS);
 }
 
 // iOS forcibly interrupts a backgrounded/standalone web app's AudioContext
@@ -541,6 +618,61 @@ async function requestWakeLock() {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') requestWakeLock();
 });
+
+// Coming back to the foreground: try a free resume() so the first tap
+// usually finds a running context already. Opportunistic only -- when it
+// silently fails (the known 'interrupted' wedge), the tap-time rebuild in
+// playClip is the real fix.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && ctx.state !== 'running') {
+    try { const p = ctx.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  }
+});
+
+/* ============================================================
+   Field debug readout -- 5 quick taps on the wordmark toggles a
+   one-line overlay of live audio-engine state. Costs nothing when
+   hidden; exists so a wedged-audio report from the field can say
+   *what state the context was in* instead of "it broke".
+   ============================================================ */
+let debugPanel = null, debugTimer = null;
+let debugTapCount = 0, debugTapLastMs = 0;
+function noteAudioEvent(msg) {
+  lastAudioEvent = msg + ' @ ' + new Date().toTimeString().slice(0, 8);
+  updateDebugPanel();
+}
+function updateDebugPanel() {
+  if (!debugPanel) return;
+  debugPanel.textContent =
+    'audio: ' + ctx.state +
+    ' · rebuilds: ' + audioRebuilds +
+    ' · clips: ' + Object.keys(buffers).length + '/' + DATA.players.length +
+    ' · last: ' + lastAudioEvent;
+}
+function toggleDebugPanel() {
+  if (debugPanel) {
+    if (debugPanel.parentElement) debugPanel.parentElement.removeChild(debugPanel);
+    debugPanel = null;
+    if (debugTimer) { clearInterval(debugTimer); debugTimer = null; }
+    return;
+  }
+  debugPanel = h('div', { class: 'debug-panel' });
+  document.getElementById('app').appendChild(debugPanel);
+  updateDebugPanel();
+  debugTimer = setInterval(updateDebugPanel, 1000);
+}
+function wordmarkTapped() {
+  const now = Date.now();
+  if (now - debugTapLastMs > 1500) debugTapCount = 0;
+  debugTapLastMs = now;
+  debugTapCount++;
+  if (debugTapCount >= 5) { debugTapCount = 0; toggleDebugPanel(); }
+}
+// Both tab headers render the wordmark through this so the 5-tap debug
+// gesture works everywhere without any visible UI surface.
+function renderWordmark() {
+  return h('div', { class: 'wordmark', text: DATA.team, onclick: wordmarkTapped });
+}
 
 /* ============================================================
    Rendering
@@ -622,7 +754,7 @@ function render() {
 function renderLineupTab() {
   const wrap = h('div', {});
   const top = h('div', { class: 'topbar' }, [
-    h('div', { class: 'wordmark', text: DATA.team }),
+    renderWordmark(),
   ]);
 
   if (order.length === 0) {
@@ -711,7 +843,7 @@ function renderLineupTab() {
 function renderGridPlay() {
   const wrap = h('div', {});
   const top = h('div', { class: 'topbar' }, [
-    h('div', { class: 'wordmark', text: DATA.team }),
+    renderWordmark(),
     h('div', { class: 'topbar-right' }, [renderOrderButton()]),
   ]);
   wrap.appendChild(top);

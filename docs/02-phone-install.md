@@ -36,17 +36,27 @@ Open the **Settings** app:
 
 ## 4. Guided Access (locks the phone to just this app)
 
+**Guided Access is optional.** Game 1 (2026-07-06) showed its friction is real: exiting needs triple-click + passcode + an extra tap, and any settings mistake compounds mid-game. On a wiped, passcode-free phone operated by your own teammates, running *without* Guided Access is a legitimate choice — the risks are an accidental Home press (the app treats that as a clean stop; one tap reopens it) and teammates wandering off into Settings. If you skip it, sections 3 and 5 still apply in full. If you use it, the settings below remove the friction that bit at game 1.
+
 1. **Settings → Accessibility → Guided Access → toggle On.**
-2. While you're there, tap **Passcode Settings → Set Guided Access Passcode** and set a simple one (write it down somewhere — you'll need it to exit Guided Access later). You can also enable "Face ID" or "Touch ID" here if you'd rather not type a passcode to exit, but this is a passcode-free phone so a simple numeric one is probably easiest for whoever's operating it.
-3. Open the walk-on music app from the home screen.
-4. **Triple-click the side button** (or Home button, if the phone has one). Guided Access should start — you'll see a yellow-ish border animation.
-5. Tap **Start** in the top-right corner.
+2. **Settings → Accessibility → Guided Access → Display Auto-Lock → Never.** ⚠️ This is a *separate* setting from the system Auto-Lock in section 3, and it **overrides it while Guided Access is running** — this is why the phone slept between innings at game 1 despite system Auto-Lock being Never. Both must be set.
+3. While you're there, tap **Passcode Settings → Set Guided Access Passcode**. A passcode (or Face ID/Touch ID) is required to exit — iOS has no "none" option, and biometrics need a device passcode, which this phone deliberately doesn't have. So set the lowest-friction passcode possible: something like `111111` that any teammate can type without thinking. Write it on a piece of tape on the back of the phone if you want — security is not the point here.
+4. Open the walk-on music app from the home screen.
+5. **Triple-click the side button** (or Home button, if the phone has one). Guided Access should start — you'll see a yellow-ish border animation.
+6. On that start screen, tap **Options** (bottom-left) and turn **Volume Buttons → On**. Without this, the hardware volume buttons are dead inside Guided Access (another game-1 lesson — the only way to change volume was exiting the mode entirely).
+7. Tap **Start** in the top-right corner.
 
 The phone is now locked into just this app — the Home button/gesture, Control Center, and notifications are all disabled until Guided Access is exited (triple-click again, enter the passcode, tap End).
 
 ## 5. Before every game
 
-- Confirm the phone has enough battery (Guided Access + always-on screen will drain it faster than normal use).
-- Confirm auto-lock is still set to Never (should persist, but worth a glance).
+- Confirm the phone has enough battery (always-on screen drains faster than normal use). **Battery tip:** the app needs zero network at the park, so turn on **Airplane Mode, then re-enable Bluetooth** (Control Center: tap Airplane, then tap Bluetooth back on for the speaker) — the cellular/Wi-Fi radios hunting for signal are a bigger drain than the screen.
+- Confirm **both** auto-lock settings are still Never: Display & Brightness → Auto-Lock, *and* Accessibility → Guided Access → Display Auto-Lock (if using Guided Access). Either one alone lets the screen sleep.
 - **Check the ring/silent switch is on Ring** (no orange showing). Silent mode mutes the app entirely — see section 3.
-- If you made roster changes since the last game, open the app once on Wi-Fi *before* Guided Access locks it in, so the service worker picks up the update (see the "Updating later" section of the GitHub Pages doc).
+- If you made roster changes since the last game, open the app once on Wi-Fi *before* Guided Access locks it in, so the service worker picks up the update (see the "Updating later" section of the GitHub Pages doc). Do this before Airplane Mode, obviously.
+
+## 6. If audio ever seems dead
+
+As of the 2026-07-07 build the app self-heals a wedged audio engine: if the phone slept or the app was backgrounded and a play tap would previously do nothing, the same tap now rebuilds the audio engine and plays. No reboot, no re-adding to the home screen. If a tap ever *does* fall silent, tap once more — the app's internal watchdog also auto-retries once within a second.
+
+**Field diagnosis:** tap the team wordmark (top-left) 5 times quickly to toggle a tiny one-line status readout at the bottom of the screen (audio state, rebuild count, last event). Tap 5 times again to hide it. If something goes wrong at a game, a photo of that line tells us exactly what happened.

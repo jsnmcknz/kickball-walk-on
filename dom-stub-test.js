@@ -118,6 +118,7 @@ class FakeAudioContext {
   createBufferSource() { return new FakeSource(); }
   createGain() { return new FakeGain(); }
   async resume() { this.state = 'running'; }
+  async close() { this.state = 'closed'; }
 }
 global.window = {
   AudioContext: FakeAudioContext,
@@ -160,6 +161,9 @@ global.__hooks = {
   // timestamp past the grace window -- which also keeps the guard itself
   // honest (an untimely stop-tap with no backdate must be a no-op).
   backdatePlayStart: function(ms) { playStartedAtMs -= ms; },
+  // Audio-lifecycle internals (interrupted-state rebuild, watchdog).
+  getCtx: function() { return ctx; },
+  getAudioRebuilds: function() { return audioRebuilds; },
 };
 `;
 
@@ -490,6 +494,63 @@ async function main() {
   findByText('last game').click();
   assert(hooks.getOrder().length === 3, 'recall still restores after a clear: ' + hooks.getOrder());
   console.log('21. Clear button empties the order (recall remains the undo): OK');
+
+  // iOS wedge regression (game 1, 2026-07-06): after a screen lock the
+  // context sits in the nonstandard 'interrupted' state -- not 'suspended'
+  // -- and resume() can no-op forever (WebAudio/web-audio-api#2585). A play
+  // tap on any not-running context must synchronously REPLACE the context
+  // (reusing decoded buffers) and play: one tap, no reboot. This test would
+  // have caught game 1's dead-after-sleep bug.
+  document.getElementById('tabLineup').click();
+  const wedgedCtx = hooks.getCtx();
+  wedgedCtx.state = 'interrupted';
+  const rebuildsBefore = hooks.getAudioRebuilds();
+  findByClassContaining('nowup-card', '').dispatch('click');
+  assert(hooks.getCtx() !== wedgedCtx, 'wedged context replaced, not trusted to resume');
+  assert(hooks.getCtx().state === 'running', 'replacement context running');
+  assert(hooks.getAudioRebuilds() === rebuildsBefore + 1, 'rebuild counted: ' + hooks.getAudioRebuilds());
+  assert(wedgedCtx.state === 'closed', 'old context closed (context-cap hygiene)');
+  assert(hooks.getPlayingId() !== null, 'clip playing after ONE tap on a wedged context');
+  hooks.backdatePlayStart(500);
+  findByClassContaining('nowup-card', '').dispatch('click'); // tap-to-stop, clean up
+  assert(hooks.getPlayingId() === null, 'stopped clean after rebuild-play');
+  console.log('22. Interrupted-context tap rebuilds and plays in one tap: OK');
+
+  // Watchdog: context wedges (or never unlocked) AFTER a play started --
+  // tap-time check missed it. Within AUDIO_WATCHDOG_MS the app must
+  // rebuild once and replay the same clip automatically, and must NOT
+  // retry-loop beyond that single replay.
+  document.getElementById('tabGrid').click();
+  hooks.getState().gridMode = 'play';
+  render();
+  findByText('Eli').dispatch('click'); // grid override play
+  assert(hooks.getPlayingId() === 'eli', 'override playing: ' + hooks.getPlayingId());
+  const ctxAtPlay = hooks.getCtx();
+  ctxAtPlay.state = 'interrupted';
+  const rebuildsBeforeWd = hooks.getAudioRebuilds();
+  await new Promise(r => setTimeout(r, 700));
+  assert(hooks.getAudioRebuilds() === rebuildsBeforeWd + 1, 'watchdog rebuilt exactly once: ' + hooks.getAudioRebuilds());
+  assert(hooks.getCtx() !== ctxAtPlay, 'fresh context after watchdog');
+  assert(hooks.getPlayingId() === 'eli', 'same clip replayed automatically: ' + hooks.getPlayingId());
+  await new Promise(r => setTimeout(r, 700)); // retry watchdog window passes quietly
+  assert(hooks.getAudioRebuilds() === rebuildsBeforeWd + 1, 'no watchdog retry-loop');
+  hooks.backdatePlayStart(1500);
+  findByText('Eli').dispatch('click'); // tap-to-stop
+  assert(hooks.getPlayingId() === null, 'stopped clean after watchdog replay');
+  console.log('23. Watchdog rebuilds + replays once, never loops: OK');
+
+  // Field debug readout: 5 quick wordmark taps toggle the overlay on,
+  // 5 more toggle it off (also clearing its refresh interval -- this test
+  // hanging the process would itself be the regression signal).
+  const wordmark = findByClassContaining('wordmark', 'Test Team');
+  assert(wordmark, 'wordmark rendered in grid header');
+  for (let i = 0; i < 5; i++) wordmark.dispatch('click');
+  assert(document.getElementById('app').querySelectorAll('.debug-panel').length === 1,
+    'debug panel appears after 5 wordmark taps');
+  for (let i = 0; i < 5; i++) wordmark.dispatch('click');
+  assert(document.getElementById('app').querySelectorAll('.debug-panel').length === 0,
+    'debug panel removed after 5 more taps');
+  console.log('24. Hidden debug readout toggles via 5 wordmark taps: OK');
 
   console.log('\nALL DOM SMOKE TESTS PASSED');
 }
