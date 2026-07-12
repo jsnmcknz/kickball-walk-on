@@ -14,14 +14,17 @@ In `playClip`, there is no `await` between checking `ctx.state` and starting the
 **2. Rebuild, never trust `resume()`.**
 After a screen lock, iOS parks the context in the nonstandard **`interrupted`** state (not `suspended`), and `resume()` from it can no-op forever (WebAudio/web-audio-api#2585). Any not-running context at tap time is closed and replaced synchronously in-gesture, reusing the decoded AudioBuffers. This was game 1's "app dead after sleep" bug, and the fix was field-confirmed 2026-07-07 (readout: `rebuild: suspended at tap → audio: running`). Buffer reuse across contexts is confirmed working on the team phone. *(Tests 22–23.)*
 
-**3. The watchdog retries exactly once.**
-`armAudioWatchdog` rebuilds + replays a clip whose context isn't running ~600ms after start — once per tap (`_watchdogRetry`), never looping. A second failure waits for the next real tap, which heals in-gesture. *(Test 23.)*
+**3. The watchdog retries exactly once, then fails visibly.**
+`armAudioWatchdog` rebuilds + replays a clip whose context isn't running ~600ms after start — once per tap (`_watchdogRetry`), never looping. A second failure waits for the next real tap, which heals in-gesture — but (2026-07-13 amendment) it no longer sits there silently claiming to be "playing" while it waits: it resets to idle (`stopCurrent(false, {advanceIfPending:false})`, no lineup-advance since nothing actually played) so the operator sees "not playing" immediately instead of a countdown that will never resolve. *(Test 23.)*
 
 **4. Backgrounding is an explicit stop.**
 iOS forcibly interrupts a standalone web app's audio when it leaves the foreground — unfixable, even with `<audio>`/Media Session. `visibilitychange → hidden` therefore stops cleanly and advances the lineup. Don't try to "fix" background playback. *(Test 17.)*
 
 **5. The silent switch mutes the app entirely.**
 WebKit routes Web Audio through the "ambient" session; the ring/silent switch silences it (confirmed on the team phone) even though music apps keep playing. Not fixable in code — handled operationally (pre-game checklist).
+
+**6. Scoring's timer-fired auto-play can't self-heal from a real sleep — this is a policy wall, not a bug.**
+`scheduleScoringAutoPlay`'s `setTimeout` callback (and its one watchdog retry) both run *outside any user gesture*, unlike every tap-triggered play in this file. Invariant 1's whole fix depends on staying inside a gesture's call stack; a timer callback was never in one to begin with, so if the device has genuinely slept in between (screen actually locked — not just idle), no amount of rebuild/retry from here can unlock the new AudioContext, full stop. This is what Jason saw live (2026-07-13): auto-play frozen at the initial stage, no progress, no countdown, no error. It is **not** fixable by restructuring this code further — iOS requires a real tap to unlock audio, and a timer firing after a sleep cycle categorically isn't one. The fix is operational: verify Settings → Display & Brightness → Auto-Lock is actually "Never" on the scoring device (the documented primary defense, invariant note above wake lock in `app.template.html`), and/or run Guided Access during games (prevents the screen from sleeping/locking at the OS level, independent of this app's own best-effort Wake Lock API call, which many older iOS/Safari versions don't even implement). Watchdog give-up now at least fails *visibly* (see invariant 3) so a missed auto-play is obvious and one manual tap away from recovering, rather than a silent, confusing hang.
 
 ## Rendering
 

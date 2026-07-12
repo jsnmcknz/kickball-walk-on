@@ -313,8 +313,16 @@
      at 2x backing resolution; horizontal scroll takes over if a long
      lineup/extra innings ever outgrow the column. */
   .boxscore-panel { margin: 0 16px 10px; }
+  /* Totals (AB/H/R/RBI) are a SEPARATE canvas positioned over the scroll
+     container's right edge (2026-07-13, Jason: "fixed to the right side...
+     inning representations scrolling horizontally beneath it") -- a single
+     canvas is one bitmap and can't be part-sticky, so scorecardLayout/
+     drawScorecard/drawScorecardTotals share row geometry and this wrapper
+     just stacks the two visually. */
+  .boxscore-grid-wrap { position: relative; }
   .boxscore-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .scorecard-canvas {
+  .boxscore-totals-sticky { position: absolute; top: 0; right: 0; z-index: 2; }
+  .scorecard-canvas, .scorecard-totals-canvas {
     display: block; background: var(--tile);
     border: 1px solid var(--tile-border); border-radius: 10px;
   }
@@ -1419,7 +1427,13 @@ function deriveState(events) {
   // home) gets the plum ✕ on their own most recent at-bat cell.
   function markKickerOut(playerId) {
     for (let i = st.paLog.length - 1; i >= 0; i--) {
-      if (st.paLog[i].playerId === playerId) { st.paLog[i].kickerOut = true; return; }
+      if (st.paLog[i].playerId === playerId) {
+        st.paLog[i].kickerOut = true;
+        // Both call sites increment st.outs immediately before calling
+        // this, so it's already the right ordinal for the corner badge.
+        st.paLog[i].outNumberInHalf = st.outs;
+        return;
+      }
     }
   }
   // Scorecard mark (iteration 2, Jason: "advancement to 2nd/3rd isn't
@@ -1501,6 +1515,12 @@ function deriveState(events) {
         // force/push/set -- see setKickerBase, iteration 2).
         kickerScored: false, kickerOut: false, endedHalf: false,
         reachedBase: HIT_BASES[result] || 0,
+        // Which out of the half-inning this was (1/2/3), for the
+        // scorecard's small corner badge -- null until/unless this record
+        // is the one that actually produced an out (stamped here for a
+        // FLY/GND/K result, or by markKickerOut for a basepath/home out on
+        // a PREVIOUS record). 2026-07-13, Jason.
+        outNumberInHalf: null,
         // Board as it stood when this kicker stepped up (round 2,
         // 2026-07-08): the last-action chip renders the NET assessment of
         // this at-bat -- pre-PA board vs. the current board -- so manual
@@ -1531,6 +1551,7 @@ function deriveState(events) {
         else creditRun(batter, record, false); // HR: batter scores too
       } else if (OUT_RESULTS.has(result)) {
         st.outs += 1; // FLY/GND/K: runners hold, deliberately (see architecture doc)
+        record.outNumberInHalf = st.outs;
       } // MISSED: runners hold, no out -- counts as PA, never AB (honest denominators)
       st.lastAction = { kind: 'pa', playerId: batter, result: result, eventIdx: idx, movements: record.movements, rbi: record.rbi };
       advanceLineupPointer();
@@ -1824,8 +1845,8 @@ let currentDuration = null;
 let tickInterval = null;
 let liveCountdownUpdate = null;
 // Scoring auto-play's pending countdown (S1.3 live feedback, 2026-07-07):
-// {batterId, fireAtMs, timeoutHandle, scheduledEventsLength} while a result
-// tap's auto-play is armed and waiting, else null. Declared here (outside
+// {batterId, fireAtMs, timeoutHandle} while a result tap's auto-play is
+// armed and waiting, else null. Declared here (outside
 // the scoring markers) so render()'s shared tick-interval gating below can
 // reference it unconditionally -- it simply never becomes non-null when
 // scoring is stripped, since the only code that sets it is scoring-only.
@@ -2050,7 +2071,24 @@ function armAudioWatchdog(source, playerId, opts) {
     if (!opts._watchdogRetry) {
       rebuildAudioContext('watchdog');
       playClip(playerId, Object.assign({}, opts, { _watchdogRetry: true }));
+      return;
     }
+    // Both the original attempt and the one gesture-less retry above
+    // failed to reach 'running' -- almost always a fully slept/locked
+    // device (2026-07-13, Jason: observed live, freezing at the initial
+    // playback stage forever, no progress, no countdown). This is an iOS
+    // policy, not something retryable from here: it categorically refuses
+    // to resume an AudioContext outside a real tap, and neither this
+    // watchdog nor scoring's timer-fired auto-play (scheduleScoringAutoPlay)
+    // count as one. Previously this branch did nothing, leaving the NOW UP
+    // card showing "playing" indefinitely. Fail visibly instead: reset to
+    // idle (no lineup-advance -- nothing actually played) so the operator
+    // sees "not playing" immediately and knows a fresh tap is what's
+    // needed, rather than waiting on a countdown that will never resolve.
+    // The next real tap heals the context via playClip's own in-gesture
+    // rebuild path, same as any other wedged-context recovery in this file.
+    noteAudioEvent('watchdog gave up (' + ctx.state + ') -- reset to idle, needs a manual tap');
+    stopCurrent(false, { advanceIfPending: false });
   }, AUDIO_WATCHDOG_MS);
 }
 
@@ -2302,7 +2340,11 @@ function openLastActionCorrection() {
 }
 
 function applyRunnerOut(playerId) {
-  cancelPendingAutoplay();
+  // No cancelPendingAutoplay() here (2026-07-13, Jason): a plain baserunner
+  // out is routine mid-countdown and doesn't touch the lineup pointer or
+  // half -- scheduleScoringAutoPlay's own fire-time check is what actually
+  // guards against a wrong-fire (e.g. this out being the 3rd), not this
+  // eager cancel. See that function's comment for the full rationale.
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out' });
   scoringState = deriveState(scoringEvents);
   scoringCorrection = null;
@@ -2340,7 +2382,7 @@ function openScoredCorrection() {
   render();
 }
 function applyScoredRunnerReturn(playerId, to) {
-  cancelPendingAutoplay();
+  // No eager cancelPendingAutoplay() -- see applyRunnerOut's comment.
   // Same `set` event as any other placement -- replay's un-score
   // enforcement (deriveState) reverses the same-half run and places them.
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'set', to: to });
@@ -2349,7 +2391,7 @@ function applyScoredRunnerReturn(playerId, to) {
   render();
 }
 function applyScoredRunnerOut(playerId) {
-  cancelPendingAutoplay();
+  // No eager cancelPendingAutoplay() -- see applyRunnerOut's comment.
   // `scored: true` is the explicit gate that lets replay reverse the run
   // and record the out -- a plain runner-out for an off-base player stays
   // a stale no-op (see the deriveState guard).
@@ -2360,7 +2402,7 @@ function applyScoredRunnerOut(playerId) {
 }
 
 function applyRunnerSet(playerId, to) {
-  cancelPendingAutoplay();
+  // No eager cancelPendingAutoplay() -- see applyRunnerOut's comment.
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'set', to: to });
   scoringState = deriveState(scoringEvents);
   scoringCorrection = null;
@@ -3069,18 +3111,27 @@ function scheduleScoringAutoPlay() {
   if (scoringState.half !== 'us') return; // this PA was the 3rd out -- nobody's kicking
   const nextBatter = scoringState.lineup[scoringState.lineupPointer];
   if (!nextBatter) return;
-  const eventsAtSchedule = scoringEvents.length;
   const delayMs = DATA.autoPlayDelayMs || 2000; // fallback matches build.py's injected default; build.py always supplies the key
   const handle = setTimeout(() => {
     scoringAutoPlayPending = null;
-    // A correction (undo/amend) or another PA landed since scheduling --
-    // this auto-play is stale; skip rather than firing the wrong clip.
-    if (scoringEvents.length !== eventsAtSchedule) return;
+    // Re-validate against LIVE state rather than "did any event happen at
+    // all" (2026-07-13, Jason: routine baserunner corrections mid-countdown
+    // were killing the next batter's music every time, requiring a manual
+    // restart -- but baserunner edits are routine and shouldn't touch
+    // playback). A correction that doesn't move the lineup pointer or flip
+    // the half -- the common case, a runner set/out/scored correction --
+    // now lets this fire exactly as scheduled. One that DOES change who's
+    // up next (a 3rd-out flip mid-countdown, a fix-last amend/undo that
+    // rewinds the pointer) is still caught here, because nextBatter no
+    // longer matches -- same wrong-fire guarantee as before, just scoped to
+    // what actually invalidates the clip instead of treating every event
+    // as suspect.
+    if (scoringState.half !== 'us' || scoringState.lineup[scoringState.lineupPointer] !== nextBatter) return;
     playClip(nextBatter);
     scoringClipFiredForBatter = nextBatter;
     render();
   }, delayMs);
-  scoringAutoPlayPending = { batterId: nextBatter, fireAtMs: Date.now() + delayMs, timeoutHandle: handle, scheduledEventsLength: eventsAtSchedule };
+  scoringAutoPlayPending = { batterId: nextBatter, fireAtMs: Date.now() + delayMs, timeoutHandle: handle };
 }
 
 // +OUT: the entire defensive half is outs + runs, never opponent PAs
@@ -3318,7 +3369,13 @@ function scorecardColumns() {
     if (!(key in colIdxByKey)) { colIdxByKey[key] = cols.length; cols.push({ inning: rec.inning, pass: pass }); }
     cellMap[rec.playerId + '|' + colIdxByKey[key]] = rec;
   });
-  const maxInning = Math.max(scoringState.innings || 7, scoringState.inning);
+  // Only pad out through the CURRENT inning, not manifest.scoring's
+  // inningsPerGame (2026-07-13, Jason): the game runs on a 50-minute timer,
+  // not a fixed inning count, so a fresh game showing 6 empty future
+  // innings was never meaningful -- it just varies game to game and isn't
+  // knowable in advance. The current in-progress inning still gets a
+  // (possibly empty) column so it's visible before its first at-bat.
+  const maxInning = scoringState.inning;
   for (let i = 1; i <= maxInning; i++) {
     if (!cols.some(c => c.inning === i)) cols.push({ inning: i, pass: 0 });
   }
@@ -3345,20 +3402,44 @@ function scorecardColumns() {
 const ROW_H_BASE = 34, ROW_H = 46;
 const ROW_SCALE = ROW_H / ROW_H_BASE;
 const CELL_W = 42;
+// Split into two canvases (2026-07-13, Jason: "AB/H/R/RBI fixed to the
+// right, innings scrolling beneath it"): a canvas can't be part-sticky --
+// it's one bitmap -- so the grid (name + per-inning cells) and the totals
+// column are now two separate <canvas> elements that share this same row
+// geometry (headH/lineH/rowH/pad) so their rows line up pixel-for-pixel
+// side by side. renderBoxScoreBody positions the totals canvas with CSS
+// (position:absolute, right:0) over a position:relative wrapper so it
+// visually stays put while .boxscore-scroll's grid canvas scrolls under it.
 function scorecardLayout() {
   const colInfo = scorecardColumns();
   const lineup = scoringState.lineup;
-  const pad = 8, nameW = 68, totW = 54, rowH = ROW_H, headH = 16, lineH = 44;
+  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 44;
   const nCols = Math.max(colInfo.cols.length, 1);
   const cellW = CELL_W;
   return {
     cols: colInfo.cols, cellMap: colInfo.cellMap,
-    innings: Math.max(scoringState.innings || 7, scoringState.inning),
+    innings: scoringState.inning, // only innings actually played -- see scorecardColumns
     lineup: lineup, pad: pad, nameW: nameW, totW: totW,
     cellW: cellW, rowH: rowH, headH: headH, lineH: lineH,
-    w: pad * 2 + nameW + cellW * nCols + totW,
+    w: pad * 2 + nameW + cellW * nCols, // grid canvas: name + inning cells only, no totals
+    totalsW: pad + totW, // totals canvas: its own small sticky panel
     h: pad * 2 + lineH + headH + rowH * lineup.length,
   };
+}
+
+// Maps a base index (1=1st, 2=2nd, 3=3rd) to the same 4 points
+// drawMiniDiamond uses, so a basepath-out X can be centered on the actual
+// base a runner was erased at (2026-07-13, Jason: previously every
+// kickerOut X landed dead-center on the diamond regardless of which base
+// it happened at). 0 or an unset base falls back to home -- the
+// out-at-home correction path doesn't set reachedBase to anything
+// base-shaped, so home is the honest fallback rather than the diamond
+// center.
+function diamondBasePoint(cx, cy, r, base) {
+  if (base === 1) return [cx + r, cy];
+  if (base === 2) return [cx, cy - r];
+  if (base === 3) return [cx - r, cy];
+  return [cx, cy + r];
 }
 
 // 4-edge mini diamond centered on (cx, cy): edge i is drawn in `col`
@@ -3402,11 +3483,12 @@ function drawScorecard(canvas) {
   // small marks floating in more empty space.
   const px = (n) => Math.round(n * ROW_SCALE);
 
-  // ---- line score ----
+  // ---- line score ("the box score above the scorecard" -- 2026-07-13,
+  // Jason: bumped a couple px across the board for legibility) ----
   const lsCell = Math.min(24, (L.w - L.pad * 2 - 60 - 24) / L.innings);
   const lsX = L.pad + 60, lsY = L.pad;
   g.textAlign = 'left'; g.textBaseline = 'middle';
-  g.font = '600 10px ' + font;
+  g.font = '600 12px ' + font;
   g.fillStyle = SCORECARD_C.pickle;
   g.fillText(teamAbbrev(), L.pad, lsY + 18);
   g.fillStyle = SCORECARD_C.muted;
@@ -3415,18 +3497,18 @@ function drawScorecard(canvas) {
   for (let i = 1; i <= L.innings; i++) {
     const x = lsX + (i - 0.5) * lsCell;
     g.fillStyle = SCORECARD_C.muted;
-    g.font = '500 8px ' + font;
+    g.font = '600 9px ' + font;
     g.fillText(String(i), x, lsY + 5);
     const usPlayed = i < st.inning || (i === st.inning);
     const themPlayed = i < st.inning || (i === st.inning && st.half === 'them');
-    g.font = '500 10px ' + font;
+    g.font = '600 12px ' + font;
     g.fillStyle = SCORECARD_C.text;
     g.fillText(usPlayed ? String(st.runsByInning.us[i] || 0) : '·', x, lsY + 18);
     g.fillStyle = SCORECARD_C.muted;
     g.fillText(themPlayed ? String(st.runsByInning.them[i] || 0) : '·', x, lsY + 32);
   }
   const rX = lsX + L.innings * lsCell + 12;
-  g.font = '600 10px ' + font;
+  g.font = '700 12px ' + font;
   g.fillStyle = SCORECARD_C.muted;
   g.fillText('R', rX, lsY + 5);
   g.fillStyle = SCORECARD_C.text;
@@ -3447,11 +3529,8 @@ function drawScorecard(canvas) {
     g.fillStyle = L.cols[c].pass > 0 ? SCORECARD_C.border : SCORECARD_C.muted;
     g.fillText(String(L.cols[c].inning), gridX + (c + 0.5) * L.cellW, gridY - px(6));
   }
-  g.fillStyle = SCORECARD_C.muted;
-  g.fillText('H·R·RBI', gridX + nCols * L.cellW + L.totW / 2, gridY - px(6));
 
   // ---- player rows ----
-  const stats = computeStats(st);
   L.lineup.forEach((pid, row) => {
     const y = gridY + row * L.rowH;
     const cy = y + L.rowH / 2;
@@ -3478,16 +3557,39 @@ function drawScorecard(canvas) {
         g.font = '500 ' + px(7) + 'px ' + font;
         g.fillStyle = SCORECARD_C.pickle;
         g.fillText(rec.result, cx, y + L.rowH - px(6));
-        if (rec.kickerOut) { // erased on the bases -- hit edges stand, plum ✕ on top
+        if (rec.kickerOut) {
+          // Erased on the bases -- hit edges stand, plum ✕ on top, centered
+          // on the ACTUAL base (2026-07-13, Jason), not the diamond middle.
+          const dcx = cx, dcy = cy - px(4), r = px(7);
+          const bp = diamondBasePoint(dcx, dcy, r, rec.reachedBase);
           g.font = '600 ' + px(11) + 'px ' + font;
           g.fillStyle = SCORECARD_C.plum;
-          g.fillText('✕', cx, cy - px(4));
+          g.fillText('✕', bp[0], bp[1]);
         }
       } else { // FLY / GND / K
+        // 2026-07-13, Jason (round 2): the X stays plum -- matches the
+        // treatment of a basepath out, an out is an out -- but the result
+        // LABEL (FLY/GND/K) is back to muted grey like every other cell
+        // label. Plum on the label too made the whole card read as too
+        // plum.
         drawMiniDiamond(g, cx, cy - px(4), px(7), 0, false);
+        g.font = '600 ' + px(11) + 'px ' + font;
+        g.fillStyle = SCORECARD_C.plum;
+        g.fillText('✕', cx, cy - px(4));
         g.font = '500 ' + px(7) + 'px ' + font;
         g.fillStyle = SCORECARD_C.muted;
         g.fillText(rec.result, cx, y + L.rowH - px(6));
+      }
+      if (rec.outNumberInHalf) {
+        // Which out of the half-inning this was (2026-07-13, Jason),
+        // small badge in the cell's upper-left corner -- covers a
+        // FLY/GND/K result AND a basepath/home out on a hit (markKickerOut
+        // stamps the same field either way), so every out reads the same.
+        g.textAlign = 'left';
+        g.font = '700 ' + px(7) + 'px ' + font;
+        g.fillStyle = SCORECARD_C.plum;
+        g.fillText(String(rec.outNumberInHalf), gridX + c * L.cellW + px(3), y + px(8));
+        g.textAlign = 'center';
       }
       if (rec.endedHalf) { // third-out marker, LOWER-right corner (iteration 2)
         const x1 = gridX + (c + 1) * L.cellW, y1 = y + L.rowH;
@@ -3498,10 +3600,46 @@ function drawScorecard(canvas) {
         g.fill();
       }
     }
-    const s = stats[pid] || { h: 0, r: 0, rbi: 0 };
-    g.font = '500 ' + px(9) + 'px ' + font;
-    g.fillStyle = SCORECARD_C.muted;
-    g.fillText(s.h + '·' + s.r + '·' + s.rbi, gridX + nCols * L.cellW + L.totW / 2, cy);
+  });
+}
+
+// Sticky-right totals panel (2026-07-13, Jason: "AB/H/R/RBI fixed to the
+// right, innings scrolling beneath it"). Shares scorecardLayout's row
+// geometry (pad/lineH/headH/rowH) with drawScorecard so the two canvases'
+// rows line up pixel-for-pixel when renderBoxScoreBody sits them side by
+// side -- this one just never scrolls.
+function drawScorecardTotals(canvas) {
+  if (!canvas.getContext) return; // DOM-stub harness: layout only, no drawing
+  const L = scorecardLayout();
+  const g = canvas.getContext('2d');
+  const dpr = 2;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, L.totalsW, L.h);
+  const font = "-apple-system, 'Segoe UI', system-ui, sans-serif";
+  const px = (n) => Math.round(n * ROW_SCALE);
+  const gridY = L.pad + L.lineH + L.headH;
+
+  // Solid fill so the grid canvas visually disappears underneath this one
+  // when scrolled, rather than showing through at the seam.
+  g.fillStyle = SCORECARD_C.bg;
+  g.fillRect(0, 0, L.totalsW, L.h);
+  g.strokeStyle = SCORECARD_C.rule;
+  g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0.5, 0); g.lineTo(0.5, L.h); g.stroke();
+
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '600 ' + px(8) + 'px ' + font;
+  g.fillStyle = SCORECARD_C.muted;
+  g.fillText('AB·H·R·RBI', L.totalsW / 2, gridY - px(6));
+
+  const stats = computeStats(scoringState);
+  L.lineup.forEach((pid, row) => {
+    const y = gridY + row * L.rowH;
+    const cy = y + L.rowH / 2;
+    const s = stats[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
+    g.font = '600 ' + px(10) + 'px ' + font;
+    g.fillStyle = SCORECARD_C.text;
+    g.fillText(s.ab + '·' + s.h + '·' + s.r + '·' + s.rbi, L.totalsW / 2, cy);
   });
 }
 
@@ -3517,8 +3655,17 @@ function renderBoxScoreBody() {
     style: 'width:' + L.w + 'px;height:' + L.h + 'px',
   });
   drawScorecard(canvas);
+  const totalsCanvas = h('canvas', {
+    class: 'scorecard-totals-canvas',
+    width: L.totalsW * 2, height: L.h * 2,
+    style: 'width:' + L.totalsW + 'px;height:' + L.h + 'px',
+  });
+  drawScorecardTotals(totalsCanvas);
   const wrap = h('div', { class: 'boxscore-panel' }, [
-    h('div', { class: 'boxscore-scroll' }, [canvas]),
+    h('div', { class: 'boxscore-grid-wrap' }, [
+      h('div', { class: 'boxscore-scroll' }, [canvas]),
+      h('div', { class: 'boxscore-totals-sticky' }, [totalsCanvas]),
+    ]),
     h('button', { class: 'correction-cancel boxscore-close', text: '✕ close box score', onclick: toggleBoxScore }),
     // End game lives here, not the lineup editor (Jason, 2026-07-12 live
     // redirect from mockup screen 5) -- glancing at the score is the

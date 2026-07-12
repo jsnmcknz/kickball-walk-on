@@ -243,6 +243,8 @@ global.__hooks = {
   decodeAll: function() { return decodeAll(); },
   getDATA: function() { return DATA; },
   debugClearGameData: function() { return debugClearGameData(); },
+  scorecardColumns: function() { return scorecardColumns(); },
+  scorecardLayout: function() { return scorecardLayout(); },
 };
 `;
 
@@ -1754,6 +1756,75 @@ async function main() {
 
     global.window.confirm = () => true; // restore default
     console.log('57. Debug panel "clear game data": confirm-gated, wipes events + localStorage, closes open overlays: OK');
+  }
+
+  // 58. Scorecard out annotations (2026-07-13, Jason): every out -- a
+  // FLY/GND/K result AND a basepath/home out on a hit -- gets an
+  // outNumberInHalf stamp (1/2/3) for the corner badge, and a basepath
+  // out's reachedBase is available to center the X on the actual base
+  // instead of the diamond middle.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'X', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'runner', { playerId: 'bob', action: 'out' }); // out on the bases, still at 1st
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'K', inning: 1, half: 'us' }); // 3rd out
+    const st = hooks.deriveState(ev);
+    const aliceRec = st.paLog.filter(r => r.playerId === 'alice')[0];
+    const bobRec = st.paLog.filter(r => r.playerId === 'bob')[0];
+    const charlieRec = st.paLog.filter(r => r.playerId === 'charlie')[0];
+    assert(aliceRec.outNumberInHalf === 1, 'alice\'s flyout is the 1st out: ' + aliceRec.outNumberInHalf);
+    assert(bobRec.kickerOut === true && bobRec.reachedBase === 1, 'bob is out on the bases, still at 1st: ' + bobRec.reachedBase);
+    assert(bobRec.outNumberInHalf === 2, 'bob\'s basepath out is the 2nd out: ' + bobRec.outNumberInHalf);
+    assert(charlieRec.outNumberInHalf === 3, 'charlie\'s K is the 3rd out: ' + charlieRec.outNumberInHalf);
+    assert(charlieRec.endedHalf === true, 'sanity: 3rd out still flips the half');
+    console.log('58. Scorecard out annotations: outNumberInHalf stamped for FLY/GND/K and basepath outs, reachedBase available for X placement: OK');
+  }
+
+  // 59. Scorecard/box score only show innings actually reached (2026-07-13,
+  // Jason: the game runs on a 50-minute timer, not a fixed inning count) --
+  // scorecardColumns/scorecardLayout no longer pad out to
+  // manifest.scoring.inningsPerGame with empty future innings.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'X', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    const cols = hooks.scorecardColumns();
+    const maxColInning = Math.max.apply(null, cols.cols.map(c => c.inning));
+    assert(maxColInning === 1, 'only inning 1 has a column while the game is still in inning 1, not padded to 7: ' + maxColInning);
+    const L = hooks.scorecardLayout();
+    assert(L.innings === 1, 'line-score width is sized to the current inning, not manifest.scoring.inningsPerGame: ' + L.innings);
+    console.log('59. Scorecard/box score: only innings actually reached are shown, no padding to inningsPerGame: OK');
+  }
+
+  // 60. Scoring auto-play survives a routine baserunner correction, but a
+  // correction that actually changes who's up next still invalidates it
+  // (2026-07-13, Jason: baserunner edits are routine mid-countdown and
+  // shouldn't kill the next batter's music every time, but a real
+  // half-flip still must not misfire the stale batter). The safety net
+  // moved from "cancel on any correction" to scheduleScoringAutoPlay's own
+  // fire-time revalidation against live state.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'X', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    hooks.scheduleScoringAutoPlay();
+    assert(hooks.getScoringAutoPlayPending() !== null, 'auto-play armed for bob');
+    assert(hooks.getScoringAutoPlayPending().batterId === 'bob', 'bob is scheduled next: ' + hooks.getScoringAutoPlayPending().batterId);
+
+    // Routine correction: alice is really on base (1st, from the 1B above)
+    // -- advancing her to 2nd doesn't touch the lineup pointer or half.
+    hooks.applyRunnerSet('alice', 2);
+    assert(hooks.getScoringAutoPlayPending() !== null, 'a routine baserunner correction no longer cancels the pending auto-play');
+    assert(hooks.getScoringAutoPlayPending().batterId === 'bob', 'still armed for the same batter after the correction');
+
+    await new Promise((resolve) => setTimeout(resolve, 2100)); // DATA.autoPlayDelayMs is 2000 in the test payload
+    assert(hooks.getPlayingId() === 'bob', 'the clip fired for bob exactly as scheduled, unaffected by the routine correction: ' + hooks.getPlayingId());
+    hooks.stopCurrent(false);
+    console.log('60. Scoring auto-play: routine baserunner correction no longer kills the pending clip, still fires on schedule: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
