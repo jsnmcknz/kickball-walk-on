@@ -234,6 +234,7 @@
     margin: 8px 16px 12px; padding: 4px;
     background: var(--tile); border-radius: 999px;
   }
+  .tabbar.hidden { display: none; } /* portal shell replaces the classic tab UI entirely */
   .tabbtn {
     flex: 1; background: transparent; border: none; color: var(--muted);
     border-radius: 999px; padding: 10px 8px; font-size: 14px; font-weight: 500;
@@ -970,6 +971,106 @@
     border-radius: 8px; padding: 9px 0; text-align: center; font-size: 12px; font-weight: 500;
   }
   .adjust-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 10px; }
+
+  /* ---- Portal (07-Portal-Architecture.md, 2026-07-13) ----
+     Appearance ground truth: mockups/portal-screens.html screens 1/2/3/6.
+     No bottom tab bar in portal mode -- it's a distinct top-level surface,
+     not a third tab (the mockup shows none; render() hides .tabbar via
+     isPortalActive()). Navigation is a single quiet header link that
+     ping-pongs between the stats and schedule screens, matching the
+     mockup exactly. */
+  .portal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .portal-link { font-size: 12px; color: var(--muted); background: none; border: none; padding: 4px 0; }
+  .portal-nextgame-card {
+    background: var(--pickle); border-radius: 12px; padding: 14px 12px 12px; text-align: center; margin-bottom: 10px;
+  }
+  .portal-nextgame-label { font-size: 11px; letter-spacing: 0.1em; color: var(--badge-text); font-weight: 500; text-transform: uppercase; }
+  .portal-nextgame-name { font-size: 22px; color: #fff; font-weight: 500; margin: 2px 0; }
+  .portal-nextgame-cap { font-size: 12px; color: var(--olive-label); }
+  .portal-record-chip {
+    display: flex; justify-content: space-between; background: var(--tile); border: 1px solid var(--tile-border);
+    border-radius: 8px; padding: 8px 10px; margin-bottom: 4px; font-size: 12px;
+  }
+  .portal-record-chip .rec { color: var(--text); font-weight: 500; }
+  .portal-record-chip .rd { color: var(--muted); }
+  .portal-section-label {
+    font-size: 11px; letter-spacing: 0.1em; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; margin: 12px 4px 6px;
+  }
+  .portal-leaders-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 4px; }
+  .portal-leader-chip { background: var(--tile); border: 1px solid var(--tile-border); border-radius: 8px; text-align: center; padding: 8px 4px; }
+  .portal-leader-stat { font-size: 11px; color: var(--muted); }
+  .portal-leader-value { font-size: 16px; font-weight: 500; color: var(--text); }
+  .portal-leader-name { font-size: 11px; color: var(--pickle); }
+  .portal-sort-header { display: flex; align-items: center; padding: 0 11px; }
+  .portal-sort-header .fill { flex: 1; }
+  .portal-sort-col { width: 30px; text-align: center; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .portal-sort-col.active { color: var(--pickle); }
+  .portal-play-spacer { width: 32px; flex: none; }
+  .portal-player-row {
+    display: flex; align-items: center; background: var(--tile); border: 1px solid var(--tile-border);
+    border-radius: 8px; padding: 7px 10px; margin-bottom: 5px;
+  }
+  .portal-player-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
+  .portal-player-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .portal-player-stat { width: 30px; text-align: center; font-size: 12px; color: var(--text); }
+  .portal-player-stat.zero { color: var(--muted); }
+  .portal-play-btn {
+    width: 26px; height: 26px; flex: none; margin-left: 6px; border: 1px solid var(--olive); border-radius: 6px;
+    background: none; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--pickle);
+  }
+  .portal-play-btn.playing { border-color: var(--plum-border); color: var(--plum-text); background: var(--plum-fill); }
+  .portal-more-row { text-align: center; padding: 6px 0 0; }
+  .portal-schedule-row {
+    display: flex; align-items: center; gap: 10px; background: var(--tile); border: 1px solid var(--tile-border);
+    border-radius: 8px; padding: 9px 10px; margin-bottom: 6px;
+  }
+  .portal-schedule-row.next { border-color: var(--olive); }
+  .portal-schedule-row.future { opacity: 0.4; }
+  .portal-schedule-date { width: 38px; flex: none; font-size: 12px; color: var(--muted); }
+  .portal-schedule-opp { flex: 1; font-size: 13px; color: var(--text); }
+  .portal-schedule-result { font-size: 13px; font-weight: 500; }
+  .portal-schedule-result.win { color: var(--pickle); }
+  .portal-schedule-result.loss { color: var(--plum-text); }
+  .portal-schedule-time { font-size: 12px; color: var(--pickle); }
+  .portal-schedule-tbd { font-size: 13px; color: var(--muted); }
+  .portal-schedule-dagger { font-size: 12px; color: var(--muted); margin-left: 4px; }
+  .portal-schedule-chev { font-size: 12px; color: var(--muted); margin-left: 4px; }
+  .portal-schedule-footnote { font-size: 12px; color: var(--muted); text-align: center; margin-top: 10px; }
+  .portal-gd-header {
+    display: flex; justify-content: space-between; align-items: baseline; background: var(--tile);
+    border: 1px solid var(--tile-border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+  }
+  .portal-gd-title { font-size: 13px; color: var(--text); font-weight: 500; }
+  .portal-gd-result { font-size: 14px; font-weight: 500; }
+  .portal-gd-result.win { color: var(--pickle); }
+  .portal-gd-result.loss { color: var(--plum-text); }
+  .portal-linescore { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; }
+  .portal-linescore th { padding: 2px 4px; color: var(--muted); font-weight: 400; text-align: center; }
+  .portal-linescore td { padding: 2px 4px; color: var(--text); text-align: center; border-top: 1px solid var(--tile-border); }
+  .portal-linescore .team-label { text-align: left; font-weight: 500; }
+  .portal-linescore .runs-total { font-weight: 500; color: var(--pickle); }
+  .portal-view-scorecard-btn {
+    display: block; width: 100%; background: var(--tile); border: 1px solid var(--olive); border-radius: 10px;
+    text-align: center; padding: 11px 0; font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px;
+  }
+  .portal-prompt-wrap { padding: 4px 0; }
+  .portal-prompt-dim { opacity: 0.4; pointer-events: none; }
+  .portal-prompt-card {
+    background: var(--tile); border: 1px solid var(--pickle); border-radius: 12px;
+    padding: 16px 12px 12px; text-align: center; margin: 18px 0;
+  }
+  .portal-prompt-label { font-size: 11px; letter-spacing: 0.1em; color: var(--pickle); font-weight: 500; text-transform: uppercase; }
+  .portal-prompt-vs { font-size: 20px; font-weight: 500; color: #fff; margin: 4px 0 2px; }
+  .portal-prompt-when { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .portal-prompt-accept {
+    display: block; width: 100%; background: var(--olive); border-radius: 8px; padding: 11px 0;
+    font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 6px;
+  }
+  .portal-prompt-decline {
+    display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border); border-radius: 8px;
+    padding: 9px 0; font-size: 12px; font-weight: 500; color: var(--muted);
+  }
   /* __SCORING_END__ */
 </style>
 </head>
@@ -980,7 +1081,7 @@
 </div>
 <div id="app" style="display:none;">
   <div id="screen"></div>
-  <div class="tabbar">
+  <div class="tabbar" id="tabbar">
     <button class="tabbtn" id="tabLineup">Next Up</button>
     <button class="tabbtn" id="tabGrid">Soundboard</button>
   </div>
@@ -1715,6 +1816,81 @@ function computeStats(st) {
   });
   st.runsLog.forEach(en => ensure(en.playerId).r += 1);
   return stats;
+}
+
+/* ---- Season portal data layer (07-Portal-Architecture.md, 2026-07-13) ----
+   Per that doc's "Data path note": stats derive from the event log, which
+   lives per-device. Until S2 sync exists, this only reflects games actually
+   SCORED ON THIS DEVICE, plus score-only manifest results (pre-app games
+   like game 1) for the record line -- exactly the "ship the posture and
+   schedule first, full value arrives with sync" tradeoff the doc accepts. */
+
+// Splits the flat scoringEvents array into one sub-array per game -- a
+// game_start opens a new segment, everything up to (not including) the
+// NEXT game_start belongs to it (adjust/runner/undo/amend events for that
+// game all land correctly this way, no separate bookkeeping needed).
+function segmentGamesFromEvents(events) {
+  const games = [];
+  let current = null;
+  events.forEach((e) => {
+    if (e.type === 'game_start') { current = []; games.push(current); }
+    if (current) current.push(e);
+  });
+  return games;
+}
+
+// One row per game with real data: device-scored games (from the local
+// log, only once they have a game_end -- an in-progress game isn't season
+// history yet) UNIONED with manifest schedule entries that carry a
+// `result` (score-only, e.g. game 1, pre-dating this app) and aren't
+// already covered by a logged game. Manifest results are assumed to count
+// toward the season record (07's open question, presumed yes since a
+// record excluding game 1 would be misleading, not because it's
+// authoritative -- easy to revisit).
+function seasonGameRecords() {
+  const records = [];
+  const byScheduleId = {};
+  segmentGamesFromEvents(scoringEvents).forEach((evts) => {
+    const startEvt = evts.find(e => e.type === 'game_start');
+    if (!startEvt) return;
+    if (!evts.some(e => e.type === 'game_end')) return; // still live -- not season history yet
+    const st = deriveState(evts);
+    const rec = {
+      scheduleGameId: (startEvt.payload && startEvt.payload.scheduleGameId) || null,
+      opponent: st.opponent, final: { us: st.scoreUs, them: st.scoreThem },
+      source: 'log', events: evts,
+    };
+    records.push(rec);
+    if (rec.scheduleGameId) byScheduleId[rec.scheduleGameId] = rec;
+  });
+  (DATA.schedule || []).forEach((g) => {
+    if (byScheduleId[g.id] || !g.result) return;
+    records.push({ scheduleGameId: g.id, opponent: g.opponent, final: g.result, source: 'manifest', events: null });
+  });
+  return records;
+}
+
+function seasonRecord() {
+  let w = 0, l = 0, runDiff = 0;
+  seasonGameRecords().forEach((r) => {
+    if (r.final.us > r.final.them) w += 1; else if (r.final.us < r.final.them) l += 1;
+    runDiff += (r.final.us - r.final.them);
+  });
+  return { w: w, l: l, runDiff: runDiff };
+}
+
+// Sums per-player stats across every device-scored game only -- a
+// manifest-only result (game 1) has no per-player data to contribute.
+function seasonPlayerStats() {
+  const totals = {};
+  seasonGameRecords().filter(r => r.source === 'log').forEach((r) => {
+    const gs = computeStats(deriveState(r.events));
+    Object.keys(gs).forEach((pid) => {
+      const t = totals[pid] || (totals[pid] = { ab: 0, h: 0, r: 0, rbi: 0 });
+      t.ab += gs[pid].ab; t.h += gs[pid].h; t.r += gs[pid].r; t.rbi += gs[pid].rbi;
+    });
+  });
+  return totals;
 }
 /* __SCORING_END__ */
 
@@ -3743,6 +3919,22 @@ function pickDefaultScheduleGameId() {
   const chosen = inWindow || nextUpcoming;
   return chosen ? chosen.id : null;
 }
+// Strict "is a fixture's window open RIGHT NOW" check for the portal's
+// game-window prompt (screen 3) -- deliberately narrower than
+// pickDefaultScheduleGameId's fallback-to-soonest-upcoming, since the
+// prompt must never appear for a game that's merely coming up someday.
+function scheduleGameInWindowNow() {
+  const now = Date.now();
+  let found = null;
+  (DATA.schedule || []).forEach(g => {
+    if (g.result) return;
+    const start = fixtureStartDate(g);
+    if (!start) return;
+    const ms = start.getTime();
+    if (now >= ms - GAME_WINDOW_MS && now <= ms + GAME_WINDOW_MS) found = g;
+  });
+  return found;
+}
 // First word of the opponent's name, upper-cased, for the adjust sheet's
 // compact team label (mockup screen 8: "OTTER" from "Otter Nonsense").
 function oppLabel() {
@@ -3762,6 +3954,23 @@ let endGameConfirmOpen = false;
 // PIN unlock IS the flag. Once entered on this device, score-mode entry
 // never re-prompts for it.
 let pinUnlocked = loadJSON('scoringPinUnlocked', false);
+
+// ---- portal (07-Portal-Architecture.md, 2026-07-13 session -- built once
+// the schedule/lineup-editor/PIN-gate machinery above already existed to
+// build on). All UI-only, decided once at boot by decidePortalBoot()
+// (a safe wrapper, declared outside these markers, near render()) and from
+// there mutated only by portal navigation taps.
+let portalActive = false;             // true -> render() shows the portal shell instead of the classic tab UI
+let portalScreen = 'stats';           // 'stats' | 'schedule' | 'gameDetail' (mockup screens 1 / 2 / 6)
+let portalGameDetailId = null;        // scheduleGameId of the game screen 6 is showing
+let portalScorecardOpen = false;      // "view scorecard" takeover within game detail
+let gameWindowPromptOpen = false;     // screen 3, over the portal
+// In-memory only (not persisted): declining the prompt hides it for the
+// rest of this session, but it returns on a fresh reload within the same
+// window. 07 flags the exact re-offer behavior ("quiet banner vs repeat
+// modal") as still undecided -- this is a deliberately simple default,
+// not a final answer.
+let gameWindowPromptDismissed = false;
 
 // ---- entry points ----
 // Stopgap direct entry point (Jason, 2026-07-12): screens 4/5 are normally
@@ -4354,6 +4563,362 @@ function debugClearGameData() {
   /* __SCORING_END__ */
 }
 
+// Team-phone role marker (07-Portal-Architecture.md, decided 2026-07-13,
+// Jason): a URL fragment baked into the home-screen bookmark
+// (index.html#team), not a persisted toggle -- survives localStorage
+// eviction; re-adding the Home Screen icon with a different URL is how
+// you'd change a device's role later. No scoring-only reference, so this
+// stays unmarked/shared -- harmless (always false) in a walk-on-only build.
+function isTeamPhone() {
+  return typeof location !== 'undefined' && location.hash === '#team';
+}
+
+// Same safe-wrapper pattern as scoringEditorActive() etc.: the boot
+// sequence at the bottom of this file is shared/unmarked code (runs in
+// every build), but deciding portal boot posture only makes sense/exists
+// in a scoring build -- see 07-Portal-Architecture.md's "Posture-aware
+// boot rule". Called once, from decodeAll().then(...), before the first
+// render().
+function decidePortalBoot() {
+  /* __SCORING_START__ */
+  if (!(DATA.scoring && DATA.scoring.enabled) || isScoringLive()) return; // rule 1: a live game always wins (handled above, at state init)
+  if (isTeamPhone()) {
+    // "game window -> Start-game flow directly, skipping the prompt;
+    // otherwise -> Next Up, never the portal." PIN gate still applies --
+    // openStartGameFlow() already gates on pinUnlocked itself.
+    if (scheduleGameInWindowNow()) openStartGameFlow();
+    return;
+  }
+  portalActive = true; // rule 3: everyone, otherwise, boots to the portal
+  if (scheduleGameInWindowNow()) gameWindowPromptOpen = true; // rule 2, layered over the portal
+  /* __SCORING_END__ */
+}
+
+/* __SCORING_START__ */
+/* ============================================================
+   Portal screens (07-Portal-Architecture.md, mockups/portal-screens.html
+   screens 1/2/3/6 -- appearance ground truth). Screens 4/5/7/8 already
+   existed from S1.6; these are the remaining "front door" surfaces:
+   season stats (1), schedule (2), the game-window prompt (3), and
+   per-game detail (6). Known v1 simplifications, flagged rather than
+   silently built around: the mockup's "... all 12, tap a kicker for
+   their season" truncation + per-player season drill-down aren't built
+   here -- the full team table just always shows everyone, and tapping a
+   row does nothing beyond its play button.
+   ============================================================ */
+
+// Soonest fixture with no result yet. Falls back to the first resultless
+// entry if every dated fixture has already passed (shouldn't happen with
+// a real schedule, but keeps the NEXT GAME card from going blank).
+function nextScheduledGame() {
+  const now = Date.now();
+  let next = null, nextMs = Infinity;
+  (DATA.schedule || []).forEach(g => {
+    if (g.result) return;
+    const start = fixtureStartDate(g);
+    if (start && start.getTime() > now && start.getTime() < nextMs) { next = g; nextMs = start.getTime(); }
+  });
+  return next || (DATA.schedule || []).find(g => !g.result) || null;
+}
+function formatFixtureDateShort(g) {
+  const d = fixtureStartDate(g);
+  if (!d) return 'TBD';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+}
+function formatFixtureTimeVenue(g) {
+  const d = fixtureStartDate(g);
+  const timePart = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Time TBD';
+  const venuePart = g.field || (DATA.venue && DATA.venue.name) || '';
+  return timePart + (venuePart ? ' · ' + venuePart : '');
+}
+// Shared by screen 1's team table and screen 6's game lines: descending
+// by default (dir -1), ties break alphabetically by name -- same
+// contract as the mockup's live tap-to-sort headers.
+function sortPlayerStatRows(pids, statsByPid, key, dir) {
+  return pids.slice().sort((a, b) => {
+    const sa = (statsByPid[a] && statsByPid[a][key]) || 0;
+    const sb = (statsByPid[b] && statsByPid[b][key]) || 0;
+    if (sa !== sb) return (sb - sa) * (dir < 0 ? 1 : -1);
+    return playerNameOf(a).localeCompare(playerNameOf(b));
+  });
+}
+function toggleSort(key, getKey, setKey, getDir, setDir) {
+  if (getKey() === key) setDir(-getDir()); else { setKey(key); setDir(-1); }
+  render();
+}
+
+let portalStatsSortKey = 'h', portalStatsSortDir = -1;
+let portalGameLinesSortKey = 'h', portalGameLinesSortDir = -1;
+
+function renderPortalHeader(linkText, onLink) {
+  return h('div', { class: 'portal-header' }, [
+    renderWordmark(),
+    h('button', { class: 'portal-link', text: linkText, onclick: onLink }),
+  ]);
+}
+
+// Screen 1 -- default boot for everyone outside a live game or the game
+// window. Row play buttons are the DECIDED replacement for a separate
+// soundboard screen (07: "no soundboard screen... a play button on each
+// player row plays that kicker's walk-up clip through the normal
+// one-sound-at-a-time engine") -- same playClip/stopCurrent/
+// STOP_TAP_GRACE_MS convention as the classic All Songs grid.
+function renderPortalStats() {
+  const wrap = h('div', {});
+  wrap.appendChild(renderPortalHeader('schedule', () => { portalScreen = 'schedule'; render(); }));
+
+  const upcoming = nextScheduledGame();
+  if (upcoming) {
+    const idx = (DATA.schedule || []).findIndex(g => g.id === upcoming.id);
+    wrap.appendChild(h('div', { class: 'portal-nextgame-card' }, [
+      h('div', { class: 'portal-nextgame-label', text: 'Next game · ' + formatFixtureDateShort(upcoming) }),
+      h('div', { class: 'portal-nextgame-name', text: (upcoming.opponent || 'TBD').toUpperCase() }),
+      h('div', { class: 'portal-nextgame-cap', text: 'Game ' + (idx + 1) + ' of ' + (DATA.schedule || []).length }),
+      h('div', { class: 'portal-nextgame-cap', text: formatFixtureTimeVenue(upcoming) }),
+    ]));
+  }
+
+  const rec = seasonRecord();
+  wrap.appendChild(h('div', { class: 'portal-record-chip' }, [
+    h('span', { class: 'rec', text: 'Our Record · ' + rec.w + '–' + rec.l }),
+    h('span', { class: 'rd', text: 'run diff ' + (rec.runDiff > 0 ? '+' : '') + rec.runDiff }),
+  ]));
+
+  const stats = seasonPlayerStats();
+  wrap.appendChild(h('div', { class: 'portal-section-label', text: 'Leaders' }));
+  const leadersRow = h('div', { class: 'portal-leaders-grid' });
+  [['h', 'HITS'], ['r', 'RUNS'], ['rbi', 'RBI']].forEach((pair) => {
+    const key = pair[0], label = pair[1];
+    let bestPid = null, bestVal = -1;
+    Object.keys(stats).forEach((pid) => { if (stats[pid][key] > bestVal) { bestVal = stats[pid][key]; bestPid = pid; } });
+    leadersRow.appendChild(h('div', { class: 'portal-leader-chip' }, [
+      h('div', { class: 'portal-leader-stat', text: label }),
+      h('div', { class: 'portal-leader-value', text: String(bestPid ? bestVal : 0) }),
+      h('div', { class: 'portal-leader-name', text: bestPid ? playerNameOf(bestPid) : '—' }),
+    ]));
+  });
+  wrap.appendChild(leadersRow);
+
+  const header = h('div', { class: 'portal-sort-header' }, [h('span', { class: 'fill', text: 'Full team' })]);
+  ['h', 'r', 'rbi'].forEach((key) => {
+    header.appendChild(h('span', {
+      class: 'portal-sort-col' + (portalStatsSortKey === key ? ' active' : ''),
+      text: key.toUpperCase() + (portalStatsSortKey === key ? (portalStatsSortDir < 0 ? ' ▾' : ' ▴') : ''),
+      onclick: () => toggleSort(key,
+        () => portalStatsSortKey, (v) => { portalStatsSortKey = v; },
+        () => portalStatsSortDir, (v) => { portalStatsSortDir = v; }),
+    }));
+  });
+  header.appendChild(h('span', { class: 'portal-play-spacer' }));
+  wrap.appendChild(header);
+
+  const rosterIds = DATA.players.map(p => p.id);
+  sortPlayerStatRows(rosterIds, stats, portalStatsSortKey, portalStatsSortDir).forEach((pid) => {
+    const s = stats[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
+    const isPlaying = playingId === pid;
+    wrap.appendChild(h('div', { class: 'portal-player-row' }, [
+      h('span', { class: 'portal-player-name', text: playerNameOf(pid) }),
+      h('span', { class: 'portal-player-stat' + (s.h ? '' : ' zero'), text: String(s.h) }),
+      h('span', { class: 'portal-player-stat' + (s.r ? '' : ' zero'), text: String(s.r) }),
+      h('span', { class: 'portal-player-stat' + (s.rbi ? '' : ' zero'), text: String(s.rbi) }),
+      h('button', {
+        class: 'portal-play-btn' + (isPlaying ? ' playing' : ''), text: isPlaying ? '⏹' : '▶',
+        onclick: () => {
+          if (isPlaying) {
+            if (Date.now() - playStartedAtMs < STOP_TAP_GRACE_MS) return; // double-tap guard, same as everywhere else
+            stopCurrent(true);
+          } else {
+            playClip(pid);
+          }
+        },
+      }),
+    ]));
+  });
+  return wrap;
+}
+
+// Screen 2 -- schedule + results. Played games (device-scored OR a
+// manifest-only score like game 1) tap through to screen 6, except a
+// manifest-only result (dagger-marked, no play-by-play to show).
+function renderPortalSchedule() {
+  const wrap = h('div', {});
+  wrap.appendChild(renderPortalHeader('stats', () => { portalScreen = 'stats'; render(); }));
+  const rec = seasonRecord();
+  wrap.appendChild(h('div', { class: 'portal-section-label', text: 'Season · ' + (DATA.teamShort || teamAbbrev()) + ' ' + rec.w + '–' + rec.l }));
+
+  const next = nextScheduledGame();
+  const byId = {};
+  seasonGameRecords().forEach((r) => { if (r.scheduleGameId) byId[r.scheduleGameId] = r; });
+
+  (DATA.schedule || []).forEach((g) => {
+    const played = byId[g.id];
+    const isNext = !!(next && next.id === g.id);
+    const isFuture = !played && !isNext;
+    const attrs = { class: 'portal-schedule-row' + (isNext ? ' next' : '') + (isFuture ? ' future' : '') };
+    if (played) attrs.onclick = () => { portalScreen = 'gameDetail'; portalGameDetailId = g.id; render(); };
+    const row = h('div', attrs, [
+      h('span', { class: 'portal-schedule-date', text: formatFixtureDateShort(g) }),
+      h('span', { class: 'portal-schedule-opp', text: g.opponent || 'TBD' }),
+    ]);
+    if (played) {
+      const won = played.final.us > played.final.them;
+      row.appendChild(h('span', { class: 'portal-schedule-result ' + (won ? 'win' : 'loss'), text: (won ? 'W ' : 'L ') + played.final.us + '–' + played.final.them }));
+      row.appendChild(h('span', { class: played.source === 'manifest' ? 'portal-schedule-dagger' : 'portal-schedule-chev', text: played.source === 'manifest' ? '†' : '▶' }));
+    } else if (g.opponent) {
+      row.appendChild(h('span', { class: 'portal-schedule-time', text: formatFixtureTimeVenue(g) }));
+    } else {
+      row.appendChild(h('span', { class: 'portal-schedule-tbd', text: '—' }));
+    }
+    wrap.appendChild(row);
+  });
+  wrap.appendChild(h('div', { class: 'portal-schedule-footnote', text: '† final score only' }));
+  return wrap;
+}
+
+// Screen 6 -- per-game deep dive. Line score from runsByInning, tap-to-
+// sort game lines, "view scorecard" reuses the SAME canvas renderer as
+// the live box score (drawScorecard/drawScorecardTotals), pointed at this
+// past game's events via a synchronous save/restore swap of
+// scoringState/scoringEvents (render() never yields mid-pass, so this is
+// safe) rather than threading a state param through every scorecard
+// function this session.
+function renderPortalGameDetail() {
+  const wrap = h('div', {});
+  wrap.appendChild(renderPortalHeader('‹ schedule', () => { portalScreen = 'schedule'; portalGameDetailId = null; render(); }));
+  const rec = seasonGameRecords().find(r => r.scheduleGameId === portalGameDetailId);
+  if (!rec) {
+    wrap.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'No data for this game yet.' }));
+    return wrap;
+  }
+  const fixture = scheduleFixtureById(portalGameDetailId);
+  const won = rec.final.us > rec.final.them;
+  wrap.appendChild(h('div', { class: 'portal-gd-header' }, [
+    h('span', { class: 'portal-gd-title', text: formatFixtureDateShort(fixture || {}) + ' · vs ' + (rec.opponent || 'TBD') }),
+    h('span', { class: 'portal-gd-result ' + (won ? 'win' : 'loss'), text: (won ? 'W ' : 'L ') + rec.final.us + '–' + rec.final.them }),
+  ]));
+  if (rec.source === 'manifest') {
+    wrap.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'Final score only -- no play-by-play data for this game.' }));
+    return wrap;
+  }
+
+  const st = deriveState(rec.events);
+  const maxInning = st.inning;
+  const headRow = h('tr', {}, [h('td', {})]);
+  for (let i = 1; i <= maxInning; i++) headRow.appendChild(h('th', { text: String(i) }));
+  headRow.appendChild(h('th', { text: 'R' }));
+  const table = h('table', { class: 'portal-linescore' }, [headRow]);
+  [['us', DATA.teamShort || teamAbbrev()], ['them', (rec.opponent || 'THEM').slice(0, 3).toUpperCase()]].forEach((pair) => {
+    const side = pair[0], label = pair[1];
+    const tr = h('tr', {}, [h('td', { class: 'team-label', text: label })]);
+    for (let i = 1; i <= maxInning; i++) tr.appendChild(h('td', { text: String((st.runsByInning[side] && st.runsByInning[side][i]) || 0) }));
+    tr.appendChild(h('td', { class: 'runs-total', text: String(side === 'us' ? rec.final.us : rec.final.them) }));
+    table.appendChild(tr);
+  });
+  wrap.appendChild(table);
+
+  wrap.appendChild(h('button', {
+    class: 'portal-view-scorecard-btn', text: '▦ view scorecard',
+    onclick: () => { portalScorecardOpen = true; render(); },
+  }));
+
+  const gs = computeStats(st);
+  const header = h('div', { class: 'portal-sort-header' }, [h('span', { class: 'fill', text: 'Game lines' })]);
+  ['ab', 'h', 'r', 'rbi'].forEach((key) => {
+    header.appendChild(h('span', {
+      class: 'portal-sort-col' + (portalGameLinesSortKey === key ? ' active' : ''),
+      text: key.toUpperCase() + (portalGameLinesSortKey === key ? (portalGameLinesSortDir < 0 ? ' ▾' : ' ▴') : ''),
+      onclick: () => toggleSort(key,
+        () => portalGameLinesSortKey, (v) => { portalGameLinesSortKey = v; },
+        () => portalGameLinesSortDir, (v) => { portalGameLinesSortDir = v; }),
+    }));
+  });
+  wrap.appendChild(header);
+  sortPlayerStatRows(st.lineup.slice(), gs, portalGameLinesSortKey, portalGameLinesSortDir).forEach((pid) => {
+    const s = gs[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
+    wrap.appendChild(h('div', { class: 'portal-player-row' }, [
+      h('span', { class: 'portal-player-name', text: playerNameOf(pid) }),
+      h('span', { class: 'portal-player-stat' + (s.ab ? '' : ' zero'), text: String(s.ab) }),
+      h('span', { class: 'portal-player-stat' + (s.h ? '' : ' zero'), text: String(s.h) }),
+      h('span', { class: 'portal-player-stat' + (s.r ? '' : ' zero'), text: String(s.r) }),
+      h('span', { class: 'portal-player-stat' + (s.rbi ? '' : ' zero'), text: String(s.rbi) }),
+    ]));
+  });
+  return wrap;
+}
+
+function renderPortalGameScorecard() {
+  const rec = seasonGameRecords().find(r => r.scheduleGameId === portalGameDetailId);
+  if (!rec || rec.source !== 'log') { portalScorecardOpen = false; return renderPortalGameDetail(); }
+  const savedState = scoringState, savedEvents = scoringEvents;
+  scoringState = deriveState(rec.events);
+  scoringEvents = rec.events;
+  let wrap;
+  try {
+    const L = scorecardLayout();
+    const canvas = h('canvas', { class: 'scorecard-canvas', width: L.w * 2, height: L.h * 2, style: 'width:' + L.w + 'px;height:' + L.h + 'px' });
+    drawScorecard(canvas);
+    const totalsCanvas = h('canvas', { class: 'scorecard-totals-canvas', width: L.totalsW * 2, height: L.h * 2, style: 'width:' + L.totalsW + 'px;height:' + L.h + 'px' });
+    drawScorecardTotals(totalsCanvas);
+    wrap = h('div', {}, [
+      renderPortalHeader('✕ close', () => { portalScorecardOpen = false; render(); }),
+      h('div', { class: 'boxscore-panel' }, [
+        h('div', { class: 'boxscore-grid-wrap' }, [
+          h('div', { class: 'boxscore-scroll' }, [canvas]),
+          h('div', { class: 'boxscore-totals-sticky' }, [totalsCanvas]),
+        ]),
+      ]),
+    ]);
+  } finally {
+    scoringState = savedState;
+    scoringEvents = savedEvents;
+  }
+  return wrap;
+}
+
+// Screen 3 -- the one context-aware overlay that sits ON TOP of the
+// portal rather than replacing it (07: "Appears over the portal"). Accept
+// clears portal state and hands off to the EXISTING Start Game flow
+// (openStartGameFlow already gates on the PIN); decline just dismisses
+// for this session -- 07 leaves the exact re-offer/banner behavior open,
+// this is a deliberately simple default, not a final answer.
+function renderGameWindowPrompt() {
+  const fixture = scheduleGameInWindowNow();
+  const wrap = h('div', { class: 'portal-prompt-wrap' });
+  wrap.appendChild(h('div', { class: 'portal-header portal-prompt-dim' }, [renderWordmark()]));
+  wrap.appendChild(h('div', { class: 'portal-prompt-card' }, [
+    h('div', { class: 'portal-prompt-label', text: 'Game tonight' }),
+    h('div', { class: 'portal-prompt-vs', text: 'vs ' + (fixture ? fixture.opponent : 'TBD') }),
+    h('div', { class: 'portal-prompt-when', text: fixture ? formatFixtureTimeVenue(fixture) : '' }),
+    h('button', {
+      class: 'portal-prompt-accept', text: '✎ score this game',
+      onclick: () => { gameWindowPromptOpen = false; portalActive = false; openStartGameFlow(); },
+    }),
+    h('button', {
+      class: 'portal-prompt-decline', text: '✕ not now — just the stats',
+      onclick: () => { gameWindowPromptOpen = false; gameWindowPromptDismissed = true; render(); },
+    }),
+  ]));
+  return wrap;
+}
+
+function renderPortalShell() {
+  if (gameWindowPromptOpen) return renderGameWindowPrompt();
+  if (portalScreen === 'gameDetail' && portalScorecardOpen) return renderPortalGameScorecard();
+  if (portalScreen === 'schedule') return renderPortalSchedule();
+  if (portalScreen === 'gameDetail') return renderPortalGameDetail();
+  return renderPortalStats();
+}
+/* __SCORING_END__ */
+
+// Safe accessor for render()'s shared/unmarked tail below (tab-bar
+// visibility, reorder-frame toggle) -- same pattern as scoringEditorActive().
+function isPortalActive() {
+  /* __SCORING_START__ */
+  if (portalActive) return true;
+  /* __SCORING_END__ */
+  return false;
+}
+
 function render() {
   liveCountdownUpdate = null;
   // Defensive sweep: a drag whose pointer stream dies mid-gesture (seen
@@ -4385,9 +4950,18 @@ function render() {
   // scoringCorrection above.
   if (!(isScoringLive() && state.activeTab === 'lineup' && !state.editing)) { scoringBoxScoreOpen = false; endGameConfirmOpen = false; }
   if (isScoringLive()) checkMercyMusicPause();
+  // Portal: a live game always wins (rule 1 of 07's boot rule), same
+  // choke-point pattern as the resets above -- if a game starts while the
+  // portal is showing (e.g. accepting the game-window prompt), portal
+  // state clears itself rather than needing every entry point to remember to.
+  if (isScoringLive() && portalActive) { portalActive = false; gameWindowPromptOpen = false; }
   /* __SCORING_END__ */
   screenEl.innerHTML = '';
-  if (state.activeTab === 'lineup') {
+  if (isPortalActive()) {
+    /* __SCORING_START__ */
+    screenEl.appendChild(renderPortalShell());
+    /* __SCORING_END__ */
+  } else if (state.activeTab === 'lineup') {
     /* __SCORING_START__ */
     // S1.6: the PIN sheet and the tap-to-draft editor both take over the
     // whole Lineup tab, ahead of the classic state.editing dispatch below
@@ -4418,7 +4992,8 @@ function render() {
 
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
-  const inReorder = state.activeTab === 'lineup' && (state.editing || scoringEditorActive());
+  document.getElementById('tabbar').classList.toggle('hidden', isPortalActive());
+  const inReorder = !isPortalActive() && state.activeTab === 'lineup' && (state.editing || scoringEditorActive());
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
 
   // Keep the on-card countdown live: start the tick the moment something
@@ -4866,6 +5441,7 @@ decodeAll().then(() => {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   requestWakeLock();
+  decidePortalBoot();
   render();
 }).catch(err => {
   console.error('Fatal error decoding clips', err);

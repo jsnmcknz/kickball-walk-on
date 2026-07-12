@@ -103,6 +103,7 @@ global.localStorage = {
 };
 
 global.navigator = {}; // no wakeLock -> exercises the feature-detect skip path
+global.location = { hash: '' }; // team-phone role marker (07-Portal-Architecture.md); '#team' for that path
 
 class FakeParam { constructor() { this.value = 1; } cancelScheduledValues() {} setValueAtTime() {} linearRampToValueAtTime() {} }
 class FakeGain { constructor() { this.gain = new FakeParam(); } connect() { return this; } }
@@ -245,6 +246,26 @@ global.__hooks = {
   debugClearGameData: function() { return debugClearGameData(); },
   scorecardColumns: function() { return scorecardColumns(); },
   scorecardLayout: function() { return scorecardLayout(); },
+  // Portal (07-Portal-Architecture.md, 2026-07-13)
+  segmentGamesFromEvents: function(ev) { return segmentGamesFromEvents(ev); },
+  seasonGameRecords: function() { return seasonGameRecords(); },
+  seasonRecord: function() { return seasonRecord(); },
+  seasonPlayerStats: function() { return seasonPlayerStats(); },
+  decidePortalBoot: function() { return decidePortalBoot(); },
+  isTeamPhone: function() { return isTeamPhone(); },
+  isPortalActive: function() { return isPortalActive(); },
+  nextScheduledGame: function() { return nextScheduledGame(); },
+  scheduleGameInWindowNow: function() { return scheduleGameInWindowNow(); },
+  getPortalScreen: function() { return portalScreen; },
+  setPortalScreen: function(v) { portalScreen = v; },
+  getPortalGameDetailId: function() { return portalGameDetailId; },
+  setPortalGameDetailId: function(v) { portalGameDetailId = v; },
+  getPortalScorecardOpen: function() { return portalScorecardOpen; },
+  setPortalScorecardOpen: function(v) { portalScorecardOpen = v; },
+  getGameWindowPromptOpen: function() { return gameWindowPromptOpen; },
+  setGameWindowPromptOpen: function(v) { gameWindowPromptOpen = v; },
+  getGameWindowPromptDismissed: function() { return gameWindowPromptDismissed; },
+  setPortalActiveForTest: function(v) { portalActive = v; },
 };
 `;
 
@@ -1825,6 +1846,324 @@ async function main() {
     assert(hooks.getPlayingId() === 'bob', 'the clip fired for bob exactly as scheduled, unaffected by the routine correction: ' + hooks.getPlayingId());
     hooks.stopCurrent(false);
     console.log('60. Scoring auto-play: routine baserunner correction no longer kills the pending clip, still fires on schedule: OK');
+  }
+
+  // ---- Portal (07-Portal-Architecture.md, built 2026-07-13) ----
+  // Fixture dates are built relative to "now" (fixtureStartDate parses
+  // date+time as local time, same convention the manifest uses), so the
+  // window math below holds regardless of what day this suite actually runs.
+  function fixtureParts(d) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return { date: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()), time: pad(d.getHours()) + ':' + pad(d.getMinutes()) };
+  }
+
+  // 61. Season data layer: segmentGamesFromEvents / seasonGameRecords /
+  // seasonRecord / seasonPlayerStats -- a device-scored completed game and a
+  // manifest-only score both count toward season history and the record;
+  // a device-scored game still IN PROGRESS (no game_end) counts toward
+  // neither, since it isn't season history yet.
+  {
+    // Game A: device-scored, played to a game_end.
+    let evA = [];
+    evA = hooks.appendScoringEvent(evA, 'game_start', { opponent: 'Foxes', innings: 7, lineup: ['alice', 'bob', 'charlie'], scheduleGameId: 'g2' });
+    evA = hooks.appendScoringEvent(evA, 'pa', { playerId: 'alice', result: 'HR', inning: 1, half: 'us' });
+    evA = hooks.appendScoringEvent(evA, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
+    evA = hooks.appendScoringEvent(evA, 'pa', { playerId: 'charlie', result: 'K', inning: 1, half: 'us' });
+    hooks.setScoringEvents(evA);
+    hooks.commitEndGame();
+    const gameAEvents = hooks.getScoringEvents().slice(); // includes the game_end commitEndGame just appended
+    const gameAFinal = { us: hooks.getScoringState().scoreUs, them: hooks.getScoringState().scoreThem };
+
+    // Game B: device-scored, still in progress (no game_end) -- must not
+    // count as season history yet.
+    let evB = [];
+    evB = hooks.appendScoringEvent(evB, 'game_start', { opponent: 'Bears', innings: 7, lineup: ['dana', 'eli'], scheduleGameId: 'g3' });
+    evB = hooks.appendScoringEvent(evB, 'pa', { playerId: 'dana', result: '1B', inning: 1, half: 'us' });
+
+    const combined = gameAEvents.concat(evB);
+    hooks.setScoringEvents(combined);
+
+    hooks.getDATA().schedule = [
+      { id: 'm1', date: '2020-01-01', time: '20:00', opponent: 'Old Foes', result: { us: 5, them: 3 } }, // manifest-only, pre-app
+      { id: 'g2', date: '2020-02-01', time: '20:00', opponent: 'Foxes' },  // matches game A's scheduleGameId, no manifest result
+      { id: 'g3', date: '2020-03-01', time: '20:00', opponent: 'Bears' }, // matches game B's scheduleGameId, no manifest result
+    ];
+
+    const segs = hooks.segmentGamesFromEvents(combined);
+    assert(segs.length === 2, 'two game_start-delimited segments in the combined log: ' + segs.length);
+
+    const records = hooks.seasonGameRecords();
+    assert(records.length === 2, 'game B (in progress) excluded; game A (log) + m1 (manifest) included: ' + records.length);
+    const gameARec = records.find(r => r.scheduleGameId === 'g2');
+    const manifestRec = records.find(r => r.scheduleGameId === 'm1');
+    assert(gameARec && gameARec.source === 'log' && gameARec.final.us === gameAFinal.us && gameARec.final.them === gameAFinal.them,
+      'game A recorded from the device log with its real derived score');
+    assert(manifestRec && manifestRec.source === 'manifest' && manifestRec.final.us === 5 && manifestRec.final.them === 3,
+      'manifest-only result (game 1 style) counted from the schedule, not the log');
+    assert(!records.find(r => r.scheduleGameId === 'g3'), 'in-progress game B is not season history yet');
+
+    const rec = hooks.seasonRecord();
+    const expectedW = (gameAFinal.us > gameAFinal.them ? 1 : 0) + 1; // m1 (5-3) is a definite win
+    const expectedL = (gameAFinal.us < gameAFinal.them ? 1 : 0);
+    const expectedRunDiff = (gameAFinal.us - gameAFinal.them) + (5 - 3);
+    assert(rec.w === expectedW && rec.l === expectedL && rec.runDiff === expectedRunDiff,
+      'seasonRecord sums W/L/run-diff across both a logged game and a manifest-only result: ' + JSON.stringify(rec));
+
+    const stats = hooks.seasonPlayerStats();
+    const expectedStats = hooks.computeStats(hooks.deriveState(gameAEvents));
+    Object.keys(expectedStats).forEach((pid) => {
+      const s = stats[pid];
+      const e = expectedStats[pid];
+      assert(s && s.ab === e.ab && s.h === e.h && s.r === e.r && s.rbi === e.rbi,
+        'seasonPlayerStats matches direct computeStats for ' + pid);
+    });
+    assert(!stats.dana && !stats.eli, 'in-progress game B contributes no player stats (source must be "log" AND ended)');
+    console.log('61. Season data layer: segments/records/record/playerStats correctly union log + manifest, exclude in-progress: OK');
+
+    hooks.setScoringEvents([]); // back to no live/pending game before the boot-posture tests below
+  }
+
+  // 62. Boot posture (decidePortalBoot): rule 1 (live game always wins,
+  // regardless of hash or window), rule 2 (non-team-phone + in-window ->
+  // portal AND the prompt layered over it), rule 3 (non-team-phone, no
+  // window -> portal alone), and the team-phone branch (in-window -> Start
+  // Game directly, PIN-gated same as the existing entry point; no window ->
+  // stays on the classic screen, portal never activates).
+  {
+    const farFuture = fixtureParts(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000));
+    const inWindow = fixtureParts(new Date(Date.now() + 10 * 60 * 1000)); // 10 min out, inside the 60-min window
+
+    function resetPortalVars() {
+      hooks.setPortalActiveForTest(false);
+      hooks.setPortalScreen('stats');
+      hooks.setPortalGameDetailId(null);
+      hooks.setPortalScorecardOpen(false);
+      hooks.setGameWindowPromptOpen(false);
+      hooks.setScoringLineupEditor(null);
+      hooks.closePinSheet();
+    }
+
+    // Rule 1: a live game always wins -- decidePortalBoot must not touch
+    // portalActive or open the Start Game editor while a game is live.
+    resetPortalVars();
+    global.location.hash = '#team';
+    hooks.getDATA().schedule = [{ id: 'lg1', date: inWindow.date, time: inWindow.time, opponent: 'Live Rival' }];
+    let evLive = [];
+    evLive = hooks.appendScoringEvent(evLive, 'game_start', { opponent: 'Live Rival', innings: 7, lineup: ['alice'] });
+    hooks.setScoringEvents(evLive); // no game_end -- live
+    hooks.decidePortalBoot();
+    assert(hooks.isPortalActive() === false, 'rule 1: a live game keeps the portal off entirely');
+    assert(hooks.getScoringLineupEditor() === null, 'rule 1: a live game does not also try to open a new Start Game flow');
+    hooks.setScoringEvents([]); // end the "live" state for the rest of this test
+
+    // Rule 3: non-team-phone, no game in window -> portal alone, no prompt.
+    resetPortalVars();
+    global.location.hash = '';
+    hooks.getDATA().schedule = [{ id: 'ff1', date: farFuture.date, time: farFuture.time, opponent: 'Someday FC' }];
+    hooks.decidePortalBoot();
+    assert(hooks.isPortalActive() === true, 'rule 3: no live game, not the team phone -> boots to the portal');
+    assert(hooks.getGameWindowPromptOpen() === false, 'rule 3: no fixture in window -> no prompt layered on top');
+
+    // Rule 2: non-team-phone, game in window -> portal AND the prompt.
+    resetPortalVars();
+    global.location.hash = '';
+    hooks.getDATA().schedule = [{ id: 'iw1', date: inWindow.date, time: inWindow.time, opponent: 'Rival FC' }];
+    hooks.decidePortalBoot();
+    assert(hooks.isPortalActive() === true, 'rule 2: still boots to the portal underneath');
+    assert(hooks.getGameWindowPromptOpen() === true, 'rule 2: a fixture inside its window layers the prompt on top');
+
+    // Team phone, no window -> stays on the classic screen, portal never
+    // activates, no prompt, no Start Game flow.
+    resetPortalVars();
+    global.location.hash = '#team';
+    hooks.getDATA().schedule = [{ id: 'ff2', date: farFuture.date, time: farFuture.time, opponent: 'Someday FC' }];
+    hooks.decidePortalBoot();
+    assert(hooks.isPortalActive() === false, 'team phone, no window: never shows the portal');
+    assert(hooks.getScoringLineupEditor() === null, 'team phone, no window: does not open Start Game either -- stays classic');
+
+    // Team phone, game in window, already PIN-unlocked -> Start Game opens
+    // directly, same one-tap guarantee as the existing entry point, skipping
+    // the portal and its prompt entirely.
+    resetPortalVars();
+    global.location.hash = '#team';
+    hooks.setPinUnlockedForTest(true);
+    hooks.getDATA().schedule = [{ id: 'iw2', date: inWindow.date, time: inWindow.time, opponent: 'Rival FC' }];
+    hooks.decidePortalBoot();
+    assert(hooks.isPortalActive() === false, 'team phone, in window: never routes through the portal');
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start',
+      'team phone, in window, already unlocked: Start Game opens directly');
+    hooks.cancelScoringLineupEditor();
+
+    // Team phone, game in window, NOT yet unlocked -> PIN gate first, same
+    // as the existing entry point -- Start Game only opens after success.
+    resetPortalVars();
+    hooks.setPinUnlockedForTest(false);
+    hooks.decidePortalBoot();
+    assert(hooks.getPinSheet() !== null, 'team phone, in window, locked: PIN sheet gates entry, same as the existing button');
+    assert(hooks.getScoringLineupEditor() === null, 'editor does not open until the PIN succeeds');
+    '0000'.split('').forEach(d => hooks.pinKeyTap(d));
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start', 'PIN success opens Start Game');
+    hooks.cancelScoringLineupEditor();
+    hooks.setPinUnlockedForTest(true); // restore -- later tests assume this device stays unlocked, as test 52 left it
+
+    global.location.hash = '';
+    resetPortalVars();
+    console.log('62. Boot posture: live game always wins; team-phone in-window opens Start Game (PIN-gated); non-team-phone boots the portal, prompt layered only when a fixture is in window: OK');
+  }
+
+  // 63. Portal UI navigation: stats -> schedule -> game detail -> scorecard
+  // and back, sort-header toggling, and the row play button reusing the
+  // normal one-sound-at-a-time engine (07: no separate soundboard screen).
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Foxes', innings: 7, lineup: ['alice', 'bob', 'charlie'], scheduleGameId: 'g2' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'HR', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'K', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    hooks.commitEndGame();
+
+    const nextWeek = fixtureParts(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    hooks.getDATA().schedule = [
+      { id: 'm1', date: '2020-01-01', time: '20:00', opponent: 'Old Foes', result: { us: 5, them: 3 } },
+      { id: 'g2', date: '2020-02-01', time: '20:00', opponent: 'Foxes' },
+      { id: 'g3', date: nextWeek.date, time: nextWeek.time, opponent: 'Upcoming United' },
+    ];
+
+    hooks.setPortalScreen('stats');
+    hooks.setPortalGameDetailId(null);
+    hooks.setPortalScorecardOpen(false);
+    hooks.setGameWindowPromptOpen(false);
+    hooks.setPortalActiveForTest(true);
+    render();
+
+    // Screen 1: stats.
+    assert(findByClassContaining('portal-leader-stat', 'HITS'), 'stats screen shows the leaders row');
+    const aliceRow = findByClassContaining('portal-player-row', 'Alice');
+    assert(aliceRow, 'full team table includes alice');
+    const playBtn = findByClassContaining('portal-play-btn', '▶');
+    assert(playBtn, 'a play button is present per row -- the decided soundboard replacement');
+    playBtn.click();
+    assert(hooks.getPlayingId() === 'alice', 'tapping the first row\'s play button plays that kicker, same engine as everywhere else: ' + hooks.getPlayingId());
+    hooks.stopCurrent(false);
+
+    // Sort header: default is H descending; clicking R switches the active
+    // sort key.
+    assert(hooks.getPortalScreen() === 'stats');
+    const rCol = findByClassContaining('portal-sort-col', 'R');
+    rCol.click();
+    const rColAfter = findByClassContaining('portal-sort-col', 'R');
+    assert(rColAfter && rColAfter.classList.contains('active'), 'clicking the R column makes it the active sort: ' + (rColAfter && rColAfter.className));
+
+    // Screen 1 -> 2 (schedule).
+    findByClassContaining('portal-link', 'schedule').click();
+    assert(hooks.getPortalScreen() === 'schedule', 'header link navigates to the schedule');
+
+    const g2Row = findByClassContaining('portal-schedule-row', 'Foxes');
+    assert(g2Row, 'a device-scored, played fixture has a row');
+    assert(findByClassContaining('portal-schedule-chev', '▶'), 'a device-scored game shows the chevron (tappable), not the dagger');
+    assert(findByClassContaining('portal-schedule-dagger', '†'), 'the manifest-only result (game-1-style) shows the dagger instead');
+    const upcomingRow = findByClassContaining('portal-schedule-row', 'Upcoming United');
+    assert(upcomingRow && upcomingRow.classList.contains('next'), 'the soonest unplayed fixture is flagged as next');
+
+    // Screen 2 -> 6 (game detail) for the device-scored game.
+    g2Row.click();
+    assert(hooks.getPortalScreen() === 'gameDetail' && hooks.getPortalGameDetailId() === 'g2', 'tapping a played row opens its game detail');
+    assert(findByClassContaining('portal-gd-title', 'Foxes'), 'game detail header names the opponent');
+    assert(findByClassContaining('portal-player-row', 'Alice'), 'game detail lists player lines');
+
+    // Sort game lines by R too, same mechanism as screen 1.
+    const gdRCol = findByClassContaining('portal-sort-col', 'R');
+    gdRCol.click();
+    const gdRColAfter = findByClassContaining('portal-sort-col', 'R');
+    assert(gdRColAfter && gdRColAfter.classList.contains('active'), 'game-detail sort headers use the same toggle');
+
+    // Screen 6 -> scorecard takeover -> back.
+    findByClassContaining('portal-view-scorecard-btn', 'view scorecard').click();
+    assert(hooks.getPortalScorecardOpen() === true, 'view scorecard opens the takeover');
+    assert(findByClassContaining('scorecard-canvas', ''), 'the scorecard grid canvas renders');
+    assert(findByClassContaining('scorecard-totals-canvas', ''), 'the sticky AB/H/R/RBI totals canvas renders alongside it');
+    findByClassContaining('portal-link', 'close').click();
+    assert(hooks.getPortalScorecardOpen() === false && hooks.getPortalScreen() === 'gameDetail', 'closing the scorecard returns to game detail, not schedule');
+
+    // Manifest-only game detail: no scorecard button, footnote instead.
+    hooks.setPortalScreen('schedule');
+    render();
+    findByClassContaining('portal-schedule-row', 'Old Foes').click();
+    assert(hooks.getPortalGameDetailId() === 'm1', 'a manifest-only result also opens game detail');
+    assert(findByClassContaining('portal-schedule-footnote', 'Final score only'), 'manifest-only game detail explains there\'s no play-by-play');
+    assert(!findByClassContaining('portal-view-scorecard-btn', 'view scorecard'), 'no scorecard button when there\'s nothing to render');
+
+    // Back to schedule, then to stats -- the ‹ schedule / stats header links.
+    findByClassContaining('portal-link', '‹ schedule').click();
+    assert(hooks.getPortalScreen() === 'schedule' && hooks.getPortalGameDetailId() === null, '‹ schedule clears the open game and returns to the list');
+    findByClassContaining('portal-link', 'stats').click();
+    assert(hooks.getPortalScreen() === 'stats', 'stats header link returns to screen 1');
+
+    console.log('63. Portal UI navigation: stats <-> schedule <-> game detail <-> scorecard, sort headers, and the per-row play button all wire correctly: OK');
+
+    hooks.setPortalActiveForTest(false);
+    hooks.setPortalScreen('stats');
+    hooks.setPortalGameDetailId(null);
+    hooks.setPortalScorecardOpen(false);
+    hooks.setScoringEvents([]);
+  }
+
+  // 64. Game-window prompt (screen 3): appears over the portal for a fixture
+  // inside its window, accept hands off to the existing PIN-gated Start Game
+  // flow and exits the portal, decline just dismisses it for this session.
+  {
+    const inWindow = fixtureParts(new Date(Date.now() + 15 * 60 * 1000));
+    hooks.getDATA().schedule = [{ id: 'gw1', date: inWindow.date, time: inWindow.time, opponent: 'Rival FC' }];
+
+    hooks.setPortalActiveForTest(true);
+    hooks.setPortalScreen('stats');
+    hooks.setGameWindowPromptOpen(true);
+    render();
+    assert(findByClassContaining('portal-prompt-vs', 'Rival FC'), 'the prompt shows the in-window fixture over the portal');
+
+    // Decline: dismiss for this session, portal stays underneath.
+    findByClassContaining('portal-prompt-decline', 'not now').click();
+    assert(hooks.getGameWindowPromptOpen() === false, 'declining closes the prompt');
+    assert(hooks.getGameWindowPromptDismissed() === true, 'declining marks it dismissed for this session (07: simple default, not final)');
+    assert(hooks.isPortalActive() === true, 'declining leaves the portal itself untouched');
+
+    // Accept, already PIN-unlocked: opens Start Game directly, exits portal.
+    hooks.setPinUnlockedForTest(true);
+    hooks.setScoringLineupEditor(null);
+    hooks.setGameWindowPromptOpen(true);
+    hooks.setPortalActiveForTest(true);
+    render();
+    findByClassContaining('portal-prompt-accept', 'score this game').click();
+    assert(hooks.getGameWindowPromptOpen() === false, 'accepting closes the prompt');
+    assert(hooks.isPortalActive() === false, 'accepting exits the portal -- game mode owns the screen now');
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start',
+      'already unlocked: accept opens Start Game directly, same one-tap guarantee as the team-phone boot path');
+    hooks.cancelScoringLineupEditor();
+
+    // Accept, NOT yet unlocked: PIN gate first, same as every other entry
+    // point into scoring.
+    hooks.setPinUnlockedForTest(false);
+    hooks.closePinSheet();
+    hooks.setScoringLineupEditor(null);
+    hooks.setGameWindowPromptOpen(true);
+    hooks.setPortalActiveForTest(true);
+    render();
+    findByClassContaining('portal-prompt-accept', 'score this game').click();
+    assert(hooks.getPinSheet() !== null, 'accept gates behind the PIN when this device is not yet unlocked');
+    assert(hooks.getScoringLineupEditor() === null, 'editor does not open until the PIN succeeds');
+    '0000'.split('').forEach(d => hooks.pinKeyTap(d));
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start', 'PIN success opens Start Game');
+    hooks.cancelScoringLineupEditor();
+    hooks.setPinUnlockedForTest(true); // restore, as every prior test group leaves it
+
+    console.log('64. Game-window prompt: shows the in-window fixture over the portal; decline dismisses for the session; accept exits the portal and opens the existing PIN-gated Start Game flow: OK');
+
+    hooks.setPortalActiveForTest(false);
+    hooks.setPortalScreen('stats');
+    hooks.setGameWindowPromptOpen(false);
+    hooks.setScoringEvents([]);
+    delete hooks.getDATA().schedule;
   }
 
   // Leave scoring's live-game UI state clean for anything appended after

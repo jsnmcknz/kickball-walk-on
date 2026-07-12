@@ -91,14 +91,17 @@ Principle 1 currently reads boot-agnostic but was written when the app had one d
 | Schedule | Manifest-borne; `game_start.scheduleGameId`; Start game = pick-from-schedule | Schema in `docs/season-schedule.md` |
 | Location capture | All batted balls (not K), same optional/non-blocking contract | Generalizes S1 item 7 |
 | Fleet updates | Design for mixed builds; replay skips unknown event types | Invariant 17 per-device |
+| Team-phone role marker | URL fragment in the home-screen bookmark (`index.html#team`), not a persisted toggle | **Decided 2026-07-13** (survives localStorage eviction; re-bookmarking is how you'd reassign a device) |
+| Portal placement | No tab bar of its own — the portal shell replaces the classic tab UI entirely (`#tabbar` hidden while `isPortalActive()`); mockup screens 1/2/6 have no tab bar either | **Decided 2026-07-13**, built |
+| Portal v1 build | Season stats (screen 1), schedule (screen 2), game detail + scorecard takeover (screen 6), game-window prompt (screen 3) — all built and tested (`node dom-stub-test.js`, groups 61–64) | **Built 2026-07-13** |
+| Rollout timing | Shipped live as the default boot screen immediately once built/tested, not gated behind a flag | **Decided 2026-07-13** — Jason: game is 2026-07-14, not the night this was built, so there's time to test/refine; a standard media-player backup is the fallback if the app fails at game time |
 
 ## Open questions (not yet decided by Jason)
 
 - **The split posture** (remote scorer + team phone as music-only) — likely classic Next Up manual operation; confirm at S2.
 - **New-player landing** — after "+ new" creates a player, does their tile appear in the grid or do they land straight in the order? Feel decision, on-device.
-- **Game-window prompt details** — exact copy, whether it re-offers on every open within the window after a decline. Portal-mockup conversation. *(The team phone skips the prompt — decided; see the team-phone bullet above.)*
-- **Team-phone role marker** — URL-fragment in the home-screen bookmark vs persisted toggle (options in the team-phone bullet; Jason to pick).
-- Portal placement in the tab structure (third tab? takeover like scoring? needs the mockup conversation).
+- **Game-window prompt re-offer behavior** — exact copy is built; whether declining should re-offer on every open within the window, or stay dismissed longer than one session, is still open. Current build: in-memory-only dismiss (`gameWindowPromptDismissed`), returns on a fresh reload within the window — a deliberately simple default, not a final answer.
+- **Per-player season drill-down** — mockup's "tap a kicker for their season" / "...all 12" truncation was scoped OUT of this build; the full team table always shows everyone, tapping a row does nothing beyond its play button. Revisit if the roster or the season stats screen gets crowded.
 - How a sub enters the kicking order (append vs chosen slot) — S1.6.
 - Sub clip playback (`defaultClip` mapping; playClip currently no-ops for overlay ids) — S1.6.
 - PIN UX (once per device vs per game-start) — carried from 06.
