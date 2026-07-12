@@ -43,6 +43,9 @@ iOS has ignored `user-scalable=no` since iOS 10 — without `manipulation`, rapi
 **10. `h()` only sets `disabled` when truthy.**
 `setAttribute('disabled', null)` still disables an element, permanently. The conditional in `h()` is the fix for a real shipped bug. *(Test 5b guards it.)*
 
+**10b. `body` is locked (`position: fixed; overflow: hidden`) — only `#screen` may ever scroll.**
+`#app` is `position: fixed` with explicit top/left/right/bottom insets, and `#screen` inside it is the one `overflow-y: auto` region — that's supposed to be the only thing that scrolls, ever. `overscroll-behavior-y: contain` on `html, body` looked sufficient (it stops scroll-chaining to native gestures like pull-to-refresh) but does NOT stop `body` itself from being draggable. On a screen taller than one viewport — first caught on the mid-game lineup editor (full roster + full add-grid + done/cancel row easily exceeds one screen) — standalone home-screen Safari let the whole page drag: `#app` and its sibling `.tabbar` visibly moved together as one unit, revealing content that should have been clipped below the physical screen edge (Jason, 2026-07-14, on-device: "tap and drag [the tab bar] down to the bottom of the screen"). Locking `body` itself to `position: fixed; top:0; left:0; width:100%; overflow:hidden` forces literally all scroll through `#screen`. If a future screen still looks like it's dragging as a whole rather than scrolling its own content, this is the first thing to re-check, not `#screen`'s own CSS.
+
 ## Interaction semantics
 
 **11. The grid is modeless (firm principle 5, structural form).**

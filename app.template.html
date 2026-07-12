@@ -50,6 +50,18 @@
     height: 100%; margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     font-weight: 400; overscroll-behavior-y: contain;
+    /* 2026-07-14, Jason (on-device, standalone home-screen app): a screen
+       taller than one viewport (e.g. the mid-game lineup editor's full
+       roster + full add-grid + done/cancel row) let the WHOLE PAGE drag --
+       #app (position:fixed) and its sibling .tabbar visibly moved together,
+       revealing content clipped below the physical screen edge, instead of
+       only #screen's own overflow-y:auto region scrolling internally as
+       intended. overscroll-behavior above only stops scroll from chaining
+       to native gestures (pull-to-refresh); it doesn't stop body itself
+       from being draggable. Locking body down to the exact viewport (fixed
+       + hidden overflow) forces literally all scroll through #screen, which
+       is the only element that should ever move. */
+    position: fixed; top: 0; left: 0; width: 100%; overflow: hidden;
   }
   button { font-family: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; }
 
