@@ -42,7 +42,7 @@
     "autoPlayDelayMs": 5000
   },
   "scoring": {
-    "enabled": false,
+    "enabled": true,
     "supabaseUrl": "",
     "supabaseAnonKey": "",
     "teamPin": "0000",
