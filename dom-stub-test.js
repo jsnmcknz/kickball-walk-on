@@ -73,6 +73,16 @@ class FakeElement {
   setPointerCapture() {}
   releasePointerCapture() {}
   get style() { return {}; }
+  // Drag-ghost preview (both drag systems: order-tile and draft-row) clones
+  // the dragged element -- no prior test dragged far enough past the
+  // threshold to reach this call, so the stub never needed it before.
+  cloneNode(deep) {
+    const clone = new FakeElement(this.tagName.toLowerCase());
+    clone.className = this.className;
+    clone._text = this._text;
+    if (deep) clone._children = this._children.map(c => c.cloneNode(true));
+    return clone;
+  }
 }
 
 // Minimal listener registries so tests can actually fire document/window-
@@ -2192,6 +2202,54 @@ async function main() {
     hooks.setGameWindowPromptOpen(false);
     hooks.setScoringEvents([]);
     delete hooks.getDATA().schedule;
+  }
+
+  // 65. Draft-row drag is scoped to the handle only (2026-07-14 fix): a
+  // drag gesture starting on .draft-row-handle engages (ghost/placeholder
+  // appear); the identical gesture starting on plain row space does
+  // nothing at all -- no listener lives there anymore, so it's free for
+  // native scroll instead of fighting it. (getBoundingClientRect is a
+  // fixed stub in this harness, so the actual row-swap math can't be
+  // exercised here -- this only proves the gating, which is what caught
+  // Jason on-device.)
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    hooks.openMidGameLineupEditor();
+    render();
+
+    const bobRow = findByClassContaining('draft-row', 'Bob');
+    assert(bobRow, 'bob\'s draft row renders');
+    const handle = bobRow.querySelectorAll('draft-row-handle')[0];
+    assert(handle, 'the row has its own dedicated handle element');
+
+    // Drag from the handle: should engage (ghost + drag-placeholder). The
+    // actual commit path runs through document-level listeners keyed by
+    // pointerId, which this harness's document.dispatchTo() can't feed an
+    // event object to -- so this only proves engagement, not the full
+    // finish-drag commit. render()'s existing defensive sweep (invariant 7)
+    // strips any stray drag-placeholder/drag-ghost regardless of how a drag
+    // gesture ends, so a plain render() below stands in for "the drag ended
+    // one way or another" without needing to simulate the exact release.
+    handle.dispatch('pointerdown', { clientY: 100, pointerId: 1 });
+    handle.dispatch('pointermove', { clientY: 160, pointerId: 1 }); // well past any real threshold
+    assert(bobRow.classList.contains('drag-placeholder'), 'a drag starting on the handle engages (ghost/placeholder appear)');
+    render();
+    assert(!findByClassContaining('draft-row', 'Bob').classList.contains('drag-placeholder'),
+      'render()\'s defensive sweep (invariant 7) clears stray drag state regardless of how the gesture ended');
+
+    // Drag from plain row space (not the handle): should do nothing --
+    // no listener lives there since the 2026-07-14 fix, so native scroll
+    // owns this area instead of fighting a JS drag that used to hijack it.
+    const charlieRow = findByClassContaining('draft-row', 'Charlie');
+    charlieRow.dispatch('pointerdown', { clientY: 100, pointerId: 2 });
+    charlieRow.dispatch('pointermove', { clientY: 160, pointerId: 2 });
+    assert(!charlieRow.classList.contains('drag-placeholder'), 'a drag gesture starting on plain row space (not the handle) does not engage at all -- free for native scroll');
+
+    hooks.cancelScoringLineupEditor();
+    console.log('65. Draft-row drag scoped to the handle only -- plain row space no longer fights native scroll: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after

@@ -874,7 +874,18 @@
   }
   .draft-row.up-now { border-color: var(--pickle); }
   .draft-row.drag-placeholder { opacity: 0.35; border-style: dashed; }
-  .draft-row-handle { font-size: 16px; color: var(--muted); margin-right: 10px; line-height: 1; }
+  /* 2026-07-14, Jason (on-device): dragging from the middle of a row (NOT
+     the handle) was jerky/fighting the scroll, and the handle itself barely
+     worked at all. Root cause: wireDraftRowDrag listened on the WHOLE row
+     and called setPointerCapture() on every pointerdown anywhere on it, so
+     a touch starting on plain row space immediately hijacked the gesture
+     from native scroll (which `.draft-row`'s touch-action: pan-y was
+     supposed to allow) -- a tug-of-war between JS preventDefault and native
+     panning. Unlike .order-tile (invariant 9), where the whole tile IS the
+     handle, this row is a scrollable list with a DEDICATED grab icon, so
+     the fix scopes both the listeners AND touch-action: none to just this
+     handle -- the rest of the row is untouched by JS and scrolls natively. */
+  .draft-row-handle { font-size: 16px; color: var(--muted); margin-right: 10px; line-height: 1; touch-action: none; padding: 4px; margin: -4px 6px -4px -4px; }
   .draft-row-badge {
     width: 20px; height: 20px; border-radius: 50%; background: var(--pickle); color: var(--badge-text);
     display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500;
@@ -4234,6 +4245,14 @@ function flipDraftRows(listEl, exceptRow, mutate) {
   });
 }
 function wireDraftRowDrag(row, id, listEl) {
+  // 2026-07-14, Jason (on-device): listeners used to live on the whole row,
+  // which fought native scrolling for any touch that started off the
+  // handle. Scoped to the handle only -- see the CSS comment on
+  // .draft-row-handle for the full story. querySelectorAll (not
+  // querySelector, which the dom-stub-test.js FakeElement doesn't
+  // implement) keeps this testable under the same harness as everything
+  // else in this file.
+  const handle = row.querySelectorAll('.draft-row-handle')[0] || row;
   // `down` guards pointermove against firing a drag start from mouse HOVER
   // alone (bug, caught by Jason on-device-in-browser 2026-07-12): a mouse
   // sends real 'pointermove' events on hover with no button pressed, unlike
@@ -4302,11 +4321,11 @@ function wireDraftRowDrag(row, id, listEl) {
   function onDocMove(e) { if (e.pointerId === activePointer) handleMove(e); }
   function onDocUp(e) { if (e.pointerId === activePointer) finishDrag(); }
   function onDocCancel(e) { if (e.pointerId === activePointer) cancelDrag(); }
-  row.addEventListener('pointerdown', (e) => {
+  handle.addEventListener('pointerdown', (e) => {
     startY = e.clientY; moved = false; dragging = false; activePointer = e.pointerId; down = true;
-    try { row.setPointerCapture(e.pointerId); } catch (err) {}
+    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
   });
-  row.addEventListener('pointermove', (e) => {
+  handle.addEventListener('pointermove', (e) => {
     if (!down) return; // hover guard -- see the `down` comment above
     if (dragging) { if (e.preventDefault) e.preventDefault(); return; }
     if (Math.abs(e.clientY - startY) > DRAG_THRESHOLD_PX) {
@@ -4317,13 +4336,13 @@ function wireDraftRowDrag(row, id, listEl) {
       handleMove(e);
     }
   });
-  row.addEventListener('pointerup', (e) => {
+  handle.addEventListener('pointerup', (e) => {
     down = false;
-    try { row.releasePointerCapture(e.pointerId); } catch (err) {}
-    // No tap action on the row body itself -- ✕ (its own button) handles
-    // removal; a non-drag tap on the row is a no-op.
+    try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+    // No tap action on the handle itself beyond drag -- ✕ (its own button,
+    // elsewhere in the row) handles removal; a non-drag tap is a no-op.
   });
-  row.addEventListener('pointercancel', () => { down = false; if (!dragging) render(); });
+  handle.addEventListener('pointercancel', () => { down = false; if (!dragging) render(); });
   row._playerId = id;
 }
 
