@@ -81,7 +81,8 @@ Principle 1 currently reads boot-agnostic but was written when the app had one d
 | Decision | Choice | Notes |
 |---|---|---|
 | App identity | Whole-team install; default posture = stats portal | Operator surfaces unchanged |
-| Boot | Live game → game screen; in a game window, a prompt over the portal offers scoring mode (PIN-gated); otherwise portal for everyone | Principle-1 amendment **signed off 2026-07-11**, in 00 |
+| Boot | Live game → game screen; in a game window, a prompt over the portal offers scoring mode (PIN-gated); otherwise portal for everyone; **team phone: always straight to Start Game, PIN-gated, window irrelevant** | Principle-1 amendment **signed off 2026-07-11**, in 00; team-phone correction **2026-07-14** below |
+| Team-phone boot (corrected) | Team phone never sees the portal or the classic screens pre-game — `decidePortalBoot()` always calls Start Game directly, regardless of `scheduleGameInWindowNow()`. The PIN sheet on this path has no cancel button, and `#tabbar` stays hidden until a game is actually live (both were live escape hatches back to the classic tile-grid/Next-Up screen). | **Corrected 2026-07-14** — Jason, on-device: the original window-gated version fell through to "the old card-style lineup page" outside a game window, and made the PIN entry point unreachable without first building a classic lineup. Once a game *is* live, the tab bar returns as the firm-principle-5 manual-override fallback, same as any device. |
 | Scorer detection | Persisted PIN unlock is the flag (skips PIN re-entry; doesn't change boot destination) | **Decided 2026-07-11** |
 | Portal v1 | H/R/RBI leaderboards + schedule + results; read-only | Spray charts / AI analysis later, mostly outside the app via S3 export |
 | Soundboard | Operator surface only (team phone / scorers). Regular members: play button per portal player row instead (mockup screen 1) | **Decided 2026-07-11** (both passes). Payload ships to everyone regardless |

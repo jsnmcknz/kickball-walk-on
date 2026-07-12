@@ -979,8 +979,13 @@
      isPortalActive()). Navigation is a single quiet header link that
      ping-pongs between the stats and schedule screens, matching the
      mockup exactly. */
-  .portal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .portal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 8px; }
   .portal-link { font-size: 12px; color: var(--muted); background: none; border: none; padding: 4px 0; }
+  /* Every other portal element sits inside this -- same 16px house gutter
+     .topbar/.empty-state/.boxscore-panel already use, just centralized here
+     instead of repeated on every portal-* class (2026-07-14 fix: the first
+     pass left every portal screen flush to the card edges). */
+  .portal-body { padding: 0 16px; }
   .portal-nextgame-card {
     background: var(--pickle); border-radius: 12px; padding: 14px 12px 12px; text-align: center; margin-bottom: 10px;
   }
@@ -1058,7 +1063,7 @@
   .portal-prompt-dim { opacity: 0.4; pointer-events: none; }
   .portal-prompt-card {
     background: var(--tile); border: 1px solid var(--pickle); border-radius: 12px;
-    padding: 16px 12px 12px; text-align: center; margin: 18px 0;
+    padding: 16px 12px 12px; text-align: center; margin: 18px 16px;
   }
   .portal-prompt-label { font-size: 11px; letter-spacing: 0.1em; color: var(--pickle); font-weight: 500; text-transform: uppercase; }
   .portal-prompt-vs { font-size: 20px; font-weight: 500; color: #fff; margin: 4px 0 2px; }
@@ -4458,13 +4463,23 @@ function renderPinSheet() {
     if (k === 'del') return h('button', { class: 'pin-key del', text: '⌫', onclick: () => pinKeyTap('del') });
     return h('button', { class: 'pin-key', text: k, onclick: () => pinKeyTap(k) });
   });
+  const cardKids = [
+    h('div', { class: 'sheet-title', text: 'Scorer PIN' }),
+    h('div', { class: 'pin-dots' }, dots),
+    h('div', { class: 'pin-keypad' }, keyEls),
+  ];
+  // The team phone has nowhere legitimate to cancel BACK TO pre-game -- game
+  // mode is the only surface it shows (firm principle 1 amendment). Jason,
+  // 2026-07-14: "if the PIN fails, the app should simply be unusable [stay
+  // on this screen] at that #anchored URL." Every other PIN entry point
+  // (the portal's game-window prompt, the classic screen's stopgap button)
+  // still offers cancel -- backing out to browse stats or the soundboard is
+  // legitimate there.
+  if (!isTeamPhone()) {
+    cardKids.push(h('button', { class: 'sheet-cancel', text: '✕ cancel', onclick: closePinSheet }));
+  }
   return h('div', { class: 'sheet-wrap' }, [
-    h('div', { class: 'sheet-card' + (s.shake ? ' pin-shake' : '') }, [
-      h('div', { class: 'sheet-title', text: 'Scorer PIN' }),
-      h('div', { class: 'pin-dots' }, dots),
-      h('div', { class: 'pin-keypad' }, keyEls),
-      h('button', { class: 'sheet-cancel', text: '✕ cancel', onclick: closePinSheet }),
-    ]),
+    h('div', { class: 'sheet-card' + (s.shake ? ' pin-shake' : '') }, cardKids),
   ]);
 }
 
@@ -4583,10 +4598,19 @@ function decidePortalBoot() {
   /* __SCORING_START__ */
   if (!(DATA.scoring && DATA.scoring.enabled) || isScoringLive()) return; // rule 1: a live game always wins (handled above, at state init)
   if (isTeamPhone()) {
-    // "game window -> Start-game flow directly, skipping the prompt;
-    // otherwise -> Next Up, never the portal." PIN gate still applies --
-    // openStartGameFlow() already gates on pinUnlocked itself.
-    if (scheduleGameInWindowNow()) openStartGameFlow();
+    // On the team phone, game mode IS the walk-up surface (firm principle 1
+    // amendment, 07-Portal-Architecture.md) -- there is no portal on this
+    // device and no legitimate classic-screen fallback pre-game either, so
+    // it always boots straight into Start Game, PIN-gated, whether or not a
+    // fixture happens to be in its window right now. (2026-07-14 correction,
+    // Jason, on-device: gating this on scheduleGameInWindowNow() left the
+    // device falling through to the classic tile-grid/Next-Up screens
+    // outside a game window -- the "old card-style lineup page" he found
+    // live, and the reason the PIN entry point seemed to require a saved
+    // classic lineup to even reach: that button only exists on those
+    // classic screens.) PIN gate still applies -- openStartGameFlow()
+    // already gates on pinUnlocked itself.
+    openStartGameFlow();
     return;
   }
   portalActive = true; // rule 3: everyone, otherwise, boots to the portal
@@ -4666,11 +4690,13 @@ function renderPortalHeader(linkText, onLink) {
 function renderPortalStats() {
   const wrap = h('div', {});
   wrap.appendChild(renderPortalHeader('schedule', () => { portalScreen = 'schedule'; render(); }));
+  const body = h('div', { class: 'portal-body' });
+  wrap.appendChild(body);
 
   const upcoming = nextScheduledGame();
   if (upcoming) {
     const idx = (DATA.schedule || []).findIndex(g => g.id === upcoming.id);
-    wrap.appendChild(h('div', { class: 'portal-nextgame-card' }, [
+    body.appendChild(h('div', { class: 'portal-nextgame-card' }, [
       h('div', { class: 'portal-nextgame-label', text: 'Next game · ' + formatFixtureDateShort(upcoming) }),
       h('div', { class: 'portal-nextgame-name', text: (upcoming.opponent || 'TBD').toUpperCase() }),
       h('div', { class: 'portal-nextgame-cap', text: 'Game ' + (idx + 1) + ' of ' + (DATA.schedule || []).length }),
@@ -4679,13 +4705,13 @@ function renderPortalStats() {
   }
 
   const rec = seasonRecord();
-  wrap.appendChild(h('div', { class: 'portal-record-chip' }, [
+  body.appendChild(h('div', { class: 'portal-record-chip' }, [
     h('span', { class: 'rec', text: 'Our Record · ' + rec.w + '–' + rec.l }),
     h('span', { class: 'rd', text: 'run diff ' + (rec.runDiff > 0 ? '+' : '') + rec.runDiff }),
   ]));
 
   const stats = seasonPlayerStats();
-  wrap.appendChild(h('div', { class: 'portal-section-label', text: 'Leaders' }));
+  body.appendChild(h('div', { class: 'portal-section-label', text: 'Leaders' }));
   const leadersRow = h('div', { class: 'portal-leaders-grid' });
   [['h', 'HITS'], ['r', 'RUNS'], ['rbi', 'RBI']].forEach((pair) => {
     const key = pair[0], label = pair[1];
@@ -4697,7 +4723,7 @@ function renderPortalStats() {
       h('div', { class: 'portal-leader-name', text: bestPid ? playerNameOf(bestPid) : '—' }),
     ]));
   });
-  wrap.appendChild(leadersRow);
+  body.appendChild(leadersRow);
 
   const header = h('div', { class: 'portal-sort-header' }, [h('span', { class: 'fill', text: 'Full team' })]);
   ['h', 'r', 'rbi'].forEach((key) => {
@@ -4710,13 +4736,13 @@ function renderPortalStats() {
     }));
   });
   header.appendChild(h('span', { class: 'portal-play-spacer' }));
-  wrap.appendChild(header);
+  body.appendChild(header);
 
   const rosterIds = DATA.players.map(p => p.id);
   sortPlayerStatRows(rosterIds, stats, portalStatsSortKey, portalStatsSortDir).forEach((pid) => {
     const s = stats[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
     const isPlaying = playingId === pid;
-    wrap.appendChild(h('div', { class: 'portal-player-row' }, [
+    body.appendChild(h('div', { class: 'portal-player-row' }, [
       h('span', { class: 'portal-player-name', text: playerNameOf(pid) }),
       h('span', { class: 'portal-player-stat' + (s.h ? '' : ' zero'), text: String(s.h) }),
       h('span', { class: 'portal-player-stat' + (s.r ? '' : ' zero'), text: String(s.r) }),
@@ -4743,8 +4769,10 @@ function renderPortalStats() {
 function renderPortalSchedule() {
   const wrap = h('div', {});
   wrap.appendChild(renderPortalHeader('stats', () => { portalScreen = 'stats'; render(); }));
+  const body = h('div', { class: 'portal-body' });
+  wrap.appendChild(body);
   const rec = seasonRecord();
-  wrap.appendChild(h('div', { class: 'portal-section-label', text: 'Season · ' + (DATA.teamShort || teamAbbrev()) + ' ' + rec.w + '–' + rec.l }));
+  body.appendChild(h('div', { class: 'portal-section-label', text: 'Season · ' + (DATA.teamShort || teamAbbrev()) + ' ' + rec.w + '–' + rec.l }));
 
   const next = nextScheduledGame();
   const byId = {};
@@ -4769,9 +4797,9 @@ function renderPortalSchedule() {
     } else {
       row.appendChild(h('span', { class: 'portal-schedule-tbd', text: '—' }));
     }
-    wrap.appendChild(row);
+    body.appendChild(row);
   });
-  wrap.appendChild(h('div', { class: 'portal-schedule-footnote', text: '† final score only' }));
+  body.appendChild(h('div', { class: 'portal-schedule-footnote', text: '† final score only' }));
   return wrap;
 }
 
@@ -4785,19 +4813,21 @@ function renderPortalSchedule() {
 function renderPortalGameDetail() {
   const wrap = h('div', {});
   wrap.appendChild(renderPortalHeader('‹ schedule', () => { portalScreen = 'schedule'; portalGameDetailId = null; render(); }));
+  const body = h('div', { class: 'portal-body' });
+  wrap.appendChild(body);
   const rec = seasonGameRecords().find(r => r.scheduleGameId === portalGameDetailId);
   if (!rec) {
-    wrap.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'No data for this game yet.' }));
+    body.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'No data for this game yet.' }));
     return wrap;
   }
   const fixture = scheduleFixtureById(portalGameDetailId);
   const won = rec.final.us > rec.final.them;
-  wrap.appendChild(h('div', { class: 'portal-gd-header' }, [
+  body.appendChild(h('div', { class: 'portal-gd-header' }, [
     h('span', { class: 'portal-gd-title', text: formatFixtureDateShort(fixture || {}) + ' · vs ' + (rec.opponent || 'TBD') }),
     h('span', { class: 'portal-gd-result ' + (won ? 'win' : 'loss'), text: (won ? 'W ' : 'L ') + rec.final.us + '–' + rec.final.them }),
   ]));
   if (rec.source === 'manifest') {
-    wrap.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'Final score only -- no play-by-play data for this game.' }));
+    body.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'Final score only -- no play-by-play data for this game.' }));
     return wrap;
   }
 
@@ -4814,9 +4844,9 @@ function renderPortalGameDetail() {
     tr.appendChild(h('td', { class: 'runs-total', text: String(side === 'us' ? rec.final.us : rec.final.them) }));
     table.appendChild(tr);
   });
-  wrap.appendChild(table);
+  body.appendChild(table);
 
-  wrap.appendChild(h('button', {
+  body.appendChild(h('button', {
     class: 'portal-view-scorecard-btn', text: '▦ view scorecard',
     onclick: () => { portalScorecardOpen = true; render(); },
   }));
@@ -4832,10 +4862,10 @@ function renderPortalGameDetail() {
         () => portalGameLinesSortDir, (v) => { portalGameLinesSortDir = v; }),
     }));
   });
-  wrap.appendChild(header);
+  body.appendChild(header);
   sortPlayerStatRows(st.lineup.slice(), gs, portalGameLinesSortKey, portalGameLinesSortDir).forEach((pid) => {
     const s = gs[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
-    wrap.appendChild(h('div', { class: 'portal-player-row' }, [
+    body.appendChild(h('div', { class: 'portal-player-row' }, [
       h('span', { class: 'portal-player-name', text: playerNameOf(pid) }),
       h('span', { class: 'portal-player-stat' + (s.ab ? '' : ' zero'), text: String(s.ab) }),
       h('span', { class: 'portal-player-stat' + (s.h ? '' : ' zero'), text: String(s.h) }),
@@ -4992,7 +5022,14 @@ function render() {
 
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
-  document.getElementById('tabbar').classList.toggle('hidden', isPortalActive());
+  // Tab bar hidden in the portal (its own surface, no tabs) AND on the team
+  // phone pre-game (2026-07-14: the Soundboard tab was a live escape hatch
+  // around the PIN gate / Start Game editor -- tapping it bypassed both and
+  // landed on the classic grid, exactly the "unusable at the #anchored URL"
+  // guarantee Jason asked for). Reappears once a game goes live: the grid
+  // stays reachable as the firm-principle-5 manual-override fallback during
+  // real play, same as every other device.
+  document.getElementById('tabbar').classList.toggle('hidden', isPortalActive() || (isTeamPhone() && !isScoringLive()));
   const inReorder = !isPortalActive() && state.activeTab === 'lineup' && (state.editing || scoringEditorActive());
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
 

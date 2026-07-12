@@ -1926,9 +1926,11 @@ async function main() {
   // 62. Boot posture (decidePortalBoot): rule 1 (live game always wins,
   // regardless of hash or window), rule 2 (non-team-phone + in-window ->
   // portal AND the prompt layered over it), rule 3 (non-team-phone, no
-  // window -> portal alone), and the team-phone branch (in-window -> Start
-  // Game directly, PIN-gated same as the existing entry point; no window ->
-  // stays on the classic screen, portal never activates).
+  // window -> portal alone), and the team-phone branch -- ALWAYS opens
+  // Start Game directly, PIN-gated, whether or not a fixture is in window
+  // (2026-07-14 correction: previously gated on the window, which left the
+  // device falling through to the classic tile-grid/Next-Up screens
+  // whenever nothing was in window -- exactly what Jason found live).
   {
     const farFuture = fixtureParts(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000));
     const inWindow = fixtureParts(new Date(Date.now() + 10 * 60 * 1000)); // 10 min out, inside the 60-min window
@@ -1972,18 +1974,24 @@ async function main() {
     assert(hooks.isPortalActive() === true, 'rule 2: still boots to the portal underneath');
     assert(hooks.getGameWindowPromptOpen() === true, 'rule 2: a fixture inside its window layers the prompt on top');
 
-    // Team phone, no window -> stays on the classic screen, portal never
-    // activates, no prompt, no Start Game flow.
+    // Team phone, NO window, already PIN-unlocked -> Start Game still opens
+    // directly (the corrected behavior: the window no longer gates this at
+    // all), same one-tap guarantee as the existing entry point, portal
+    // never involved.
     resetPortalVars();
     global.location.hash = '#team';
+    hooks.setPinUnlockedForTest(true);
     hooks.getDATA().schedule = [{ id: 'ff2', date: farFuture.date, time: farFuture.time, opponent: 'Someday FC' }];
     hooks.decidePortalBoot();
-    assert(hooks.isPortalActive() === false, 'team phone, no window: never shows the portal');
-    assert(hooks.getScoringLineupEditor() === null, 'team phone, no window: does not open Start Game either -- stays classic');
+    assert(hooks.isPortalActive() === false, 'team phone, no window: never routes through the portal');
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start',
+      'team phone, NO window, already unlocked: Start Game opens directly anyway -- the window no longer gates this');
+    assert(document.getElementById('tabbar').classList.contains('hidden'),
+      'tab bar stays hidden on the team phone pre-game -- no Soundboard-tab escape hatch around the editor');
+    hooks.cancelScoringLineupEditor();
 
-    // Team phone, game in window, already PIN-unlocked -> Start Game opens
-    // directly, same one-tap guarantee as the existing entry point, skipping
-    // the portal and its prompt entirely.
+    // Team phone, game IN window, already PIN-unlocked -> same result,
+    // confirming the window genuinely no longer matters either way.
     resetPortalVars();
     global.location.hash = '#team';
     hooks.setPinUnlockedForTest(true);
@@ -1994,21 +2002,41 @@ async function main() {
       'team phone, in window, already unlocked: Start Game opens directly');
     hooks.cancelScoringLineupEditor();
 
-    // Team phone, game in window, NOT yet unlocked -> PIN gate first, same
-    // as the existing entry point -- Start Game only opens after success.
+    // Team phone, NOT yet unlocked -> PIN gate first, same as the existing
+    // entry point -- Start Game only opens after success, and the PIN sheet
+    // itself offers no cancel button (nowhere legitimate to send this
+    // device pre-game -- 2026-07-14, Jason: "the app should simply be
+    // unusable at that #anchored URL" until the PIN succeeds).
     resetPortalVars();
     hooks.setPinUnlockedForTest(false);
     hooks.decidePortalBoot();
-    assert(hooks.getPinSheet() !== null, 'team phone, in window, locked: PIN sheet gates entry, same as the existing button');
+    assert(hooks.getPinSheet() !== null, 'team phone, locked: PIN sheet gates entry, same as the existing button');
     assert(hooks.getScoringLineupEditor() === null, 'editor does not open until the PIN succeeds');
+    render();
+    assert(!findByClassContaining('sheet-cancel', 'cancel'), 'team phone: the PIN sheet has no cancel button -- stuck here until it succeeds');
+    assert(document.getElementById('tabbar').classList.contains('hidden'), 'tab bar stays hidden behind the PIN sheet too -- no tab-tap escape');
     '0000'.split('').forEach(d => hooks.pinKeyTap(d));
     assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start', 'PIN success opens Start Game');
     hooks.cancelScoringLineupEditor();
     hooks.setPinUnlockedForTest(true); // restore -- later tests assume this device stays unlocked, as test 52 left it
 
+    // Sanity check: the same PIN sheet DOES offer cancel off the team phone
+    // (e.g. the game-window prompt's accept, or the classic screen's
+    // stopgap button) -- declining back to the portal/classic screen is
+    // legitimate there, only the team phone's forced pre-game gate is a
+    // dead end by design.
+    global.location.hash = '';
+    hooks.setPinUnlockedForTest(false);
+    hooks.setScoringLineupEditor(null);
+    hooks.openPinSheet(() => {});
+    render();
+    assert(findByClassContaining('sheet-cancel', 'cancel'), 'off the team phone, the PIN sheet still offers cancel');
+    hooks.closePinSheet();
+    hooks.setPinUnlockedForTest(true);
+
     global.location.hash = '';
     resetPortalVars();
-    console.log('62. Boot posture: live game always wins; team-phone in-window opens Start Game (PIN-gated); non-team-phone boots the portal, prompt layered only when a fixture is in window: OK');
+    console.log('62. Boot posture: live game always wins; team phone always opens Start Game (PIN-gated, no cancel, tab bar hidden) regardless of window; non-team-phone boots the portal, prompt layered only when a fixture is in window: OK');
   }
 
   // 63. Portal UI navigation: stats -> schedule -> game detail -> scorecard
