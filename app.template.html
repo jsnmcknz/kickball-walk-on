@@ -1013,8 +1013,13 @@
   .portal-sort-col.active { color: var(--pickle); }
   .portal-play-spacer { width: 32px; flex: none; }
   .portal-player-row {
+    /* 2026-07-14, Jason (on-device, both a 15 Pro Max and an XS Max): the
+       15-row full team table needs less scrolling to reach the bottom than
+       this -- tightened from 7px/5px to fit 1-2 more rows in the same
+       viewport without shrinking the 26px play button below a usable tap
+       target. */
     display: flex; align-items: center; background: var(--tile); border: 1px solid var(--tile-border);
-    border-radius: 8px; padding: 7px 10px; margin-bottom: 5px;
+    border-radius: 8px; padding: 5px 10px; margin-bottom: 4px;
   }
   .portal-player-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
   .portal-player-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 4px; }
@@ -1027,8 +1032,10 @@
   .portal-play-btn.playing { border-color: var(--plum-border); color: var(--plum-text); background: var(--plum-fill); }
   .portal-more-row { text-align: center; padding: 6px 0 0; }
   .portal-schedule-row {
+    /* Same 2026-07-14 tightening as .portal-player-row -- same list-of-rows
+       shape, same "less scrolling to see the season" goal. */
     display: flex; align-items: center; gap: 10px; background: var(--tile); border: 1px solid var(--tile-border);
-    border-radius: 8px; padding: 9px 10px; margin-bottom: 6px;
+    border-radius: 8px; padding: 7px 10px; margin-bottom: 5px;
   }
   .portal-schedule-row.next { border-color: var(--olive); }
   .portal-schedule-row.future { opacity: 0.4; }
