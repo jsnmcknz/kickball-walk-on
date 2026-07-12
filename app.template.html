@@ -4430,15 +4430,10 @@ function renderScoringLineupEditor() {
   });
   wrap.appendChild(list);
 
-  const pool = draftRosterPool();
-  wrap.appendChild(h('div', { class: 'editor-sect', text: 'TAP TO ADD' + (isStart ? ' · ' + pool.length + ' ON THE ROSTER' : '') }));
-  const grid = h('div', { class: 'draft-addgrid' });
-  pool.forEach(p => {
-    grid.appendChild(h('button', { class: 'tile draft-addtile', onclick: () => draftAppend(p.id) }, [h('span', { text: p.name })]));
-  });
-  grid.appendChild(h('button', { class: 'tile draft-addtile bench-tile', onclick: openAddPlayerSheet }, [h('span', { text: '+ new' })]));
-  wrap.appendChild(grid);
-
+  // CTA sits between the active order and the "tap to add" pool (2026-07-14,
+  // Jason: on-device, this read as the natural commit point -- you finish
+  // arranging who's in, act right there, without scrolling past the whole
+  // roster grid first). Previously lived at the very bottom, after the grid.
   const ctaKids = [];
   if (isStart) {
     ctaKids.push(h('button', { class: 'done-full', text: '▶ start game', disabled: ed.draft.length === 0, onclick: commitStartGame }));
@@ -4453,6 +4448,15 @@ function renderScoringLineupEditor() {
     // an already-long scrollable page read as "the button does nothing."
   }
   wrap.appendChild(h('div', { class: 'draft-cta-wrap' }, ctaKids));
+
+  const pool = draftRosterPool();
+  wrap.appendChild(h('div', { class: 'editor-sect', text: 'TAP TO ADD' + (isStart ? ' · ' + pool.length + ' ON THE ROSTER' : '') }));
+  const grid = h('div', { class: 'draft-addgrid' });
+  pool.forEach(p => {
+    grid.appendChild(h('button', { class: 'tile draft-addtile', onclick: () => draftAppend(p.id) }, [h('span', { text: p.name })]));
+  });
+  grid.appendChild(h('button', { class: 'tile draft-addtile bench-tile', onclick: openAddPlayerSheet }, [h('span', { text: '+ new' })]));
+  wrap.appendChild(grid);
   return wrap;
 }
 
@@ -4601,6 +4605,20 @@ function renderAdjustSheet() {
 function scoringEditorActive() {
   /* __SCORING_START__ */
   if (scoringLineupEditor) return true;
+  /* __SCORING_END__ */
+  return false;
+}
+
+// Same safe-wrapper pattern: the tab bar hides on these "sub-pages of the
+// main scoring screen" (2026-07-14, Jason: box score, lineup edit/start-game
+// draft, and end-game confirm don't contextually make sense with a
+// Scoring/Soundboard switcher sitting there, and the switcher eats space
+// better spent on their own content) -- the ROOT scoring screen (the live
+// at-bat/diamond view) keeps the tab bar, since that's firm principle 5's
+// manual-override fallback and must stay reachable during real play.
+function isScoringSubpageActive() {
+  /* __SCORING_START__ */
+  if (scoringLineupEditor || scoringBoxScoreOpen || endGameConfirmOpen) return true;
   /* __SCORING_END__ */
   return false;
 }
@@ -5096,7 +5114,12 @@ function render() {
   // guarantee Jason asked for). Reappears once a game goes live: the grid
   // stays reachable as the firm-principle-5 manual-override fallback during
   // real play, same as every other device.
-  document.getElementById('tabbar').classList.toggle('hidden', isPortalActive() || (isTeamPhone() && !isScoringLive()));
+  // 2026-07-14, Jason: also hidden on scoring's own sub-pages (box score,
+  // lineup edit/start-game draft, end-game confirm) -- a Scoring/Soundboard
+  // switcher doesn't contextually belong on what's functionally a sub-page
+  // of the live at-bat screen, and it was eating space better spent on
+  // their own content. The root at-bat screen keeps it (principle 5).
+  document.getElementById('tabbar').classList.toggle('hidden', isPortalActive() || (isTeamPhone() && !isScoringLive()) || isScoringSubpageActive());
   const inReorder = !isPortalActive() && state.activeTab === 'lineup' && (state.editing || scoringEditorActive());
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
 

@@ -276,6 +276,11 @@ global.__hooks = {
   setGameWindowPromptOpen: function(v) { gameWindowPromptOpen = v; },
   getGameWindowPromptDismissed: function() { return gameWindowPromptDismissed; },
   setPortalActiveForTest: function(v) { portalActive = v; },
+  // Tab-bar-on-scoring-subpages (2026-07-14)
+  toggleBoxScore: function() { return toggleBoxScore(); },
+  getScoringBoxScoreOpen: function() { return scoringBoxScoreOpen; },
+  isScoringSubpageActive: function() { return isScoringSubpageActive(); },
+  getTabbarHidden: function() { return document.getElementById('tabbar').classList.contains('hidden'); },
 };
 `;
 
@@ -2250,6 +2255,65 @@ async function main() {
 
     hooks.cancelScoringLineupEditor();
     console.log('65. Draft-row drag scoped to the handle only -- plain row space no longer fights native scroll: OK');
+  }
+
+  // 66. Tab bar hidden on scoring's sub-pages (box score, lineup edit/
+  // start-game draft, end-game confirm), visible on the root at-bat screen
+  // (firm principle 5 still applies there). Also: the done/cancel (or start
+  // game) CTA now sits between the order list and "tap to add", not after
+  // the whole add-grid (2026-07-14, Jason).
+  {
+    function domOrderIndex(cls) {
+      let counter = 0, found = -1;
+      const walk = (node) => {
+        counter++;
+        if (found === -1 && node.classList && node.classList.contains(cls)) found = counter;
+        (node._children || []).forEach(walk);
+      };
+      walk(document.getElementById('screen'));
+      return found;
+    }
+
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    assert(hooks.isScoringSubpageActive() === false, 'root at-bat screen is not a subpage');
+    assert(hooks.getTabbarHidden() === false, 'tab bar visible on the root at-bat screen (principle 5 fallback stays reachable)');
+
+    hooks.toggleBoxScore();
+    assert(hooks.getScoringBoxScoreOpen() === true, 'sanity: box score opened');
+    assert(hooks.isScoringSubpageActive() === true && hooks.getTabbarHidden() === true, 'tab bar hidden while the box score takeover is open');
+    hooks.toggleBoxScore();
+    assert(hooks.getTabbarHidden() === false, 'tab bar returns once box score closes');
+
+    hooks.openMidGameLineupEditor();
+    assert(hooks.getTabbarHidden() === true, 'tab bar hidden on the mid-game lineup editor');
+    assert(domOrderIndex('draft-cta-wrap') > domOrderIndex('draft-list') && domOrderIndex('draft-cta-wrap') < domOrderIndex('draft-addgrid'),
+      'done/cancel CTA sits between the order list and the add-grid, not after it');
+    hooks.cancelScoringLineupEditor();
+    assert(hooks.getTabbarHidden() === false, 'tab bar returns once the editor closes');
+
+    hooks.openStartGameFlow(); // already unlocked from earlier tests
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start', 'sanity: start-game draft opened');
+    assert(hooks.getTabbarHidden() === true, 'tab bar hidden on the start-game draft screen too -- same render function, same fix');
+    assert(domOrderIndex('draft-cta-wrap') > domOrderIndex('draft-list') && domOrderIndex('draft-cta-wrap') < domOrderIndex('draft-addgrid'),
+      'start-game CTA sits in the same place as done/cancel');
+    hooks.cancelScoringLineupEditor();
+
+    // End-game confirm: only reachable while actually live, so re-derive
+    // the live game state after the Start Game draft's cancel above left
+    // the ORIGINAL game (from setScoringEvents at the top) as the live one.
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    hooks.openEndGameConfirm();
+    assert(hooks.getEndGameConfirmOpen() === true, 'sanity: end-game confirm opened');
+    assert(hooks.getTabbarHidden() === true, 'tab bar hidden on the end-game confirm sheet too -- same "sub-page" category');
+    hooks.closeEndGameConfirm();
+    assert(hooks.getTabbarHidden() === false, 'tab bar returns once the confirm closes');
+
+    console.log('66. Tab bar hidden on scoring sub-pages, visible on the root at-bat screen; CTA relocated between the order list and add-grid: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
