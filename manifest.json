@@ -1,25 +1,51 @@
 {
   "team": "🥒 Pickles' Party Palace",
+  "teamShort": "PICKLES",
   "players": [
-    { "id": "charlie", "name": "Charlie", "clips": ["Charlie-01.m4a"] },
-    { "id": "clayton", "name": "Clayton", "clips": ["Clayton-01.m4a"] },
-    { "id": "elias", "name": "Elias", "clips": ["Elias-01.mp3"] },
-    { "id": "franny", "name": "Franny", "clips": ["Franny-01.m4a"] },
-    { "id": "jason", "name": "Jason", "clips": ["Jason-01.m4a"] },
-    { "id": "kirsten", "name": "Kirsten", "clips": ["Kirsten-01.m4a"] },
-    { "id": "marcel", "name": "Marcel", "clips": ["Marcel-01.m4a"] },
-    { "id": "mark", "name": "Mark", "clips": ["Mark-01.m4a"] },
-    { "id": "megan", "name": "Megan", "clips": ["Megan-01.m4a"] },
-    { "id": "mike", "name": "Mike", "clips": ["Mike-01.m4a"] },
-    { "id": "ming", "name": "Ming", "clips": ["Ming-01.mp3"] },
-    { "id": "penny", "name": "Penny", "clips": ["Penny-01.m4a"] },
-    { "id": "pouriya", "name": "Pouriya", "clips": ["Pouriya-01.m4a"] },
-    { "id": "will", "name": "Will", "clips": ["Will-01.m4a"] },
-    { "id": "winson", "name": "Winson", "clips": ["Winson-01.m4a"] }
+    { "id": "charlie", "name": "Charlie", "clips": ["Charlie-01.m4a"], "status": "member" },
+    { "id": "clayton", "name": "Clayton", "clips": ["Clayton-01.m4a"], "status": "member" },
+    { "id": "elias", "name": "Elias", "clips": ["Elias-01.mp3"], "status": "member" },
+    { "id": "franny", "name": "Franny", "clips": ["Franny-01.m4a"], "status": "member" },
+    { "id": "jason", "name": "Jason", "clips": ["Jason-01.m4a"], "status": "member" },
+    { "id": "kirsten", "name": "Kirsten", "clips": ["Kirsten-01.m4a"], "status": "member" },
+    { "id": "marcel", "name": "Marcel", "clips": ["Marcel-01.m4a"], "status": "member" },
+    { "id": "mark", "name": "Mark", "clips": ["Mark-01.m4a"], "status": "member" },
+    { "id": "megan", "name": "Megan", "clips": ["Megan-01.m4a"], "status": "member" },
+    { "id": "mike", "name": "Mike", "clips": ["Mike-01.m4a"], "status": "member" },
+    { "id": "ming", "name": "Ming", "clips": ["Ming-01.mp3"], "status": "member" },
+    { "id": "penny", "name": "Penny", "clips": ["Penny-01.m4a"], "status": "member" },
+    { "id": "pouriya", "name": "Pouriya", "clips": ["Pouriya-01.m4a"], "status": "member" },
+    { "id": "will", "name": "Will", "clips": ["Will-01.m4a"], "status": "member" },
+    { "id": "winson", "name": "Winson", "clips": ["Winson-01.m4a"], "status": "member" }
   ],
+  "teamSounds": [],
+  "defaultClips": ["placeholder-hype-1.mp3", "placeholder-hype-2.mp3"],
+  "schedule": [
+    { "id": "2026-g1", "date": "2026-07-06", "time": "21:30", "opponent": "COLD SHOTZ",
+      "field": "West Pitch — South Field", "result": { "us": 13, "them": 27 } },
+    { "id": "2026-g2", "date": "2026-07-13", "time": "20:30", "opponent": "Otter Nonsense",
+      "field": "West Pitch — North Field" },
+    { "id": "2026-g3", "date": "2026-07-20", "time": "20:30", "opponent": "The Brew Jays",
+      "field": "West Pitch — North Field" },
+    { "id": "2026-g4", "date": "2026-07-27", "time": "21:30", "opponent": "Down with the Kickness",
+      "field": "West Pitch — North Field" },
+    { "id": "2026-g5", "date": "2026-08-10", "time": "20:30", "opponent": "Base Invaders",
+      "field": "West Pitch — North Field" },
+    { "id": "2026-g6", "date": "2026-08-17" },
+    { "id": "2026-g7", "date": "2026-08-24" }
+  ],
+  "venue": { "name": "University of Toronto — Back Campus Field", "address": "5 Hoskin Avenue" },
   "settings": {
     "clipsDir": "source/clips",
     "fadeOutMs": 1500,
-    "theme": "dark"
+    "theme": "dark",
+    "autoPlayDelayMs": 5000
+  },
+  "scoring": {
+    "enabled": false,
+    "supabaseUrl": "",
+    "supabaseAnonKey": "",
+    "teamPin": "0000",
+    "inningsPerGame": 7
   }
 }

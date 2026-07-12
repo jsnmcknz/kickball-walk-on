@@ -1,0 +1,69 @@
+{
+  "_comment": "Replay fixture: the 3-inning demo game from mockups/scoring-screens.html screen 6. Feed events[] to deriveState() and assert the checkpoints. ts values are synthetic but strictly increasing; single device so seq order = replay order. Kickball league rules: no BB, no reached-on-error; results are 1B 2B 3B HR FLY GND K MISSED SKIP.",
+  "events": [
+    { "seq": 1,  "type": "game_start", "payload": { "opponent": "Kick City", "innings": 7, "lineup": ["megan", "charlie", "franny", "jason", "kirsten", "marcel", "penny", "will", "ming"] } },
+    { "seq": 2,  "type": "pa", "payload": { "playerId": "megan",   "result": "1B",     "inning": 1, "half": "us" } },
+    { "seq": 3,  "type": "pa", "payload": { "playerId": "charlie", "result": "FLY",    "inning": 1, "half": "us" } },
+    { "seq": 4,  "type": "pa", "payload": { "playerId": "franny",  "result": "1B",     "inning": 1, "half": "us" } },
+    { "seq": 5,  "type": "pa", "payload": { "playerId": "jason",   "result": "2B",     "inning": 1, "half": "us" } },
+    { "seq": 6,  "type": "pa", "payload": { "playerId": "kirsten", "result": "K",      "inning": 1, "half": "us" } },
+    { "seq": 7,  "type": "pa", "payload": { "playerId": "marcel",  "result": "GND",    "inning": 1, "half": "us" } },
+    { "seq": 8,  "type": "opp_run", "payload": { "inning": 1, "delta": 1 } },
+    { "seq": 9,  "type": "opp_run", "payload": { "inning": 1, "delta": 1 } },
+    { "seq": 10, "type": "opp_out", "payload": { "inning": 1 } },
+    { "seq": 11, "type": "opp_out", "payload": { "inning": 1 } },
+    { "seq": 12, "type": "opp_out", "payload": { "inning": 1 } },
+    { "seq": 13, "type": "pa", "payload": { "playerId": "penny",   "result": "FLY",    "inning": 2, "half": "us" } },
+    { "seq": 14, "type": "pa", "payload": { "playerId": "will",    "result": "1B",     "inning": 2, "half": "us" } },
+    { "seq": 15, "type": "pa", "payload": { "playerId": "ming",    "result": "1B",     "inning": 2, "half": "us" } },
+    { "seq": 16, "type": "pa", "payload": { "playerId": "megan",   "result": "HR",     "inning": 2, "half": "us" } },
+    { "seq": 17, "type": "pa", "payload": { "playerId": "charlie", "result": "2B",     "inning": 2, "half": "us" } },
+    { "seq": 18, "type": "pa", "payload": { "playerId": "franny",  "result": "GND",    "inning": 2, "half": "us" } },
+    { "seq": 19, "type": "pa", "payload": { "playerId": "jason",   "result": "FLY",    "inning": 2, "half": "us" } },
+    { "seq": 20, "type": "opp_out", "payload": { "inning": 2 } },
+    { "seq": 21, "type": "opp_out", "payload": { "inning": 2 } },
+    { "seq": 22, "type": "opp_out", "payload": { "inning": 2 } },
+    { "seq": 23, "type": "pa", "payload": { "playerId": "kirsten", "result": "1B",     "inning": 3, "half": "us" } },
+    { "seq": 24, "type": "runner", "payload": { "playerId": "kirsten", "action": "out" } },
+    { "seq": 25, "type": "pa", "payload": { "playerId": "marcel",  "result": "MISSED", "inning": 3, "half": "us" } },
+    { "seq": 26, "type": "pa", "payload": { "playerId": "penny",   "result": "GND",    "inning": 3, "half": "us" } },
+    { "seq": 27, "type": "pa", "payload": { "playerId": "will",    "result": "K",      "inning": 3, "half": "us" } },
+    { "seq": 28, "type": "opp_run", "payload": { "inning": 3, "delta": 1 } },
+    { "seq": 29, "type": "opp_out", "payload": { "inning": 3 } },
+    { "seq": 30, "type": "opp_out", "payload": { "inning": 3 } },
+    { "seq": 31, "type": "opp_out", "payload": { "inning": 3 } }
+  ],
+  "checkpoints": [
+    {
+      "_comment": "After seq 5 (Jason's 2B): assumption engine moved Megan 2nd->home (run + RBI to Jason), Franny 1st->3rd.",
+      "afterSeq": 5,
+      "expect": { "inning": 1, "half": "us", "outs": 1, "scoreUs": 1, "scoreThem": 0, "runners": { "franny": 3, "jason": 2 }, "nowUp": "kirsten" }
+    },
+    {
+      "_comment": "After seq 16 (Megan's HR): Will, Ming, Megan all score; RBI 3 to Megan; bases empty.",
+      "afterSeq": 16,
+      "expect": { "inning": 2, "half": "us", "outs": 1, "scoreUs": 4, "scoreThem": 2, "runners": {}, "nowUp": "charlie" }
+    },
+    {
+      "_comment": "After seq 24 (Kirsten out on the bases): her 1B stands in stats; out count 1. MISSED (seq 25) adds no out. Will's K (seq 27) is the 3rd out and flips the half.",
+      "afterSeq": 27,
+      "expect": { "inning": 3, "half": "them", "outs": 0, "scoreUs": 4, "scoreThem": 2, "runners": {}, "nowUp": "ming" }
+    },
+    {
+      "afterSeq": 31,
+      "expect": { "inning": 4, "half": "us", "outs": 0, "scoreUs": 4, "scoreThem": 3, "runners": {}, "nowUp": "ming" }
+    }
+  ],
+  "expectedStats": {
+    "_comment": "pa = all plate appearances incl. MISSED, excl. SKIP (none here). ab = known-result PAs only (the honest denominator). No inferred RBI in this fixture (all runs via assumption engine, none via manual scored-corrections).",
+    "megan":   { "pa": 2, "ab": 2, "h": 2, "r": 2, "rbi": 3 },
+    "charlie": { "pa": 2, "ab": 2, "h": 1, "r": 0, "rbi": 0 },
+    "franny":  { "pa": 2, "ab": 2, "h": 1, "r": 0, "rbi": 0 },
+    "jason":   { "pa": 2, "ab": 2, "h": 1, "r": 0, "rbi": 1 },
+    "kirsten": { "pa": 2, "ab": 2, "h": 1, "r": 0, "rbi": 0 },
+    "marcel":  { "pa": 2, "ab": 1, "h": 0, "r": 0, "rbi": 0 },
+    "penny":   { "pa": 2, "ab": 2, "h": 0, "r": 0, "rbi": 0 },
+    "will":    { "pa": 2, "ab": 2, "h": 1, "r": 1, "rbi": 0 },
+    "ming":    { "pa": 1, "ab": 1, "h": 1, "r": 1, "rbi": 0 }
+  }
+}

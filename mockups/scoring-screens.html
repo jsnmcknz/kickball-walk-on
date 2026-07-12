@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scoring screens — normative mockups (2026-07-07 design session)</title>
+<style>
+  body { background:#26282b; margin:0; padding:24px; font-family:-apple-system,"Helvetica Neue",sans-serif; }
+  .row { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; }
+  .col { width:292px; }
+  .caption { font-size:13px; color:#b9bdb9; margin:0 0 8px; text-align:center; }
+  .note { font-size:12px; color:#8f948f; margin:6px 4px 28px; line-height:1.5; }
+  .phone { background:#101215; border-radius:28px; border:1px solid #44464a; padding:16px 14px; }
+  .hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .wordmark { font-size:11px; letter-spacing:2px; color:#82A167; font-weight:500; }
+  .lineup-btn { font-size:11px; color:#e8eae6; background:#1d2126; border:1px solid #33383e; border-radius:6px; padding:3px 8px; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .tab { flex:1; text-align:center; border-radius:8px; padding:6px 0; font-size:13px; }
+  .tab.on { background:#536840; color:#e8eae6; font-weight:500; }
+  .tab.off { background:#1d2126; color:#8f948f; border:1px solid #33383e; }
+  .bug { display:flex; justify-content:space-between; align-items:center; background:#1d2126; border:1px solid #33383e; border-radius:8px; padding:6px 10px; margin-bottom:10px; font-size:12px; }
+  .card { background:#82A167; border-radius:12px; padding:14px 12px 12px; text-align:center; margin-bottom:10px; }
+  .card .lbl { font-size:11px; letter-spacing:1.5px; color:#2C2E20; font-weight:500; }
+  .card .name { font-size:30px; color:#FFFFFF; font-weight:500; margin:2px 0; }
+  .card .cap { font-size:12px; color:#D8DBBE; }
+  .pad { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:6px; margin-bottom:8px; }
+  .t { background:#1d2126; border:1px solid #33383e; border-radius:8px; text-align:center; color:#e8eae6; font-weight:500; }
+  .t3 { grid-column:span 3; padding:13px 0; font-size:15px; }
+  .t4 { grid-column:span 4; padding:8px 0; font-size:15px; }
+  .t .sub { font-size:11px; color:#8f948f; font-weight:400; }
+  .dash { background:#101215; border:1px dashed #33383e; color:#8f948f; font-size:13px; }
+  .muted { font-size:12px; color:#8f948f; }
+  .chip { background:#1d2126; border:1px solid #33383e; border-radius:8px; padding:6px 10px; }
+  .base { position:absolute; transform:rotate(45deg); border-radius:4px; }
+  .dim { opacity:0.4; }
+  .t.hit { position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .hit .lb { position:relative; z-index:1; font-size:12px; }
+  .hit .dia { display:block; position:absolute; left:50%; top:50%; width:30px; height:30px; margin:-15px 0 0 -15px; transform:rotate(45deg); border-radius:3px; border:2px solid #33383e; }
+</style>
+</head>
+<body>
+
+<p style="color:#e8eae6; font-size:15px; max-width:640px; margin:0 auto 6px;">Normative visual reference — scoring merge (designed 2026-07-07)</p>
+<p style="color:#CBA9DD; font-size:12px; max-width:640px; margin:0 auto 10px; line-height:1.6;"><strong>AUTHORITY DOWNGRADE (2026-07-11):</strong> the built app has evolved well past this file — pill Scoring/Soundboard tabs at bottom, vertical score bug with LEADS/TRAILS/TIED + box-score link, play button under the NOW UP name, fixed-height last-action box, moss on-deck strip with runs-this-inning, reworked defense screen, diamond-tap corrections. <strong>For every screen that exists in the build, `app.template.html` (see `dist/scoring-preview.html`) is now normative for appearance — do NOT use this file to "correct" the build.</strong> This file remains a reference for palette, casing rules, per-screen behavioral notes, and the dated addendum deltas below that are not yet built.</p>
+<p style="color:#8f948f; font-size:12px; max-width:640px; margin:0 auto 28px; line-height:1.6;">Original note: these mockups were the design of record for appearance at the 2026-07-07 design session. Behavior is governed by 03-Invariants.md and 05-Scoring-Architecture.md. Palette is the locked dark scoreboard theme from 01-Architecture.md.</p>
+
+<div class="row">
+
+<div class="col">
+<p class="caption">1 — Offense (our half, game live)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#9998; lineup</span></div>
+  <div class="tabs"><div class="tab on">Scoring</div><div class="tab off">Soundboard</div></div>
+  <div class="bug">
+    <span style="color:#e8eae6;">&#9650; 3rd &middot; <span style="color:#8f948f;">kicking</span></span>
+    <span><span style="color:#e8eae6;">&#9679;&#9679;</span><span style="color:#33383e;">&#9679;</span> <span style="color:#8f948f;">outs</span></span>
+    <span style="color:#e8eae6; font-weight:500;">PICKLES 5 &middot; 3</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+    <div style="position:relative; width:104px; height:88px; flex:none;">
+      <div class="base" style="left:39px; top:2px; width:24px; height:24px; background:#1d2126; border:1px solid #33383e;"></div>
+      <div class="base" style="right:6px; top:32px; width:24px; height:24px; background:#82A167;"></div>
+      <div style="position:absolute; right:9px; top:37px; width:18px; text-align:center; font-size:12px; font-weight:500; color:#2C2E20;">F</div>
+      <div class="base" style="left:6px; top:32px; width:24px; height:24px; background:#82A167;"></div>
+      <div style="position:absolute; left:9px; top:37px; width:18px; text-align:center; font-size:12px; font-weight:500; color:#2C2E20;">K</div>
+      <div class="base" style="left:43px; bottom:2px; width:16px; height:16px; background:#101215; border:1px dashed #33383e;"></div>
+    </div>
+    <div style="flex:1; min-width:0;">
+      <div class="chip" style="margin-bottom:6px;">
+        <div style="font-size:12px; color:#e8eae6;">&#9998; last: Franny &mdash; 1B</div>
+        <div style="font-size:11px; color:#8f948f;">tap to fix or undo</div>
+      </div>
+      <div class="muted" style="line-height:1.5;">2 on &middot; tap a runner to fix</div>
+    </div>
+  </div>
+  <div class="card"><div class="lbl">NOW UP</div><div class="name">MEGAN &nbsp;&#9654;</div><div class="cap">5 of 9 &middot; tap to replay</div></div>
+  <div class="pad">
+    <div class="t t3 hit"><span class="dia" style="border-right-color:#536840;"></span><span class="lb">1B</span></div>
+    <div class="t t3 hit"><span class="dia" style="border-top-color:#536840; border-right-color:#536840;"></span><span class="lb">2B</span></div>
+    <div class="t t3 hit"><span class="dia" style="border-top-color:#536840; border-right-color:#536840; border-left-color:#536840;"></span><span class="lb">3B</span></div>
+    <div class="t t3 hit"><span class="dia" style="border-color:#536840; background:rgba(130,161,103,0.12);"></span><span class="lb">HR</span></div>
+    <div class="t t4">FLY<div class="sub">out</div></div>
+    <div class="t t4">GROUND<div class="sub">out</div></div>
+    <div class="t t4">K<div class="sub">strikeout</div></div>
+    <div class="t dash" style="grid-column:span 6; padding:8px 0;">MISSED<div class="sub">kicked, no result</div></div>
+    <div class="t dash" style="grid-column:span 6; padding:8px 0;">SKIP &#9197;<div class="sub">didn&rsquo;t kick</div></div>
+  </div>
+  <div class="muted" style="text-align:center;">on deck &mdash; Penny &middot; Will &middot; Ming</div>
+</div>
+<p class="note">Result tap = log PA + advance lineup + fire next clip after autoPlayDelayMs (2000). Card caption reads &ldquo;tap to replay&rdquo; once the kicker&rsquo;s clip has already fired this PA; &ldquo;tap to play&rdquo; otherwise. While playing: existing plum stop-control card with live countdown, unchanged. Last-action chip shows the most recent event of any kind. Score bug figures are tappable &rarr; adjust steppers. Sync indicator: nothing visible when synced (silence is the success state). <strong>2026-07-11 addendum (Jason):</strong> hit buttons carry <em>baseline indicators</em> — the scorecard&rsquo;s mini-diamond motif behind the label, edges lit moss per bases reached (1B right, 2B +top, 3B +left, HR all four + faint fill), same base&harr;edge mapping as the scorecard cells. GND reads GROUND on the button (event code stays <code>GND</code>). Tabs read <em>Scoring / Soundboard</em> in game mode (walk-on-only builds keep <em>Next Up</em>). These apply to every render of the pad and tabs, not just this screen. Also from the same pass: the live diamond graphic should grow to fill its column, and the last-action chip text sizes up a step — exact values tuned in the build preview.</p>
+</div>
+
+<div class="col">
+<p class="caption">2 — Defense (their half)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#9998; lineup</span></div>
+  <div class="tabs"><div class="tab on">Scoring</div><div class="tab off">Soundboard</div></div>
+  <div class="bug">
+    <span style="color:#e8eae6;">&#9660; 3rd &middot; <span style="color:#8f948f;">fielding</span></span>
+    <span><span style="color:#e8eae6;">&#9679;</span><span style="color:#33383e;">&#9679;&#9679;</span> <span style="color:#8f948f;">outs</span></span>
+    <span style="color:#e8eae6; font-weight:500;">PICKLES 5 &middot; 3</span>
+  </div>
+  <div class="chip" style="border-radius:12px; text-align:center; padding:14px 12px; margin-bottom:10px;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#8f948f; font-weight:500;">THEY&rsquo;RE KICKING</div>
+    <div class="muted" style="margin-top:4px;">walk-up music resumes next half</div>
+  </div>
+  <div style="background:#1d2126; border:1px solid #536840; border-radius:12px; text-align:center; padding:26px 0; margin-bottom:10px;">
+    <div style="font-size:26px; font-weight:500; color:#e8eae6;">+ OUT</div>
+    <div class="muted" style="margin-top:2px;">1 of 3 &middot; third out flips the half</div>
+  </div>
+  <div style="display:flex; align-items:center; justify-content:center; gap:14px; background:#1d2126; border:1px solid #33383e; border-radius:12px; padding:14px 0; margin-bottom:10px;">
+    <div style="width:44px; height:44px; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; color:#e8eae6;">&minus;</div>
+    <div style="text-align:center;"><div style="font-size:24px; font-weight:500; color:#e8eae6;">2</div><div style="font-size:11px; color:#8f948f;">their runs, this inning</div></div>
+    <div style="width:44px; height:44px; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; color:#e8eae6;">+</div>
+  </div>
+  <div class="muted" style="text-align:center; margin-bottom:10px;">leading off next half &mdash; Penny</div>
+  <div style="text-align:center;"><span style="font-size:11px; color:#8f948f; background:#1d2126; border:1px solid #33383e; border-radius:6px; padding:3px 10px;">&#9679; 2 plays waiting to sync</span></div>
+</div>
+<p class="note">The entire defensive half: outs + runs, never opponent PAs. Bottom chip appears only when the sync queue is non-empty (shown here in the offline team-phone posture). Full sync diagnostics live in the hidden debug readout (5 wordmark taps).</p>
+</div>
+
+<div class="col">
+<p class="caption">3 — Runner tapped (correction state 1)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#9998; lineup</span></div>
+  <div class="bug" style="margin-bottom:12px;">
+    <span style="color:#e8eae6;">&#9650; 3rd &middot; <span style="color:#8f948f;">kicking</span></span>
+    <span><span style="color:#e8eae6;">&#9679;&#9679;</span><span style="color:#33383e;">&#9679;</span> <span style="color:#8f948f;">outs</span></span>
+    <span style="color:#e8eae6; font-weight:500;">PICKLES 5 &middot; 3</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+    <div style="position:relative; width:122px; height:112px; flex:none;">
+      <div class="base" style="left:47px; top:2px; width:28px; height:28px; background:#1d2126; border:1px solid #33383e;"></div>
+      <div class="base" style="right:4px; top:38px; width:34px; height:34px; background:#82A167; border:2px solid #FFFFFF; border-radius:5px;"></div>
+      <div style="position:absolute; right:8px; top:46px; width:26px; text-align:center; font-size:16px; font-weight:500; color:#2C2E20;">F</div>
+      <div class="base dim" style="left:8px; top:40px; width:28px; height:28px; background:#82A167;"></div>
+      <div class="dim" style="position:absolute; left:11px; top:46px; width:22px; text-align:center; font-size:13px; font-weight:500; color:#2C2E20;">K</div>
+      <div class="base" style="left:52px; bottom:2px; width:18px; height:18px; background:#101215; border:1px dashed #33383e;"></div>
+    </div>
+    <div style="flex:1; min-width:0;">
+      <div style="font-size:13px; color:#FFFFFF; font-weight:500; margin-bottom:6px;">FRANNY &mdash; on 1st</div>
+      <div style="background:#1d2126; border:1px solid #7A5C82; border-radius:8px; padding:9px 10px; margin-bottom:5px; font-size:13px; font-weight:500; color:#CBA9DD;">OUT</div>
+      <div class="chip" style="margin-bottom:5px; padding:6px 10px;"><div style="font-size:13px; font-weight:500; color:#e8eae6;">+1 &rarr; 2nd</div></div>
+      <div class="chip" style="margin-bottom:5px; padding:6px 10px;"><div style="font-size:13px; font-weight:500; color:#e8eae6;">+2 &rarr; 3rd</div><div style="font-size:11px; color:#8f948f;">K scored</div></div>
+      <div class="chip" style="margin-bottom:5px; padding:6px 10px;"><div style="font-size:13px; font-weight:500; color:#e8eae6;">+3 &rarr; scored</div><div style="font-size:11px; color:#8f948f;">K scored</div></div>
+      <div style="background:#101215; border:1px dashed #33383e; border-radius:8px; padding:7px 10px; text-align:center; font-size:12px; font-weight:500; color:#8f948f;">&#10005; cancel</div>
+    </div>
+  </div>
+  <div class="card dim" style="padding:12px;"><div class="lbl">NOW UP</div><div class="name" style="font-size:28px;">MEGAN &nbsp;&#9654;</div><div class="cap">5 of 9 &middot; tap to replay</div></div>
+  <div class="pad dim" style="margin-bottom:0;">
+    <div class="t t3" style="padding:12px 0;">1B</div><div class="t t3" style="padding:12px 0;">2B</div><div class="t t3" style="padding:12px 0;">3B</div><div class="t t3" style="padding:12px 0;">HR</div>
+    <div class="t t4" style="padding:7px 0;">FLY<div class="sub">out</div></div>
+    <div class="t t4" style="padding:7px 0;">GROUND<div class="sub">out</div></div>
+    <div class="t t4" style="padding:7px 0;">K<div class="sub">strikeout</div></div>
+  </div>
+</div>
+<p class="note">Diamond enlarges; selected chip grows with a 2px white ring; uninvolved elements dim to 40%. OUT is first (plum — the app&rsquo;s &ldquo;this ends&rdquo; semantic). Only legal +N buttons render (lead-runner pushes computed; past home = scored). Cascade subtitles state every consequence for lead runners before commit (&ldquo;K &amp; M scored&rdquo; when multiple). Tapping the runner placed by the most recent PA opens state 4 instead — that&rsquo;s a re-score, not an advance.</p>
+</div>
+
+<div class="col">
+<p class="caption">4 — Fix-last (correction state 2)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#9998; lineup</span></div>
+  <div class="bug">
+    <span style="color:#e8eae6;">&#9650; 3rd &middot; <span style="color:#8f948f;">kicking</span></span>
+    <span><span style="color:#e8eae6;">&#9679;&#9679;</span><span style="color:#33383e;">&#9679;</span> <span style="color:#8f948f;">outs</span></span>
+    <span style="color:#e8eae6; font-weight:500;">PICKLES 5 &middot; 3</span>
+  </div>
+  <div class="dim" style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+    <div style="position:relative; width:104px; height:88px; flex:none;">
+      <div class="base" style="left:39px; top:2px; width:24px; height:24px; background:#1d2126; border:1px solid #33383e;"></div>
+      <div class="base" style="right:6px; top:32px; width:24px; height:24px; background:#82A167;"></div>
+      <div style="position:absolute; right:9px; top:37px; width:18px; text-align:center; font-size:12px; font-weight:500; color:#2C2E20;">F</div>
+      <div class="base" style="left:6px; top:32px; width:24px; height:24px; background:#82A167;"></div>
+      <div style="position:absolute; left:9px; top:37px; width:18px; text-align:center; font-size:12px; font-weight:500; color:#2C2E20;">K</div>
+      <div class="base" style="left:43px; bottom:2px; width:16px; height:16px; background:#101215; border:1px dashed #33383e;"></div>
+    </div>
+    <div style="flex:1; min-width:0;" class="muted">runner state re-derives from the corrected result</div>
+  </div>
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:10px 12px; text-align:center; margin-bottom:10px;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500;">FIXING: FRANNY</div>
+    <div class="muted" style="margin-top:3px;">logged as 1B &mdash; tap the correct result</div>
+  </div>
+  <div class="pad" style="margin-bottom:10px;">
+    <div class="t t3" style="border:2px solid #82A167; color:#82A167; padding:11px 0;">1B</div>
+    <div class="t t3" style="padding:12px 0;">2B</div><div class="t t3" style="padding:12px 0;">3B</div><div class="t t3" style="padding:12px 0;">HR</div>
+    <div class="t t4" style="padding:7px 0;">FLY<div class="sub">out</div></div>
+    <div class="t t4" style="padding:7px 0;">GROUND<div class="sub">out</div></div>
+    <div class="t t4" style="padding:7px 0;">K<div class="sub">strikeout</div></div>
+    <div style="grid-column:span 8; background:#101215; border:1px dashed #7A5C82; border-radius:8px; padding:8px 0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:500; color:#CBA9DD;">&#8617; undo &mdash; Franny still at bat</div>
+    <div style="grid-column:span 4; background:#101215; border:1px dashed #33383e; border-radius:8px; padding:8px 0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500; color:#8f948f;">&#10005; cancel</div>
+  </div>
+  <div class="muted" style="text-align:center;">Megan&rsquo;s turn resumes after the fix</div>
+</div>
+<p class="note">Entered via the last-action chip or the previous-kicker redirect. Current logged result highlighted in pickle; any result tap amends it; undo restores full pre-tap state (pointer back to the previous kicker). This mode also carries the rare &ldquo;out on the bases &mdash; hit stands&rdquo; option (rundown after reaching) &mdash; add as a third dashed row when entered via the redirect.</p>
+</div>
+
+<div class="col">
+<p class="caption">5 — All Songs (soundboard with team sounds)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#9998; lineup</span></div>
+  <div class="tabs"><div class="tab off">Scoring</div><div class="tab on">Soundboard</div></div>
+  <div style="font-size:11px; letter-spacing:1.5px; color:#8f948f; font-weight:500; margin-bottom:6px;">TEAM</div>
+  <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:14px;">
+    <div style="background:#4A3C52; border:1px solid #7A5C82; border-radius:8px; text-align:center; padding:8px 0;"><div style="font-size:13px; font-weight:500; color:#CBA9DD;">&#9632; AIRHORN</div><div style="font-size:11px; color:#CBA9DD;">0:02</div></div>
+    <div style="background:#1d2126; border:1px solid #536840; border-radius:8px; text-align:center; padding:8px 0;"><div style="font-size:13px; font-weight:500; color:#e8eae6;">CHARGE</div><div style="font-size:11px; color:#8f948f;">stinger</div></div>
+    <div style="background:#1d2126; border:1px solid #536840; border-radius:8px; text-align:center; padding:8px 0;"><div style="font-size:13px; font-weight:500; color:#e8eae6;">RALLY</div><div style="font-size:11px; color:#8f948f;">hype</div></div>
+  </div>
+  <div style="font-size:11px; letter-spacing:1.5px; color:#8f948f; font-weight:500; margin-bottom:6px;">PLAYERS &middot; A &rarr; Z BY ROW</div>
+  <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px;">
+    <div class="t" style="padding:16px 0; font-size:13px;">Charlie</div>
+    <div class="t" style="padding:16px 0; font-size:13px;">Clayton</div>
+    <div class="t" style="padding:16px 0; font-size:13px;">Elias</div>
+    <div class="t" style="padding:16px 0; font-size:13px;">Franny</div>
+    <div class="t" style="padding:16px 0; font-size:13px;">Jason</div>
+    <div class="t" style="padding:16px 0; font-size:13px;">Kirsten</div>
+    <div class="t" style="padding:16px 0; font-size:13px; color:#8f948f; font-weight:400;">&hellip;</div>
+    <div class="t" style="padding:16px 0; font-size:13px;">Winson</div>
+    <div class="t dash" style="padding:16px 0; font-size:13px;">Guest</div>
+  </div>
+</div>
+<p class="note">Player names Title Case (caps stay reserved for wordmark, NOW UP, section labels, and team-sound names, which are ALL CAPS by design). Team tiles wear moss borders to read as a different species; playing tile (any species) is the universal plum stop control with countdown. One sound at a time; a new tap stops the old. Tab is modeless and never blocks (firm principle 5); real grid keeps its fixed 78px tiles (invariant 8 family).</p>
+</div>
+
+<div class="col" style="width:308px;">
+<p class="caption">6 — Shareable scorecard (S3 renderer target)</p>
+<div id="scorecard"></div>
+<p class="note">Batting order snakes across columns (staircase) &mdash; blank cells mean the order didn&rsquo;t reach that player that inning. Diamond edges fill as bases are reached (lower-right = 1st, upper-right = 2nd, upper-left = 3rd); solid diamond = run scored; plum &#10005; = runner erased at that base, hit stands (Kirsten, 3rd); shaded ? = missed play, excluded from rate stats (&#8224;); corner triangle = third out. Rendered to canvas at 2&times; and shared as PNG via the share button (app chrome, not part of the image).</p>
+</div>
+
+<div class="col">
+<p class="caption">7 — Fly-out location field picker (transient)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#9998; lineup</span></div>
+  <div class="bug">
+    <span style="color:#e8eae6;">&#9650; 3rd &middot; <span style="color:#8f948f;">kicking</span></span>
+    <span><span style="color:#e8eae6;">&#9679;</span><span style="color:#33383e;">&#9679;&#9679;</span> <span style="color:#8f948f;">outs</span></span>
+    <span style="color:#e8eae6; font-weight:500;">PICKLES 5 &middot; 3</span>
+  </div>
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:10px 6px 8px; margin-bottom:10px;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500; text-align:center; margin-bottom:4px;">MEGAN &mdash; FLY &middot; WHERE&rsquo;D IT LAND?</div>
+    <svg viewBox="0 0 260 195" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 192.2 119.8 L 233.2 78.8 A 146 146 0 0 0 185.9 47.1 L 163.7 100.7 A 88 88 0 0 1 192.2 119.8 Z" fill="#22262b" stroke="#33383e"/>
+      <path d="M 163.7 100.7 L 185.9 47.1 A 146 146 0 0 0 130 36 L 130 94 A 88 88 0 0 1 163.7 100.7 Z" fill="#22262b" stroke="#33383e"/>
+      <path d="M 130 94 L 130 36 A 146 146 0 0 0 74.1 47.1 L 96.3 100.7 A 88 88 0 0 1 130 94 Z" fill="#22262b" stroke="#33383e"/>
+      <path d="M 96.3 100.7 L 74.1 47.1 A 146 146 0 0 0 26.8 78.8 L 67.8 119.8 A 88 88 0 0 1 96.3 100.7 Z" fill="#22262b" stroke="#33383e"/>
+      <text x="195" y="88" text-anchor="middle" font-size="13" font-weight="500" fill="#e8eae6">RF</text>
+      <text x="152.8" y="70" text-anchor="middle" font-size="13" font-weight="500" fill="#e8eae6">RC</text>
+      <text x="107.2" y="70" text-anchor="middle" font-size="13" font-weight="500" fill="#e8eae6">LC</text>
+      <text x="65" y="88" text-anchor="middle" font-size="13" font-weight="500" fill="#e8eae6">LF</text>
+      <polygon points="130,136 88,136 130,94" fill="#1d2126" stroke="#33383e"/>
+      <polygon points="130,136 130,94 172,136" fill="#1d2126" stroke="#33383e"/>
+      <polygon points="130,136 88,136 130,178" fill="#1d2126" stroke="#33383e"/>
+      <polygon points="130,136 172,136 130,178" fill="#1d2126" stroke="#33383e"/>
+      <text x="114" y="124" text-anchor="middle" font-size="11" font-weight="500" fill="#e8eae6">SS</text>
+      <text x="146" y="124" text-anchor="middle" font-size="11" font-weight="500" fill="#e8eae6">2B</text>
+      <text x="112" y="156" text-anchor="middle" font-size="11" font-weight="500" fill="#e8eae6">3B</text>
+      <text x="148" y="156" text-anchor="middle" font-size="11" font-weight="500" fill="#e8eae6">1B</text>
+      <rect x="164" y="128" width="16" height="16" rx="3" transform="rotate(45 172 136)" fill="#82A167"/>
+      <text x="172" y="140.5" text-anchor="middle" font-size="11" font-weight="500" fill="#2C2E20">F</text>
+      <rect x="80" y="128" width="16" height="16" rx="3" transform="rotate(45 88 136)" fill="#82A167"/>
+      <text x="88" y="140.5" text-anchor="middle" font-size="11" font-weight="500" fill="#2C2E20">K</text>
+      <rect x="123" y="171" width="14" height="14" rx="2" transform="rotate(45 130 178)" fill="#101215" stroke="#33383e" stroke-dasharray="3 2"/>
+    </svg>
+    <div style="background:#101215; border:1px dashed #33383e; border-radius:8px; text-align:center; padding:8px 0; font-size:12px; font-weight:500; color:#8f948f; margin-top:6px;">&#10005; skip &mdash; didn&rsquo;t see it</div>
+    <div style="font-size:11px; color:#8f948f; text-align:center; margin-top:6px;">optional &mdash; keep scoring and this gets out of the way</div>
+  </div>
+  <div class="card" style="padding:12px;"><div class="lbl">NOW UP</div><div class="name" style="font-size:28px;">CHARLIE &nbsp;&#9654;</div><div class="cap">6 of 9 &middot; tap to replay</div></div>
+  <div class="pad" style="margin-bottom:0;">
+    <div class="t t3" style="padding:12px 0;">1B</div><div class="t t3" style="padding:12px 0;">2B</div><div class="t t3" style="padding:12px 0;">3B</div><div class="t t3" style="padding:12px 0;">HR</div>
+    <div class="t t4" style="padding:7px 0;">FLY<div class="sub">out</div></div>
+    <div class="t t4" style="padding:7px 0;">GROUND<div class="sub">out</div></div>
+    <div class="t t4" style="padding:7px 0;">K<div class="sub">strikeout</div></div>
+  </div>
+</div>
+<p class="note">Flag: scoring.flyLocationField (default true). The picker IS the diamond zone &mdash; runner chips stay live (a runner tap opens the normal runner sheet; the picker returns after it resolves). Dismisses via zone tap, skip, ~6s timeout, or any other tap winning &mdash; it never captures input, so the next result tap always executes normally. Location logs as an amend on the FLY event; a dismissed fly can still get one via fix-last. FLY only &mdash; no GND/K capture. Everything below the prompt stays fully live, never dimmed.</p>
+</div>
+
+</div>
+<script>
+(function(){
+var G="#82A167", M="#8f948f", F="#2c3036", D="#33383e", T="#e8eae6", PL="#CBA9DD";
+function dia(b,x){
+  var inner;
+  if(b===0) inner='<div style="width:16px;height:16px;transform:rotate(45deg);border:2px solid '+F+';border-radius:2px;position:absolute;left:4px;top:4px;"></div>';
+  else{
+    var t=b>=2?G:D, r=b>=1?G:D, l=b>=3?G:D, bo=b>=4?G:D, bg=b>=4?G:'transparent';
+    inner='<div style="width:16px;height:16px;transform:rotate(45deg);border-style:solid;border-width:2px;border-color:'+t+' '+r+' '+bo+' '+l+';background:'+bg+';border-radius:2px;position:absolute;left:4px;top:4px;"></div>';
+  }
+  var xm = x===2 ? '<div style="position:absolute;left:8px;top:-6px;font-size:10px;font-weight:500;color:'+PL+';">&#10005;</div>' : '';
+  return '<div style="width:26px;height:26px;position:relative;margin:2px auto 4px;">'+inner+xm+'</div>';
+}
+function cell(c){
+  var s='style="text-align:center;border-top:1px solid #2c3036;padding:3px 1px;position:relative;height:50px;vertical-align:middle;"';
+  if(!c) return '<td '+s+'></td>';
+  if(c.q) return '<td style="text-align:center;border-top:1px solid #2c3036;background:#1d2126;color:'+M+';font-style:italic;height:50px;">?</td>';
+  var lab='<div style="font-size:9px;color:'+(c.b>0?G:M)+';font-weight:500;">'+c.r+'</div>';
+  var tick=c.e?'<div style="position:absolute;right:0;bottom:0;width:0;height:0;border-left:7px solid transparent;border-bottom:7px solid '+PL+';"></div>':'';
+  return '<td '+s+'>'+dia(c.b||0,c.x)+lab+tick+'</td>';
+}
+var P=[
+["Megan",[{r:"1B",b:4},{r:"HR",b:4},null],2,2,2,3],
+["Charlie",[{r:"FLY",b:0},{r:"2B",b:2},null],2,1,0,0],
+["Franny",[{r:"1B",b:3},{r:"GND",b:0},null],2,1,0,0],
+["Jason",[{r:"2B",b:2},{r:"FLY",b:0,e:1},null],2,1,0,1],
+["Kirsten",[{r:"K",b:0},null,{r:"1B",b:1,x:2}],2,1,0,0],
+["Marcel",[{r:"GND",b:0,e:1},null,{q:1}],"1&#8224;",0,0,0],
+["Penny <span style='color:#8f948f;font-weight:400;font-size:9px;'>sub</span>",[null,{r:"FLY",b:0},{r:"GND",b:0}],2,0,0,0],
+["Will",[null,{r:"1B",b:4},{r:"K",b:0,e:1}],2,1,1,0],
+["Ming",[null,{r:"1B",b:4},null],1,1,1,0]
+];
+var rows=P.map(function(p){
+  return '<tr style="color:'+T+';"><td style="padding:3px 3px;border-top:1px solid #2c3036;font-weight:500;font-size:10px;">'+p[0]+'</td>'
+  + p[1].map(cell).join('')
+  + '<td style="text-align:center;border-top:1px solid #2c3036;border-left:1px solid #2c3036;font-size:10px;">'+p[2]+'</td>'
+  + '<td style="text-align:center;border-top:1px solid #2c3036;font-size:10px;color:'+(p[3]>0?G:T)+';">'+p[3]+'</td>'
+  + '<td style="text-align:center;border-top:1px solid #2c3036;font-size:10px;">'+p[4]+'</td>'
+  + '<td style="text-align:center;border-top:1px solid #2c3036;font-size:10px;">'+p[5]+'</td></tr>';
+}).join('');
+document.getElementById('scorecard').innerHTML =
+'<div style="background:#101215;border-radius:16px;padding:14px 10px 12px;">'
++'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;"><span style="font-size:10px;letter-spacing:1.5px;color:'+G+';font-weight:500;">&#129362; PICKLES&rsquo; PARTY PALACE</span><span style="font-size:10px;color:'+M+';">Jul 14 &middot; gm 3</span></div>'
++'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;"><span style="font-size:14px;color:'+T+';font-weight:500;">vs Kick City &mdash; <span style="color:'+G+';">W 4&ndash;3</span></span><span style="font-size:10px;color:'+M+';">1&ndash;3 of 7</span></div>'
++'<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10px;"><tr style="color:'+M+';"><td style="padding:2px 3px;"></td><td style="text-align:center;">1</td><td style="text-align:center;">2</td><td style="text-align:center;">3</td><td style="text-align:center;font-weight:500;">R</td></tr>'
++'<tr style="color:'+T+';border-top:1px solid #2c3036;"><td style="padding:2px 3px;font-weight:500;">PPP</td><td style="text-align:center;">1</td><td style="text-align:center;">3</td><td style="text-align:center;">0</td><td style="text-align:center;color:'+G+';font-weight:500;">4</td></tr>'
++'<tr style="color:'+T+';border-top:1px solid #2c3036;"><td style="padding:2px 3px;font-weight:500;color:'+M+';">KC</td><td style="text-align:center;">2</td><td style="text-align:center;">0</td><td style="text-align:center;">1</td><td style="text-align:center;font-weight:500;">3</td></tr></table>'
++'<table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;"><tr style="color:'+M+';"><td style="width:52px;padding:2px 3px;">KICKERS</td><td style="text-align:center;">1</td><td style="text-align:center;">2</td><td style="text-align:center;">3</td><td style="width:22px;text-align:center;border-left:1px solid #2c3036;">AB</td><td style="width:18px;text-align:center;">H</td><td style="width:18px;text-align:center;">R</td><td style="width:24px;text-align:center;">RBI</td></tr>'
++rows+'</table>'
++'<div style="margin-top:8px;font-size:9px;color:'+M+';line-height:1.6;"><span style="color:'+G+';">filled</span> scored &middot; edges = bases reached &middot; <span style="color:'+PL+';">&#10005;</span> out on the bases &middot; <span style="font-style:italic;">?</span> missed &middot; &#9698; 3rd out &middot; &#8224; known results only</div>'
++'</div>'
++'<div style="margin-top:10px;text-align:center;"><div style="display:inline-block;background:'+G+';color:#2C2E20;font-weight:500;font-size:13px;border-radius:10px;padding:8px 22px;">&#8593; share scorecard</div></div>';
+})();
+</script>
+</body>
+</html>

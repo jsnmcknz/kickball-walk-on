@@ -261,6 +261,695 @@
     border-radius: 8px; padding: 4px 8px;
     pointer-events: none; text-align: left;
   }
+
+  /* __SCORING_START__ */
+  /* Shared reference height for the diamond row's matched columns
+     (2026-07-08 session; was a bare 132px repeated in five places -- the
+     var keeps .diamond-col / .last-action-chip / .diamond-note /
+     .correction-panel / .fixlast-chip locked together, which is the whole
+     trick behind the S1.5 round-3/4 centering fixes. Bumped to 150px when
+     the diamond grew for bigger tap targets, same session). */
+  #app { --scoring-ref-h: 166px; } /* 160 -> 166, 2026-07-11: diamond scaled ~10% (wrap 118x114 -> 130x124); ref grows with it to keep the row's proportions */
+  /* ---- scoring: shared game-screen chrome (S1.3/S1.4) ----
+     Colors/spacing lifted directly from mockups/scoring-screens.html
+     (05-Scoring-Architecture.md "Design authority": mockup is normative
+     for appearance). New classes alongside the existing ones, per that
+     doc's instruction not to port the mockup's markup -- this app never
+     uses inline styles, so fixed diamond positions are expressed as
+     modifier classes instead of the mockup's inline left/top/right. */
+  /* Bigger/bolder per Jason's live feedback -- score + outs are the
+     at-a-glance numbers, the original single 12px row under-served that. */
+  .score-bug {
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 10px;
+    padding: 8px 14px 10px; margin: 0 16px 10px;
+    position: relative; /* anchors the box-score chip in the top-right corner */
+  }
+  /* Box-score entry point (2026-07-08 round 4): PLACEHOLDER, not yet
+     functional -- the live box-score view is a planned build (see
+     handoff); this reserves its spot in the top-right of the score bug,
+     across from the inning/half line. Quiet chip styling on purpose:
+     it's a read-only glance surface, not an operator control. */
+  .boxscore-chip {
+    position: absolute; top: 6px; right: 8px;
+    background: transparent; border: 1px solid var(--tile-border); color: var(--muted);
+    border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: 500;
+  }
+  .boxscore-chip:active { opacity: 0.7; }
+  .boxscore-chip.active { border-color: var(--pickle); color: var(--pickle); }
+  /* Live scorecard takeover panel (round 5 first pass). The canvas draws
+     at 2x backing resolution; horizontal scroll takes over if a long
+     lineup/extra innings ever outgrow the column. */
+  .boxscore-panel { margin: 0 16px 10px; }
+  .boxscore-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .scorecard-canvas {
+    display: block; background: var(--tile);
+    border: 1px solid var(--tile-border); border-radius: 10px;
+  }
+  .boxscore-close { margin-top: 8px; }
+  .score-bug-top { font-size: 12px; margin-bottom: 4px; }
+  .score-bug .dim-label { color: var(--muted); }
+  /* Round 6 (Jason, live feedback, 2026-07-07): outs are back in the
+     score bug on the OFFENSE screen only (defense keeps its own dots on
+     the +OUT button, per Jason's explicit "not in the score bug" call) --
+     rendered conditionally by renderScoreBug() based on which half it is.
+     Stacked column now (was a row in round 5): score summary on top,
+     outs BELOW it, both centered horizontally. */
+  .score-bug-main { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; }
+  .outs-block { text-align: center; }
+  .outs-big { font-size: 20px; letter-spacing: 2px; }
+  .score-bug .outs-dot { color: var(--text); }
+  .score-bug .outs-dot.empty { color: var(--tile-border); }
+  .outs-label-big { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+  /* Team + verb ("PPP trails") stacked above the score, smaller and dark
+     moss, so the actual score stays the visual focal point, centered
+     underneath (Jason, live feedback, round 5 -- previously the whole
+     line was one size/color, which both buried the score under equal
+     weight and made the verb read as odd since numbers usually don't
+     carry a color meaning by themselves). */
+  .score-stack { display: flex; flex-direction: column; align-items: center; }
+  .score-verb { font-size: 13px; font-weight: 600; color: var(--olive); text-transform: uppercase; letter-spacing: 0.04em; }
+  .score-total-big { font-size: 26px; font-weight: 600; color: var(--text); }
+
+  /* Top/bottom breathing room around the diamond + last-action row.
+     Round 7 (2026-07-06 session, Jason live feedback): was align-items:
+     center, which was stable ONLY because .last-action-chip had a fixed
+     min-height (round 6) -- centering the diamond against a sibling of
+     constant height never has anything to fight.
+     S1.5 round 2 (Jason, live feedback, 2026-07-07): that assumption broke
+     the moment this row started hosting OTHER right-column content of
+     wildly different heights -- the runner-correction panel (3-5 rows
+     depending on how many bases are legal), fix-last's one-line note, the
+     old fixed-height chip. Centering against each of those independently
+     put the diamond at a different absolute Y per screen -- visibly
+     "jumping" between otherwise-adjacent states, exactly what Jason
+     flagged (and correctly root-caused to the centering logic, not the
+     enlarge transform removed in round 1). flex-start makes the diamond's
+     position a function of ONLY what's above this row (the score bug --
+     identical everywhere), never of whatever happens to be beside it. */
+  .diamond-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 16px 10px; padding: 5px 0; }
+  /* Hard-set 40/60 split (Jason, live feedback, round 4): the diamond
+     column's width used to be implicit (diamond-wrap's fixed 104px plus
+     whatever the on-base hint text needed), so a longer hint string like
+     "2 on · tap a runner to fix" vs. "bases empty" shifted the whole row
+     horizontally. Fixed percentages + centered content stop that.
+     Round 6 fix: subtracting half the row's 10px gap from each side's
+     percentage -- flexbox doesn't shrink percentage flex-basis to make
+     room for `gap`, so the un-adjusted 40%/60% overflowed the row by the
+     full 10px, silently eating into the row's own right-hand margin
+     (this is why the last-action chip looked flush against the screen
+     edge while the diamond side still had its margin). */
+  .diamond-col {
+    flex: 0 0 calc(40% - 5px); width: calc(40% - 5px); display: flex; flex-direction: column;
+    align-items: center; text-align: center; position: relative;
+    /* S1.5 round 3 (Jason, live feedback): the aesthetic he liked --
+       diamond vertically centered against its neighbor -- decoupled from
+       row-level align-items (which has to stay flex-start so the
+       still-variable-height runner-correction panel doesn't reintroduce
+       the jump). Instead the diamond centers itself within its OWN fixed
+       132px reference box, matching the last-action chip's height, and
+       every "matched" right-column variant (fix-last's note, the
+       undo-only sheet's hint -- see .diamond-note) reserves that same
+       132px. Equal-height columns make align-items moot for those cases;
+       the not-yet-redesigned correction panel (still taller, pending the
+       base-tap conversation) just sits with the diamond centered in its
+       own top 132px rather than the panel's full height.
+       Round 4 (Jason, live feedback): round 3's fix for the ACROSS-screens
+       jump introduced a WITHIN-screen mismatch -- the caption slot below
+       the diamond (.diamond-col-caption, added so diamondCol's content
+       height matches across screens) was part of THIS centering, which
+       pulls the diamond's own midpoint above the box's true center
+       (asymmetric block: diamond on top, caption below, centered as one
+       unit). The .diamond-note sibling has no such trailing element, so it
+       centers on the box's true middle -- an 11px mismatch between the
+       two. Fix: the caption is now position:absolute (see
+       .diamond-col-caption below), removed from the flex content entirely,
+       so the diamond -- now the ONLY flex child -- centers on the box's
+       true middle too, matching .diamond-note exactly regardless of
+       whether the caption has real text or is empty. */
+    min-height: var(--scoring-ref-h); justify-content: center;
+  }
+  /* Diamond enlarged 2026-07-08 (Jason: bigger tap targets) -- wrap
+     104x88 -> 118x102, bases 24 -> 28px, labels sized for the 2-letter
+     runner codes that replaced single initials (three Ms on base at once
+     were unreadable). Geometry note: bases rotate about their own center,
+     so the un-rotated top/left below place the BOX; the visible diamond
+     extends ~6px past each edge of it. */
+  /* Home-plate placement, round 5 (Jason, screenshot with the red box,
+     2026-07-08): width = the diamond's hypotenuse -- the full horizontal
+     span of a rotated 28px base (≈40px), so the plate fills the same
+     column 2nd base does. TRUE plate proportions: a real plate is 17"
+     wide and 17" deep (8.5" straight sides + 8.5" of point), i.e. a
+     SQUARE bounding box with the shoulders at half height -- round 4's
+     28×24 was vertically squashed. Placement: the lower 45° edges
+     (shoulder->apex) are COLLINEAR with the lower OUTER edges of 1st/3rd
+     (3rd's outer lower edge runs (0.2,51)->(20,70.8), slope +1; the
+     plate's left shoulder (39,90) and apex (59,110) sit on that same
+     line). */
+  /* Scaled ~10% 2026-07-11 (Jason: fill the column better): wrap
+     118x114 -> 130x124, bases 28 -> 30, plate 32 -> 34. Same placement
+     rules as rounds 3-5b, re-derived at the new scale: centers 2nd
+     (65,17), 1st (108,56), 3rd (22,56); plate apex (65,120) sits at the
+     intersection of the lines through 1st/3rd's lower OUTER edges
+     (3rd's runs (0.8,56)->(22,77.2), slope +1, y = x + 55.2). */
+  .diamond-wrap { position: relative; width: 130px; height: 124px; flex: none;
+    /* 2026-07-11 (Jason): a few px of air between the plate and the
+       caption. The col flex-centers wrap+margin as one block, so this
+       8px margin lifts the diamond 4px while the absolutely-anchored
+       caption stays put -- plate apex lands at 137, caption top at 145,
+       8px gap. Applies identically on every screen that renders the
+       diamond (live, runner sheet, fix-last), so the diamond never
+       shifts between edit states. */
+    margin-bottom: 8px;
+  }
+  .diamond-base {
+    position: absolute; transform: rotate(45deg); border-radius: 4px;
+    background: var(--tile); border: 1px solid var(--tile-border);
+  }
+  .diamond-base.occupied { background: var(--pickle); border: none; }
+  .diamond-base.pos-2nd { left: 50px; top: 2px; width: 30px; height: 30px; }
+  .diamond-base.pos-1st { right: 7px; top: 41px; width: 30px; height: 30px; }
+  .diamond-base.pos-3rd { left: 7px; top: 41px; width: 30px; height: 30px; }
+  /* Home is an actual home plate now (2026-07-08, Jason): un-rotated
+     pentagon via clip-path (with the -webkit- prefix old Safari needs).
+     Outline effect = a filled outer pentagon with a slightly-inset
+     background-colored ::after pentagon on top -- border-drawn outlines
+     get clipped away by clip-path, so this two-layer trick is the only
+     reliable way to "stroke" the shape. State fills below recolor the
+     OUTER layer only. */
+  /* Round 5b (Jason): 40px matched 2nd's span exactly, but flat vertical
+     edges at the extremes read wider than a diamond's single-point span --
+     narrowed to 32px, still square (true 17"x17" plate proportions), same
+     placement rule: lower 45° edges collinear with 1st/3rd's outer lower
+     edges (apex stays at their intersection (59,110); top = 110 - 32). */
+  .diamond-base.pos-home {
+    left: 48px; top: 86px; width: 34px; height: 34px; /* apex (65,120) on the re-derived baselines; top = 120 - 34 */
+    transform: none; border: none; border-radius: 0;
+    background: var(--tile-border); padding: 0;
+    -webkit-clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%);
+    clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  .diamond-base.pos-home::after {
+    content: ''; position: absolute; left: 2px; top: 2px; right: 2px; bottom: 3px;
+    background: var(--bg);
+    -webkit-clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%);
+    clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  /* Home-plate states: deep moss = "someone scored this half, tappable to
+     fix a run"; pickle = legal forward-set target; white = selected (the
+     scored-runner sheet is open on this runner). All recolor the outer
+     pentagon; the generic .legal-target/.selected border rules don't
+     survive clip-path, hence the explicit overrides. */
+  .diamond-base.pos-home.has-scored { background: var(--pickle); }
+  .diamond-base.pos-home.legal-target { border: none; background: var(--pickle); }
+  .diamond-base.pos-home.selected { border: none; background: #FFFFFF; }
+  .diamond-label {
+    position: absolute; width: 30px; text-align: center; font-size: 12px;
+    font-weight: 500; color: var(--badge-text); pointer-events: none;
+    letter-spacing: 0.02em;
+  }
+  .diamond-label.pos-2nd { left: 50px; top: 10px; }
+  .diamond-label.pos-1st { right: 7px; top: 49px; }
+  .diamond-label.pos-3rd { left: 7px; top: 49px; }
+  .diamond-info { flex: 0 0 calc(60% - 5px); width: calc(60% - 5px); min-width: 0; }
+  /* S1.5 round 3 (Jason, live feedback): the fix-last / undo-only sheets'
+     right column is a single short line -- give it the SAME 132px
+     reference height as the last-action chip and center that line inside
+     it, instead of letting it shrink to content height (which is what
+     made the diamond's own centering, above, land at a different spot
+     than the normal screen's chip). */
+  .diamond-note {
+    flex: 0 0 calc(60% - 5px); width: calc(60% - 5px); min-width: 0;
+    min-height: var(--scoring-ref-h); box-sizing: border-box; display: flex; align-items: center;
+    font-size: 12px; color: var(--muted); line-height: 1.5; padding: 0 16px;
+  }
+  /* Back beside the diamond (Jason, live feedback) -- headline + a list of
+     detail lines (who scored, who else moved) instead of one inline
+     sentence, with the result spelled out in plain English.
+     Round 6 (Jason, live feedback): min-height sized for the largest
+     realistic content -- headline (1 line) + up to 3 runner-movement
+     detail lines (max 3 other runners can be on base) + the RBI line +
+     "tap to fix or undo" -- so the chip (and the row it's in) holds a
+     stable height instead of jumping around per play, with content
+     top-aligned inside rather than vertically centered. */
+  .last-action-chip {
+    background: var(--tile); border: 1px solid var(--olive); border-radius: 8px;
+    padding: 8px 10px; margin-bottom: 6px; min-height: var(--scoring-ref-h); box-sizing: border-box;
+    /* Flex column so "tap to fix or undo" can be pinned to the bottom
+       (round 7, Jason, live feedback) regardless of how many detail lines
+       sit above it -- headline + details stay naturally stacked at the
+       top via normal flow, the sub line's margin-top:auto eats whatever
+       space is left in the fixed-height box. */
+    display: flex; flex-direction: column;
+    /* S1.5 round 1 (Jason, live feedback): now that this is a <button>
+       (tappable), WebKit doesn't reliably stretch a flex-display button to
+       fill its container the way a div would -- it was shrink-wrapping to
+       content width. Explicit width, same fix pattern as every other
+       "button that must fill its column" element in this file. */
+    width: 100%;
+  }
+  .la-headline { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1.3; } /* 14 -> 15, 2026-07-11 (Jason: last-action text a step larger) */
+  /* Moss for the headline's subject only (the batter/runner this event is
+     about) -- NOT the detail list's names below (Jason, live feedback). */
+  .la-name { color: var(--pickle); }
+  .la-detail { font-size: 13px; color: var(--muted); line-height: 1.4; margin-top: 2px; } /* 12 -> 13, 2026-07-11 */
+  /* RBI line: same size as the rest of the movement list, but white --
+     Jason, live feedback, 2026-07-07 (moved out of the headline, where it
+     was wrapping onto its own line next to the at-bat summary). */
+  .la-detail-rbi { color: var(--card-pop); }
+  .last-action-chip .sub { font-size: 11px; color: var(--muted); margin-top: auto; padding-top: 4px; }
+  .diamond-hint { font-size: 12px; color: var(--muted); line-height: 1.5; padding: 0 16px; text-align: left; }
+  /* S1.5 round 4 (Jason, live feedback): dedicated class for the caption
+     slot directly under the diamond inside .diamond-col (distinct from the
+     general-purpose .diamond-hint above, which is also used for unrelated
+     full-width notes elsewhere). position:absolute and pinned to the
+     bottom of .diamond-col's 132px box -- deliberately OUT of normal flex
+     flow, so it never participates in .diamond-col's justify-content:center
+     math. Only the diamond itself is a flex child now, so it centers on
+     the box's true midpoint, matching .diamond-note's centering on the
+     next screen over exactly (round 3 had this slot IN-flow, which pulled
+     the diamond's own midpoint above the box's true center -- an
+     asymmetric diamond+caption block centered as one unit -- while
+     .diamond-note, with no such trailing element, centered on the true
+     middle: an 11px mismatch between the two, only visible with the
+     correction sheets' otherwise-empty caption). */
+  .diamond-col-caption {
+    position: absolute; left: 0; right: 0;
+    /* Round 4 (Jason's preview, 2026-07-08): anchored just below the
+       diamond wrap (50% of the col + half the 114px wrap + 2px) instead
+       of the box's bottom. Bottom-anchoring grew a wrapping caption
+       UPWARD into the plate -- overlap whenever the text hit two lines,
+       which on a 414pt phone it does. Growing DOWNWARD it can never touch
+       the plate; a second line spills a few px past the reference box
+       into the row's own padding/margin slack without shifting layout,
+       since it's absolutely positioned. Round 5: +2px extra clearance per
+       Jason (plate bottom sits 4px above the wrap edge, so the total
+       plate-to-text gap is ~6px). KEEP THIS OFFSET IN SYNC with
+       .diamond-wrap's height/2 if the diamond is resized again --
+       62 = 124/2 as of 2026-07-11, chosen so the caption's single line
+       sits level with the last-action chip's bottom-pinned "tap to fix or
+       undo" sub across the row (Jason's alignment ask; both are 11px now).
+       Plate apex at 137 (wrap's 8px margin-bottom lifts it 4px), caption
+       top at 145 -- 8px clearance. */
+    top: calc(50% + 62px);
+    font-size: 11px; color: var(--muted); line-height: 1.5; text-align: center;
+  }
+
+  .result-pad {
+    display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px;
+    margin: 0 16px 8px;
+  }
+  .result-tile {
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 8px;
+    text-align: center; color: var(--text); font-weight: 500; font-size: 15px;
+  }
+  .result-tile.span3 { grid-column: span 3; padding: 15px 0; } /* 13 -> 15, 2026-07-11: matches the out row's label+sub height, and gives the 30px indicator diamond more room */
+  .result-tile.span4 { grid-column: span 4; padding: 8px 0; }
+  .result-tile.span6 { grid-column: span 6; padding: 8px 0; }
+  .result-tile .sub { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .result-tile.dashed { background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted); font-size: 13px; }
+  /* Baseline indicators (2026-07-11, Jason): hit tiles carry the
+     scorecard's mini-diamond motif behind the label -- edges lit moss per
+     bases reached (right=1st, +top=2nd, +left=3rd, all four + faint
+     fill=HR), the same edge mapping the scorecard cells use. The label
+     centers via the tile's own text-align (inline span in a
+     text-align:center button); the diamond self-centers absolutely --
+     do NOT switch the tile to flex, that was the mockup's centering bug. */
+  .result-tile.hit { position: relative; overflow: hidden; }
+  .tile-lb { position: relative; z-index: 1; }
+  .tile-dia {
+    display: block; position: absolute; left: 50%; top: 50%;
+    width: 30px; height: 30px; margin: -15px 0 0 -15px;
+    transform: rotate(45deg); border-radius: 3px;
+    border: 2px solid var(--tile-border);
+  }
+  .tile-dia.dia-1 { border-right-color: var(--olive); }
+  .tile-dia.dia-2 { border-top-color: var(--olive); border-right-color: var(--olive); }
+  .tile-dia.dia-3 { border-top-color: var(--olive); border-right-color: var(--olive); border-left-color: var(--olive); }
+  .tile-dia.dia-4 { border-color: var(--olive); background: rgba(130, 161, 103, 0.12); }
+  /* Bigger + moss names, mirroring the defense screen's leadoff treatment
+     (Jason, live feedback) -- both screens now use the same "this is our
+     offensive lineup" color language. */
+  .scoring-ondeck { text-align: center; padding: 4px 16px 0; }
+  .scoring-ondeck-label { font-size: 11px; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+  .scoring-ondeck-names { font-size: 15px; font-weight: 500; color: var(--pickle); margin-left: 6px; }
+  /* Italic per Jason's live feedback, round 4. */
+  .runs-this-inning { text-align: center; font-size: 12px; color: var(--muted); font-style: italic; padding: 8px 16px 0; }
+
+  /* Round 6 fix (Jason, live feedback): this variant never had its own
+     side margin -- the classic Next Up tab's card gets its 16px inset for
+     free from .lineup-body's own padding, but the scoring screen's outer
+     wrapper has no such padding, so the card was rendering flush against
+     the screen edges (same class of bug as the diamond-row overflow
+     above, different cause).
+     Round 7 fix: adding that margin exposed a second bug -- the base
+     .nowup-card rule sets width:100%, and `width` never subtracts
+     margins, so 100% + 32px of margin overflowed the container by 32px
+     (visible as a right-edge overflow + horizontal scroll). Same pattern
+     .out-button already gets right below with calc(100% - 32px). */
+  .game-nowup-card.compact { padding: 14px 12px 12px; min-height: 0; margin: 0 16px 10px; width: calc(100% - 32px); }
+  /* All compact-card text one step up, 2026-07-11 (Jason) -- final sizes
+     get a real-phone pass before they're considered settled. */
+  .game-nowup-card.compact .nowup-name { font-size: 33px; margin: 2px 0; }
+  .game-nowup-card.compact .nowup-label { font-size: 12px; }
+  .game-nowup-card.compact .nowup-caption { font-size: 13px; }
+  /* "X of Y" on its own line under the playback metadata (Jason, live
+     feedback, 2026-07-07) -- was prefixed inline onto the caption before. */
+  .game-nowup-card.compact .nowup-position { font-size: 12px; opacity: 0.65; margin-top: 2px; }
+  /* Fixed-height icon slot, always present, holding either shape centered --
+     eliminates the card-height jump between idle/playing (Jason, live
+     feedback: the old inline "▶" glyph vs. block stop-icon moved the card). */
+  .game-nowup-card.compact .nowup-icon-slot {
+    height: 20px; display: flex; align-items: center; justify-content: center; margin: 4px 0 8px;
+  }
+  .game-nowup-card.compact .nowup-play-icon {
+    width: 0; height: 0; margin: 0;
+    border-top: 8px solid transparent; border-bottom: 8px solid transparent;
+    border-left: 13px solid var(--card-pop);
+  }
+  .game-nowup-card.compact .nowup-stop-icon {
+    width: 14px; height: 14px; margin: 0;
+    border: 2px solid var(--plum-text); border-radius: 3px;
+  }
+
+  /* ---- scoring: defense screen (S1.4) ---- */
+  .defense-chip {
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 12px;
+    text-align: center; padding: 14px 12px; margin: 0 16px 10px;
+  }
+  .defense-chip .defense-label { font-size: 11px; letter-spacing: 0.1em; color: var(--muted); font-weight: 500; }
+  .defense-chip .defense-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .out-button {
+    display: block; background: var(--tile); border: 1px solid var(--olive); border-radius: 12px;
+    text-align: center; padding: 26px 0; margin: 0 16px 10px; width: calc(100% - 32px);
+  }
+  .out-button .out-label { font-size: 26px; font-weight: 500; color: var(--text); }
+  /* Bigger + brighter per Jason's live feedback: current outs/runs are the
+     most-referenced numbers on defense and were reading as fine print.
+     Round 3 (Jason, live feedback, 2026-07-07): replaced the "X of 3" text
+     with the same dot notation as the score bug, plus a separate grey
+     explainer line underneath instead of cramming both into one line. */
+  .out-button .out-dots { font-size: 20px; letter-spacing: 2px; margin-top: 6px; }
+  .out-button .outs-dot { color: var(--text); }
+  .out-button .outs-dot.empty { color: var(--tile-border); }
+  .out-button .out-sub { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 4px; }
+  .out-button:active { opacity: 0.85; }
+  .runs-stepper {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 12px;
+    padding: 14px 0; margin: 0 16px 10px;
+  }
+  .runs-stepper button {
+    width: 44px; height: 44px; border: 1px solid var(--tile-border); border-radius: 8px;
+    background: transparent; color: var(--text); font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .runs-stepper button:active { opacity: 0.7; }
+  .runs-stepper-count { text-align: center; }
+  /* Header above the count, matching the OUTS label's treatment
+     elsewhere (Jason, live feedback, 2026-07-07). */
+  .runs-stepper-count .hdr { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+  .runs-stepper-count .num { font-size: 34px; font-weight: 600; color: var(--text); }
+  .runs-stepper-count .lbl { font-size: 12px; color: var(--muted); }
+
+  /* Mercy-limit banner: a choice, not an automatic cutoff. */
+  .mercy-banner {
+    background: var(--plum-fill); border: 1px solid var(--plum-border); border-radius: 12px;
+    padding: 10px 12px; margin: 0 16px 10px; text-align: center;
+  }
+  .mercy-text { font-size: 13px; font-weight: 500; color: var(--plum-text); margin-bottom: 8px; }
+  .mercy-actions { display: flex; gap: 8px; }
+  .mercy-btn {
+    flex: 1; background: var(--tile); border: 1px solid var(--tile-border); border-radius: 8px;
+    padding: 8px 0; font-size: 13px; font-weight: 500; color: var(--text);
+  }
+  .mercy-btn.dashed { background: var(--bg); border-style: dashed; color: var(--muted); }
+  .mercy-btn:active { opacity: 0.8; }
+
+  /* Bigger, chip-styled "next up" at the bottom of the defense screen
+     (Jason, live feedback) instead of a single muted line. */
+  .leadoff-preview-big {
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 12px;
+    text-align: center; padding: 12px; margin: 0 16px;
+  }
+  .leadoff-label { font-size: 11px; letter-spacing: 0.1em; color: var(--muted); font-weight: 500; }
+  /* Moss, not plain text -- Jason, live feedback: this refers to OUR
+     offensive lineup, not the defensive stats it sits among, and needs to
+     read as visually distinct at a glance. */
+  .leadoff-name { font-size: 20px; font-weight: 500; color: var(--pickle); margin-top: 3px; }
+  /* Round 3 (Jason, live feedback, 2026-07-07): show the next 3 batters,
+     not just the leadoff -- #1 keeps the big treatment above, #2/#3 ride
+     underneath in a smaller size so the leadoff is still the clear focal
+     point. */
+  .leadoff-preview-rest { font-size: 14px; font-weight: 500; color: var(--pickle); margin-top: 4px; opacity: 0.75; }
+
+  /* ---- scoring: correction states (S1.5, 06-Scoring-Specs.md item 5) ---- */
+  /* .diamond-base and .last-action-chip are now sometimes <button>s
+     (occupied bases, the chip itself) so they're tappable -- reset the UA
+     button chrome that would otherwise leak through their existing
+     background/border/padding rules above. */
+  .diamond-base, button.last-action-chip {
+    font: inherit; cursor: pointer; appearance: none; -webkit-appearance: none; text-align: left;
+  }
+  .diamond-base.selected { border: 2px solid #FFFFFF; }
+  .diamond-base.dimmed, .diamond-label.dimmed { opacity: 0.4; }
+  /* Round 7 (Jason, live feedback): tap-a-base targets. Takes visual
+     priority over .dimmed (renderDiamond only applies .dimmed when a base
+     ISN'T also a legal target) -- an occupied base that's a legal forward
+     target needs to read as actionable, not de-emphasized. */
+  .diamond-base.legal-target { border: 2px dashed var(--pickle); background: transparent; }
+  /* Generic "visible but inert" treatment -- the runner sheet's dimmed
+     lower half (mockup 3) and the fix-last sheet's dimmed diamond
+     (mockup 4) both use this rather than separate dim rules per element. */
+  .scoring-dimmed { opacity: 0.4; pointer-events: none; }
+  /* Round 7: fixed 132px height, matching the last-action chip -- the
+     panel shrank enough once the +N button list became a diamond tap
+     (below) that this now actually fits, unlike round 3's stopgap. */
+  .correction-panel { flex: 0 0 calc(60% - 5px); width: calc(60% - 5px); min-width: 0; min-height: var(--scoring-ref-h); box-sizing: border-box; }
+  .correction-heading { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .correction-out {
+    display: block; width: 100%; background: var(--tile); border: 1px solid var(--plum-border);
+    color: var(--plum-text); border-radius: 8px; padding: 9px 10px; margin-bottom: 5px;
+    font-size: 13px; font-weight: 500;
+  }
+  .correction-tap-hint { font-size: 12px; color: var(--muted); text-align: center; padding: 6px 0; }
+  .correction-cancel {
+    display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border);
+    color: var(--muted); border-radius: 8px; padding: 7px 10px; text-align: center;
+    font-size: 12px; font-weight: 500;
+  }
+
+  /* Round 5 (Jason, live feedback): this used to be a separate full-width
+     banner below the diamond row, with a generic ("runner state
+     re-derives...") note filling the row's right column above it. Two
+     problems: the note was too technical to show a live operator, and
+     having a whole extra element meant the row's right column wasn't
+     really "the chip, now editable" -- it just had unrelated text in it.
+     Now this box fills that column directly (same slot .last-action-chip
+     and .diamond-note occupy elsewhere), so fix-last visually reads as
+     "the chip flipped into edit mode," not a separate screen bolted on. */
+  .fixlast-chip {
+    background: var(--tile); border: 1px solid var(--pickle); border-radius: 8px;
+    padding: 8px 10px; margin-bottom: 6px; min-height: var(--scoring-ref-h); box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  }
+  .fixlast-heading { font-size: 11px; letter-spacing: 0.1em; color: var(--pickle); font-weight: 500; }
+  .fixlast-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  /* Current logged result, pickle-highlighted, inside the re-targeted pad. */
+  .result-tile.current { border: 2px solid var(--pickle); color: var(--pickle); }
+  .fixlast-undo {
+    grid-column: span 8; background: var(--bg); border: 1px dashed var(--plum-border); color: var(--plum-text);
+    border-radius: 8px; padding: 8px 0; font-size: 13px; font-weight: 500; text-align: center;
+  }
+  .fixlast-cancel {
+    grid-column: span 4; background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted);
+    border-radius: 8px; padding: 8px 0; font-size: 12px; font-weight: 500; text-align: center;
+  }
+  .fixlast-hitstands {
+    grid-column: span 12; background: var(--bg); border: 1px dashed var(--plum-border); color: var(--plum-text);
+    border-radius: 8px; padding: 8px 0; font-size: 12px; font-weight: 500; text-align: center; margin-top: 6px;
+  }
+
+  /* Minimal undo-only confirm for non-PA last actions (not in the
+     mockups -- see the scoringCorrection shape comment in the script). */
+  .undolast-banner {
+    background: var(--tile); border: 1px solid var(--plum-border); border-radius: 12px;
+    padding: 10px 12px; margin: 0 16px 10px; text-align: center;
+  }
+  .undolast-heading { font-size: 13px; font-weight: 500; color: var(--text); }
+  .undolast-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .undolast-btn {
+    flex: 1; background: var(--bg); border: 1px dashed var(--plum-border); color: var(--plum-text);
+    border-radius: 8px; padding: 8px 0; font-size: 13px; font-weight: 500;
+  }
+  .undolast-btn.cancel { border-color: var(--tile-border); color: var(--muted); }
+
+  /* ---- scoring: S1.6 tap-to-draft lineup editor + Start/End game + PIN
+     + adjust sheet. Appearance ground truth: mockups/portal-screens.html
+     screens 4/5/7/8 (05-Scoring-Architecture.md "Design authority": new
+     surfaces are governed by the portal mockup, not scoring-screens.html).
+     Reuses existing primitives (.tile/.grid/.done-full/.recall-btn/
+     .correction-*) wherever the mockup's visual is already covered by one,
+     per that doc's "implement inside app.template.html's conventions"
+     instruction -- new classes only for shapes the app didn't have yet. ---- */
+  .fixture-card {
+    background: var(--tile); border: 1px solid var(--pickle); border-radius: 12px;
+    padding: 10px 12px; text-align: center; margin: 0 16px 10px;
+  }
+  .fixture-label { font-size: 11px; letter-spacing: 0.1em; color: var(--pickle); font-weight: 500; text-transform: uppercase; }
+  .fixture-name { font-size: 18px; font-weight: 500; color: var(--card-pop); margin-top: 2px; }
+  .fixture-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .fixture-change { color: var(--text); text-decoration: underline; }
+  .editor-sect {
+    font-size: 11px; letter-spacing: 0.08em; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; margin: 14px 16px 6px;
+  }
+  .editor-sect:first-of-type { margin-top: 4px; }
+  .draft-list { padding: 0 16px; }
+  .draft-row {
+    display: flex; align-items: center; background: var(--tile); border: 1px solid var(--tile-border);
+    border-radius: 10px; padding: 10px 10px; margin-bottom: 6px; touch-action: pan-y;
+  }
+  .draft-row.up-now { border-color: var(--pickle); }
+  .draft-row.drag-placeholder { opacity: 0.35; border-style: dashed; }
+  .draft-row-handle { font-size: 16px; color: var(--muted); margin-right: 10px; line-height: 1; }
+  .draft-row-badge {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--pickle); color: var(--badge-text);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500;
+    margin-right: 10px; flex-shrink: 0;
+  }
+  .draft-row-name { flex: 1; font-size: 14px; font-weight: 500; color: var(--text); }
+  .draft-row-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .draft-row-upnow-label { font-size: 11px; color: var(--pickle); font-weight: 500; }
+  .draft-row-remove { font-size: 11px; color: var(--muted); padding: 4px 6px; margin-left: 6px; background: transparent; border: none; }
+  .draft-addgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
+  .draft-addtile { height: 56px; }
+  .draft-cta-wrap { padding: 12px 16px 16px; }
+  /* Moved off the lineup editor onto the box-score panel (Jason, 2026-07-12
+     preview review): "end game" reads more naturally as a call made while
+     looking at the score, not while drafting the batting order -- a live
+     divergence from mockup screen 5, which put it here originally. */
+  .boxscore-endgame-btn {
+    display: block; width: 100%; background: var(--tile); border: 1px solid var(--plum-border);
+    color: var(--plum-text); border-radius: 10px; padding: 11px 0; text-align: center;
+    font-size: 13px; font-weight: 500; margin-top: 10px;
+  }
+  .boxscore-endgame-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+  .draft-livechip {
+    display: flex; justify-content: space-between; align-items: center; background: var(--tile);
+    border: 1px solid var(--tile-border); border-radius: 8px; padding: 8px 10px; margin: 0 16px 10px;
+    font-size: 12px; color: var(--text);
+  }
+
+  /* Takeover sheets (PIN / add player / end game confirm) -- same "own
+     card over the rest of the screen, not a dimmed modal" idiom the
+     correction sheets already use, per the portal mockup's note that all
+     three render as takeover sheets in the app's existing conventions. */
+  .sheet-wrap { padding: 16px; }
+  .sheet-card {
+    background: var(--tile); border: 1px solid var(--pickle); border-radius: 12px; padding: 14px;
+  }
+  .sheet-card.plum { border-color: var(--plum-border); }
+  .sheet-title {
+    font-size: 11px; letter-spacing: 0.1em; color: var(--pickle); font-weight: 500;
+    text-transform: uppercase; text-align: center; margin-bottom: 10px;
+  }
+  .sheet-card.plum .sheet-title { color: var(--plum-text); }
+  .sheet-cancel {
+    display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border);
+    color: var(--muted); border-radius: 8px; padding: 9px 0; text-align: center;
+    font-size: 12px; font-weight: 500; margin-top: 6px;
+  }
+
+  .pin-dots { display: flex; justify-content: center; gap: 10px; margin: 4px 0 14px; }
+  .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--tile-border); }
+  .pin-dot.filled { background: var(--pickle); border-color: var(--pickle); }
+  .pin-dot.shake-error { background: transparent; border-color: var(--plum-border); }
+  .pin-keypad {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 220px; margin: 0 auto 8px;
+  }
+  .pin-key {
+    background: var(--tile); border: 1px solid var(--tile-border); color: var(--text);
+    border-radius: 8px; padding: 12px 0; font-size: 16px; font-weight: 500; text-align: center;
+  }
+  .pin-key.blank { background: transparent; border: none; }
+  .pin-key.del { background: var(--bg); border-style: dashed; color: var(--muted); font-size: 13px; }
+  .pin-shake { animation: pinShake 0.35s; }
+  @keyframes pinShake {
+    10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); }
+  }
+
+  .addplayer-input {
+    background: var(--bg); border: 1px solid var(--tile-border); border-radius: 8px;
+    padding: 9px 10px; font-size: 14px; color: var(--text); width: 100%; margin-bottom: 8px;
+  }
+  .addplayer-toggle-row { display: flex; gap: 6px; margin-bottom: 10px; }
+  .addplayer-toggle {
+    flex: 1; background: var(--tile); border: 1px solid var(--tile-border); color: var(--text);
+    border-radius: 8px; padding: 9px 0; text-align: center; font-size: 13px; font-weight: 500;
+  }
+  .addplayer-toggle.active { border-color: var(--pickle); color: var(--pickle); }
+  .addplayer-songlabel { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+  .addplayer-song {
+    display: block; width: 100%; background: var(--tile); border: 1px solid var(--tile-border);
+    color: var(--text); border-radius: 8px; padding: 9px 10px; text-align: left;
+    font-size: 13px; margin-bottom: 6px;
+  }
+  .addplayer-song.active { border-color: var(--pickle); color: var(--pickle); }
+  .addplayer-song.empty { color: var(--muted); font-style: italic; }
+  .addplayer-song.dashed { background: var(--bg); border-style: dashed; color: var(--muted); }
+  .addplayer-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .addplayer-submit {
+    flex: 1; background: var(--olive); border: none; color: var(--text); border-radius: 8px;
+    padding: 10px 0; text-align: center; font-size: 13px; font-weight: 500;
+  }
+  .addplayer-cancel {
+    flex: 1; background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted);
+    border-radius: 8px; padding: 10px 0; text-align: center; font-size: 12px; font-weight: 500;
+  }
+
+  .endgame-score { font-size: 18px; font-weight: 500; color: var(--card-pop); margin: 4px 0 2px; text-align: center; }
+  .endgame-meta { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 12px; }
+  .endgame-confirm {
+    display: block; width: 100%; background: var(--tile); border: 1px solid var(--plum-border);
+    color: var(--plum-text); border-radius: 8px; padding: 10px 0; text-align: center;
+    font-size: 13px; font-weight: 500; margin-bottom: 6px;
+  }
+
+  /* Adjust sheet (score bug tap) -- draft/commit/cancel steppers, layout
+     per Jason's revisions on portal mockup screen 8: OUTS+INNING box on
+     top, SCORES box (team names above side-by-side steppers) below. */
+  .adjust-box {
+    background: var(--bg); border: 1px solid var(--tile-border); border-radius: 10px;
+    padding: 8px 6px; margin-bottom: 8px; display: flex; gap: 6px;
+  }
+  .adjust-box.scores { display: block; }
+  .adjust-scores-label {
+    font-size: 11px; letter-spacing: 0.1em; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; text-align: center; margin-bottom: 6px;
+  }
+  .adjust-col { flex: 1; min-width: 0; text-align: center; }
+  .adjust-divider { width: 1px; flex: none; background: var(--row-rule); }
+  .adjust-collabel { font-size: 11px; letter-spacing: 0.05em; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+  .adjust-stepper { display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .adjust-btn {
+    width: 32px; height: 32px; flex: none; border: 1px solid var(--tile-border); background: transparent;
+    color: var(--text); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px;
+  }
+  .adjust-btn:disabled { opacity: 0.3; }
+  .adjust-value { width: 26px; flex: none; text-align: center; font-size: 20px; font-weight: 500; color: var(--text); }
+  .adjust-scores-row { display: flex; gap: 6px; }
+  .adjust-actions { display: flex; gap: 6px; }
+  .adjust-done {
+    flex: 1; background: var(--olive); border: none; color: var(--text); border-radius: 8px;
+    padding: 9px 0; text-align: center; font-size: 13px; font-weight: 500;
+  }
+  .adjust-cancel {
+    flex: 1; background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted);
+    border-radius: 8px; padding: 9px 0; text-align: center; font-size: 12px; font-weight: 500;
+  }
+  .adjust-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 10px; }
+  /* __SCORING_END__ */
 </style>
 </head>
 <body>
@@ -272,7 +961,7 @@
   <div id="screen"></div>
   <div class="tabbar">
     <button class="tabbtn" id="tabLineup">Next Up</button>
-    <button class="tabbtn" id="tabGrid">All Songs</button>
+    <button class="tabbtn" id="tabGrid">Soundboard</button>
   </div>
 </div>
 
@@ -350,6 +1039,651 @@ function saveJSON(key, value) {
   catch (e) { /* storage full/unavailable -- non-fatal, in-memory state still works this session */ }
 }
 
+/* __SCORING_START__ */
+/* ============================================================
+   Scoring event log + replay engine
+   (05-Scoring-Architecture.md "Event sourcing" / §Assumption engine;
+   06-Scoring-Specs.md S1 item 2). Append-only; every user action is one
+   event; ALL derived state -- score, outs, runners, stats -- is computed
+   by deriveState() replaying the log from scratch. No derived quantity is
+   ever stored. Stripped from the artifact entirely by build.py's
+   strip_scoring_blocks() when scoring.enabled is false -- these markers
+   are what it matches; keep every scoring-only addition inside them.
+   ============================================================ */
+const SCORING_STORAGE_KEY = 'scoringEvents_v1';
+const HIT_BASES = { '1B': 1, '2B': 2, '3B': 3, 'HR': 4 };
+const OUT_RESULTS = new Set(['FLY', 'GND', 'K']);
+
+function loadScoringEvents() { return loadJSON(SCORING_STORAGE_KEY, []); }
+function saveScoringEvents(events) { saveJSON(SCORING_STORAGE_KEY, events); }
+
+// Local id generator -- unique within one device's own array, which is all
+// appendScoringEvent/amend/undo need for S1 (offline, single device). Real
+// cross-device uniqueness for sync comes from the (game_id, device_id, seq)
+// tuple once S2 lands; not crypto.randomUUID, which isn't guaranteed on the
+// team phone's old Safari.
+let _scoringIdCounter = 0;
+function scoringEventId() {
+  _scoringIdCounter += 1;
+  return 'e' + Date.now().toString(36) + '_' + _scoringIdCounter + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+// Appends one event and persists synchronously -- same "lands in
+// localStorage with the tap" guarantee as the rest of the app's saveJSON
+// pattern (architecture doc "Sync layer": local-first, always).
+function appendScoringEvent(events, type, payload) {
+  const evt = { id: scoringEventId(), seq: events.length + 1, ts: new Date().toISOString(), type: type, payload: payload || {} };
+  const next = events.concat([evt]);
+  saveScoringEvents(next);
+  return next;
+}
+
+function eventIdentity(e, idx) {
+  return (e.id !== undefined && e.id !== null) ? e.id : ('_idx' + idx);
+}
+
+// Pure, no mutation: pushes every runner at base >= fromBase forward by
+// `delta`, highest base first so a pushed runner is never overwritten by
+// another mid-push. Runners pushed to base 4+ score. Shared by the replay
+// engine (hits push existing runners; manual advances push blocked lead
+// runners -- "a trailing runner may never pass a lead runner") and the
+// UI's legal-move/cascade-subtitle preview below: one implementation, so
+// "legal" always matches what actually happens on replay.
+function runnerAtBase(runners, base) {
+  return Object.keys(runners).find(id => runners[id] === base) || null;
+}
+
+function applyRunnerPush(runners, fromBase, delta) {
+  const next = Object.assign({}, runners);
+  const scored = [];
+  const ids = Object.keys(next).filter(id => next[id] >= fromBase);
+  ids.sort((a, b) => next[b] - next[a]);
+  ids.forEach(id => {
+    const nb = next[id] + delta;
+    delete next[id];
+    if (nb >= 4) scored.push(id); else next[id] = nb;
+  });
+  return { runners: next, scored: scored };
+}
+
+// Chain semantics for MANUAL forward sets (2026-07-08 session, audit find
+// + Jason sign-off pass): the tapped runner moves to `to`; every runner
+// they'd PASS (bases in (from, to]) is carried along ahead of them -- a
+// trailing runner never passes a lead runner without carrying them -- but
+// runners already BEYOND the target hold their base unless a carried
+// runner actually lands on them, in which case they're bumped one base at
+// a time (scoring past home). This replaces uniform applyRunnerPush for
+// sets: uniform push moved EVERY runner ahead of the mover by the full
+// delta, which wrongly scored an unblocked runner on 3rd when a trailing
+// runner was corrected 1st->2nd (runners on the corners -- the most common
+// board in the game). Same class of fix as the force-chain-only 1B rule.
+// Hits (2B/3B) keep uniform push deliberately -- that's the assumption
+// engine's documented default, corrected after the fact via sets.
+function applyChainForwardSet(runners, playerId, to) {
+  const before = Object.assign({}, runners);
+  const next = Object.assign({}, runners);
+  const delta = to - before[playerId];
+  const scored = [];
+  const movements = [];
+  // Bumps the (possibly chained) stationary occupants of `base` up one,
+  // highest first, scoring anyone bumped past 3rd.
+  function bumpChainFrom(base) {
+    const chain = [];
+    let b = base;
+    while (b <= 3) {
+      const occ = runnerAtBase(next, b);
+      if (!occ) break;
+      chain.push([occ, b]);
+      b += 1;
+    }
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const id = chain[i][0], cb = chain[i][1];
+      delete next[id];
+      if (cb + 1 >= 4) { scored.push(id); movements.push({ playerId: id, from: cb, to: null, scored: true }); }
+      else { next[id] = cb + 1; movements.push({ playerId: id, from: cb, to: cb + 1, scored: false }); }
+    }
+  }
+  // The moving group: the tapped runner plus anyone they'd pass, lead-most
+  // first so gaps inside the group are preserved and members never collide
+  // with each other.
+  const group = Object.keys(next)
+    .filter(id => next[id] >= before[playerId] && next[id] <= to)
+    .sort((a, b) => next[b] - next[a]);
+  group.forEach(id => { delete next[id]; });
+  group.forEach(id => {
+    const nb = before[id] + delta;
+    if (nb >= 4) { scored.push(id); movements.push({ playerId: id, from: before[id], to: null, scored: true }); return; }
+    bumpChainFrom(nb);
+    next[id] = nb;
+    movements.push({ playerId: id, from: before[id], to: nb, scored: false });
+  });
+  return { runners: next, scored: scored, movements: movements };
+}
+
+// S1.5 round 7 (Jason, live feedback): legal ABSOLUTE targets for a runner
+// correction, replacing the relative-delta legalAdvanceBases/
+// previewRunnerAdvance pair. This is what makes tap-a-base possible (a
+// target is just a base number, not a delta-plus-preview) AND fixes the
+// order-of-operations bug a relative delta had: a STORED "+1" replays
+// relative to whatever the runner's base happens to be at replay time,
+// which drifted if an earlier event (e.g. the PA that force-advanced them)
+// got undone afterward. A stored "to: 3" always means 3rd, full stop.
+//
+// True when walking a runner from `fromBase` down to `toBase` would land
+// on OR pass another runner -- both are physically impossible (a runner
+// can no more retreat through a teammate than advance through one).
+// Round 2 fix (Jason, on-device 2026-07-08): the original backward rule
+// only checked the TARGET base, so a runner walked back from home could
+// "skip past" a trailing runner to an open base behind them (Marcel,
+// scored from 3rd, offered 1st with Penny standing on 2nd). Backward
+// legality now stops at the first occupied base. Used by both target
+// computation below AND the replay engine, so "legal" always matches what
+// replay actually applies.
+function backwardBlocked(runners, fromBase, toBase) {
+  for (let b = toBase; b < fromBase; b++) {
+    if (runnerAtBase(runners, b)) return true;
+  }
+  return false;
+}
+
+// Forward targets (base+1 .. home) use chain semantics
+// (applyChainForwardSet above) -- passed runners are carried along;
+// runners beyond the target hold unless actually collided into. Backward
+// targets: the runner moves ALONE, only down to open bases SHORT of the
+// nearest trailing runner (backwardBlocked above) -- correcting an
+// over-advance never displaces or passes a teammate.
+function legalSetTargets(runners, playerId) {
+  const base = runners[playerId];
+  if (base === undefined) return [];
+  const out = [];
+  for (let b = base + 1; b <= 4; b++) out.push(b);
+  for (let b = base - 1; b >= 1; b--) {
+    if (runnerAtBase(runners, b)) break; // occupied: this and everything behind it is unreachable
+    out.push(b);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+// Legal bases a SCORED runner can be walked back to (2026-07-08 session:
+// the "auto-scored on the assumption engine's double, but really held at
+// 3rd" correction -- reached by tapping home plate). Same backward rules,
+// from home: open bases down to the nearest trailing runner only.
+function legalReturnTargets(runners) {
+  const out = [];
+  for (let b = 3; b >= 1; b--) {
+    if (runnerAtBase(runners, b)) break;
+    out.push(b);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+// The load-bearing function: replays the entire event log into one
+// authoritative state object. Cheap enough to call fresh on every render
+// while a game is live (a season's worth of events is a few thousand rows
+// at most) -- that's what makes undo/amend/sync-merge structural rather
+// than special-cased (architecture doc "Event sourcing").
+function deriveState(events) {
+  // Pass 1: collect tombstones and amendments, keyed by target identity,
+  // before touching any real state -- undo/amend are meta-events that
+  // change how OTHER events replay, not state transitions of their own.
+  const tombstoned = new Set();
+  const amendments = {};
+  events.forEach(e => {
+    if (e.type === 'undo') {
+      const t = e.payload && e.payload.target_event_id;
+      if (t !== undefined && t !== null) tombstoned.add(t);
+    }
+  });
+  events.forEach((e, i) => {
+    if (e.type === 'amend') {
+      // A tombstoned amend never applies (2026-07-08 hardening) -- no UI
+      // path produces an undo-of-an-amend today, but S2's multi-device
+      // merge could replay one, and silently honoring a dead amendment
+      // would be exactly the class of quiet corruption event sourcing
+      // exists to prevent.
+      if (tombstoned.has(eventIdentity(e, i))) return;
+      const t = e.payload && e.payload.target_event_id;
+      if (t === undefined || t === null) return;
+      amendments[t] = Object.assign(amendments[t] || {}, e.payload);
+      delete amendments[t].target_event_id;
+    }
+  });
+
+  const st = {
+    lineup: [], lineupPointer: 0,
+    inning: 1, half: 'us', outs: 0,
+    scoreUs: 0, scoreThem: 0,
+    // thisHalfRunsThem / thisHalfRunsUs: runs scored in the CURRENT half
+    // only (each resets when its own half begins) -- mercy-rule awareness
+    // (06-Scoring-Specs.md S1.4 defense; offense indicator added per
+    // Jason's live feedback 2026-07-07) is per-half, separate from the
+    // running game totals.
+    thisHalfRunsThem: 0,
+    thisHalfRunsUs: 0,
+    runners: {},
+    paLog: [], runsLog: [],
+    // Per-inning run tallies for the scorecard's line score (2026-07-08
+    // round 5). Objects keyed by inning number, not arrays -- innings can
+    // exceed `innings` in extras and adjust events don't touch these
+    // (a score adjust has no inning attribution; known, accepted gap).
+    runsByInning: { us: {}, them: {} },
+    lastAction: null,
+    gameStarted: false, gameEnded: false,
+    opponent: '', innings: 7,
+    finalUs: null, finalThem: null,
+    rosterOverlay: [],
+    scheduleGameId: null,
+  };
+
+  function creditRun(playerId, record, inferred) {
+    st.scoreUs += 1;
+    st.thisHalfRunsUs += 1; // creditRun only ever fires for our own runs
+    // Entries are objects (2026-07-08 session; were bare playerId strings):
+    // un-scoring (unscoreRun below) needs to know WHICH credit to reverse --
+    // the paLog record it credited an RBI to, whether that RBI was
+    // inferred, and the half it happened in (the same-half guard is what
+    // keeps a stale `set` from clawing back a legitimate run scored
+    // innings earlier).
+    st.runsLog.push({ playerId: playerId, record: record || null, inferred: !!inferred, inning: st.inning, half: st.half });
+    st.runsByInning.us[st.inning] = (st.runsByInning.us[st.inning] || 0) + 1;
+    // Scorecard mark (round 5): the run also lights up the SCORER's own
+    // most recent at-bat cell (solid diamond on the scorecard). Stash the
+    // record ref on the runsLog entry so unscoreRun can flip it back.
+    const en = st.runsLog[st.runsLog.length - 1];
+    for (let i = st.paLog.length - 1; i >= 0; i--) {
+      if (st.paLog[i].playerId === playerId) { st.paLog[i].kickerScored = true; en.scorerRecord = st.paLog[i]; break; }
+    }
+    if (record) {
+      record.rbi += 1;
+      if (inferred) record.inferredRbi += 1;
+    }
+  }
+  // Reverses the most recent SAME-HALF run credit for a player -- the
+  // engine half of "the assumption engine scored them, but the operator
+  // observed otherwise" (2026-07-08 session; Jason's Megan/Ming scenario:
+  // amending a 1B to a 2B re-pushed home a runner whose manual "set to
+  // 3rd" observation was recorded before the amend -- the observation must
+  // win over the assumption). Returns the reversed entry, or null when no
+  // same-half credit exists, in which case the caller treats the event as
+  // stale and no-ops -- same convention as every other stale-correction
+  // path. `placedAtBase` (or null for out-at-home) rewrites the crediting
+  // PA's own movement line so the recap chip reads the corrected reality
+  // ("Ming 2nd→3rd"), not a stale "Ming scored".
+  // The most recent run credit of the current half -- the ONLY run the
+  // un-scoring paths may touch (round 3, Jason 2026-07-08: scorers can
+  // only be walked back in the reverse order they crossed the plate, one
+  // at a time -- pulling a mid-order scorer off the board while later
+  // scorers stay home is physically impossible, and was producing
+  // teleported runners in his grand-slam tests).
+  function lastSameHalfRunEntry() {
+    for (let i = st.runsLog.length - 1; i >= 0; i--) {
+      const en = st.runsLog[i];
+      if (en.inning === st.inning && en.half === st.half) return en;
+    }
+    return null;
+  }
+  function unscoreRun(playerId, placedAtBase) {
+    for (let i = st.runsLog.length - 1; i >= 0; i--) {
+      const en = st.runsLog[i];
+      if (en.playerId !== playerId || en.inning !== st.inning || en.half !== st.half) continue;
+      st.runsLog.splice(i, 1);
+      st.scoreUs -= 1;
+      st.thisHalfRunsUs -= 1;
+      st.runsByInning.us[en.inning] = (st.runsByInning.us[en.inning] || 1) - 1;
+      if (en.scorerRecord) en.scorerRecord.kickerScored = false;
+      if (en.record) {
+        en.record.rbi -= 1;
+        if (en.inferred) en.record.inferredRbi -= 1;
+        (en.record.movements || []).forEach(m => {
+          if (m.playerId === playerId && m.scored) { m.scored = false; m.to = placedAtBase; }
+        });
+      }
+      return en;
+    }
+    return null;
+  }
+  // Pushes runners at base >= fromBase by `delta`, credits anyone who
+  // scores, and returns a movements[] list ({playerId, from, to, scored})
+  // for the last-action recap text -- `to: null` means scored.
+  function pushAndCredit(fromBase, delta, record, inferred) {
+    const before = Object.assign({}, st.runners);
+    const result = applyRunnerPush(st.runners, fromBase, delta);
+    st.runners = result.runners;
+    const moved = [];
+    Object.keys(before).filter(id => before[id] >= fromBase).forEach(id => {
+      if (st.runners[id] !== undefined) moved.push({ playerId: id, from: before[id], to: st.runners[id], scored: false });
+      else moved.push({ playerId: id, from: before[id], to: null, scored: true });
+    });
+    result.scored.forEach(id => creditRun(id, record, inferred));
+    moved.forEach(m => { if (!m.scored) setKickerBase(m.playerId, m.to); }); // scorecard edge fills (iteration 2)
+    return moved;
+  }
+  // Force-chain for 1B only (Jason, 2026-07-07 live feedback): a runner is
+  // forced to advance one base ONLY if the base behind them was occupied,
+  // cascading from 1st -- so a runner on 3rd with 1st/2nd empty simply
+  // holds on a single (e.g. a ball hit to the left side), rather than
+  // being auto-pushed like the old uniform-delta model. 2B/3B/HR keep the
+  // uniform push deliberately (an extra-base hit overwhelmingly clears the
+  // bases in practice; scoped narrowly per Jason's explicit example, not
+  // generalized to every hit type).
+  function forcedBasesFor1B(runners) {
+    const forced = new Set();
+    if (runnerAtBase(runners, 1)) {
+      forced.add(1);
+      if (runnerAtBase(runners, 2)) {
+        forced.add(2);
+        if (runnerAtBase(runners, 3)) forced.add(3);
+      }
+    }
+    return forced;
+  }
+  function advanceLineupPointer() {
+    if (st.lineup.length === 0) return;
+    st.lineupPointer = (st.lineupPointer + 1) % st.lineup.length;
+  }
+  // 3-out flip applies identically to either half (invariant-style shared
+  // path): clear the diamond and outs; flip 'us'->'them' same inning, or
+  // 'them'->'us' with the inning incrementing.
+  function flipHalfIfThreeOuts() {
+    if (st.outs < 3) return;
+    // Scorecard mark (round 5): the third-out corner triangle lives on the
+    // cell of whichever at-bat was current when OUR half ended.
+    if (st.half === 'us') {
+      const r = mostRecentPaRecord();
+      if (r) r.endedHalf = true;
+    }
+    st.outs = 0;
+    st.runners = {};
+    if (st.half === 'us') {
+      st.half = 'them';
+      st.thisHalfRunsThem = 0; // fresh tally for the half that's about to start
+    } else {
+      st.half = 'us'; st.inning += 1;
+      st.thisHalfRunsUs = 0; // fresh tally for the half that's about to start
+    }
+  }
+  // Scorecard mark (round 5): a runner erased from the bases (or out at
+  // home) gets the plum ✕ on their own most recent at-bat cell.
+  function markKickerOut(playerId) {
+    for (let i = st.paLog.length - 1; i >= 0; i--) {
+      if (st.paLog[i].playerId === playerId) { st.paLog[i].kickerOut = true; return; }
+    }
+  }
+  // Scorecard mark (iteration 2, Jason: "advancement to 2nd/3rd isn't
+  // reflected until they score"): every runner movement -- force chains,
+  // pushes from hits, manual sets forward OR backward, un-score
+  // walk-backs -- writes the runner's CURRENT base onto their most recent
+  // at-bat record. Chronological replay means last write wins, so the
+  // cell's edge fills always show the corrected truth, not a historical
+  // max.
+  function setKickerBase(playerId, base) {
+    for (let i = st.paLog.length - 1; i >= 0; i--) {
+      if (st.paLog[i].playerId === playerId) { st.paLog[i].reachedBase = base; return; }
+    }
+  }
+  // The "previous kicker" for the correction UI's redirect rule: the most
+  // recent real PA (SKIP excluded -- it was never a plate appearance).
+  function mostRecentPaRecord() {
+    for (let i = st.paLog.length - 1; i >= 0; i--) {
+      if (st.paLog[i].result !== 'SKIP') return st.paLog[i];
+    }
+    return null;
+  }
+
+  events.forEach((rawEvent, idx) => {
+    const identity = eventIdentity(rawEvent, idx);
+    if (tombstoned.has(identity)) return; // tombstoned: replay as if it never happened
+    const e = amendments[identity]
+      ? Object.assign({}, rawEvent, { payload: Object.assign({}, rawEvent.payload, amendments[identity]) })
+      : rawEvent;
+    const p = e.payload || {};
+
+    if (e.type === 'game_start') {
+      // A fresh game_start resets per-game fields (score, outs, runners,
+      // paLog/runsLog) -- deriveState() run against a local device's full
+      // array always reflects the CURRENT (most recent) game only.
+      st.lineup = (p.lineup || []).slice();
+      st.lineupPointer = 0;
+      st.inning = 1; st.half = 'us'; st.outs = 0;
+      st.scoreUs = 0; st.scoreThem = 0; st.thisHalfRunsThem = 0; st.thisHalfRunsUs = 0; st.runners = {};
+      st.paLog = []; st.runsLog = [];
+      st.gameStarted = true; st.gameEnded = false;
+      st.opponent = p.opponent || ''; st.innings = p.innings || 7;
+      st.finalUs = null; st.finalThem = null;
+      // S1.6 / 07-Portal-Architecture.md: links this game to its manifest
+      // schedule fixture; absent for the "unscheduled game" fallback.
+      st.scheduleGameId = p.scheduleGameId || null;
+    } else if (e.type === 'lineup_set') {
+      // S1.6 addition (2026-07-12, Jason sign-off): the tap-to-draft
+      // editor's Done commit for a MID-GAME lineup edit -- add/remove/
+      // reorder existing or newly-added (player_add) players. One event
+      // per commit, payload {lineup:[playerId,...]}, mirroring game_start's
+      // own lineup field exactly -- keeps the append-only/one-event-per-
+      // action pattern rather than one event per drag/tap. Not in
+      // 05-Scoring-Architecture.md's original event table; documented here
+      // and flagged for that doc's amendment. The current batter (if any)
+      // is carried forward by identity, not index, so an edit that only
+      // reorders/adds around them never visibly "moves the pointer" --
+      // the UI itself refuses to let the current batter be removed, so
+      // they're always still present in the new list.
+      const currentBatter = st.lineup[st.lineupPointer];
+      st.lineup = (p.lineup || []).slice();
+      const idx = st.lineup.indexOf(currentBatter);
+      st.lineupPointer = idx !== -1 ? idx : 0;
+    } else if (e.type === 'pa') {
+      const result = p.result, batter = p.playerId;
+      if (result === 'SKIP') {
+        // No PA happened -- pointer advances, excluded from every stat.
+        st.lastAction = { kind: 'pa', playerId: batter, result: result, eventIdx: idx };
+        advanceLineupPointer();
+        return;
+      }
+      const record = {
+        eventIdx: idx, id: identity, playerId: batter, result: result,
+        inning: p.inning, half: p.half, rbi: 0, inferredRbi: 0, location: p.location || null,
+        movements: [],
+        // Scorecard cell state (round 5): all recomputed fresh each
+        // replay, so corrections re-derive the scorecard for free.
+        // reachedBase = the kicker's CURRENT base (updated by every later
+        // force/push/set -- see setKickerBase, iteration 2).
+        kickerScored: false, kickerOut: false, endedHalf: false,
+        reachedBase: HIT_BASES[result] || 0,
+        // Board as it stood when this kicker stepped up (round 2,
+        // 2026-07-08): the last-action chip renders the NET assessment of
+        // this at-bat -- pre-PA board vs. the current board -- so manual
+        // corrections made afterward fold into one honest recap instead
+        // of replacing it.
+        runnersBefore: Object.assign({}, st.runners),
+      };
+      st.paLog.push(record);
+      if (result === '1B') {
+        // Force-chain only (see forcedBasesFor1B) -- process forced bases
+        // highest-first so a forced runner is never overwritten mid-cascade.
+        const forced = forcedBasesFor1B(st.runners);
+        [3, 2, 1].forEach(b => {
+          if (!forced.has(b)) return;
+          const pid = runnerAtBase(st.runners, b);
+          if (!pid) return;
+          const nb = b + 1;
+          delete st.runners[pid];
+          if (nb >= 4) { creditRun(pid, record, false); record.movements.push({ playerId: pid, from: b, to: null, scored: true }); }
+          else { st.runners[pid] = nb; record.movements.push({ playerId: pid, from: b, to: nb, scored: false }); setKickerBase(pid, nb); }
+        });
+        st.runners[batter] = 1;
+      } else if (HIT_BASES[result]) {
+        // 2B/3B/HR: uniform push, unchanged (see forcedBasesFor1B's comment).
+        const delta = HIT_BASES[result];
+        record.movements = pushAndCredit(1, delta, record, false);
+        if (delta < 4) st.runners[batter] = delta;
+        else creditRun(batter, record, false); // HR: batter scores too
+      } else if (OUT_RESULTS.has(result)) {
+        st.outs += 1; // FLY/GND/K: runners hold, deliberately (see architecture doc)
+      } // MISSED: runners hold, no out -- counts as PA, never AB (honest denominators)
+      st.lastAction = { kind: 'pa', playerId: batter, result: result, eventIdx: idx, movements: record.movements, rbi: record.rbi };
+      advanceLineupPointer();
+      flipHalfIfThreeOuts();
+    } else if (e.type === 'runner' || e.type === 'runner_out_hit_stands') {
+      // runner_out_hit_stands is the architecture doc's name for the
+      // rundown case; it's the same effect as `runner`/action:"out" (hit
+      // stays in stats, out increments, runner leaves the bases), so both
+      // event-type spellings converge here.
+      const pid = p.playerId;
+      const action = e.type === 'runner_out_hit_stands' ? 'out' : p.action;
+      if (st.runners[pid] === undefined) {
+        // Runner isn't on base at this point in the replay. Two real cases
+        // (2026-07-08 session) before the stale/duplicate no-op:
+        //
+        // 1. `set` for a runner THIS replay scored earlier in the SAME
+        //    half. A set is an absolute observation ("this runner ended up
+        //    on base N") and must win over the assumption engine -- the
+        //    canonical trigger is Jason's Megan/Ming scenario: 1B logged,
+        //    runner manually set to 3rd, then the 1B amended to a 2B; the
+        //    amended replay pushes the runner home BEFORE the set replays.
+        //    Un-score the run and place them where the operator said.
+        //    Guards: same-half credit must exist, target base 1-3 and
+        //    unoccupied (backward-move rules) -- otherwise stale no-op.
+        //
+        // 2. `out` with payload.scored (only the scored-runner correction
+        //    sheet appends this flag): "actually out at home" -- run comes
+        //    off the board, out goes up. The flag gate keeps a duplicate
+        //    plain runner-out from ever clawing back an earlier legit run.
+        // Reverse-order guard (round 3): only the MOST RECENT same-half
+        // scorer can be un-scored. Anything else is stale/illegal -- the
+        // UI can't produce it, but a replay against amended history could.
+        const lastRun = lastSameHalfRunEntry();
+        const isLastScorer = !!(lastRun && lastRun.playerId === pid);
+        if (action === 'set' && isLastScorer && typeof p.to === 'number' && p.to >= 1 && p.to <= 3 && !backwardBlocked(st.runners, 4, p.to)) {
+          if (!unscoreRun(pid, p.to)) return; // no same-half run to reverse: stale
+          st.runners[pid] = p.to;
+          setKickerBase(pid, p.to); // scorecard edge fills track the corrected truth
+          st.lastAction = { kind: 'runner_return', playerId: pid, eventIdx: idx, movements: [{ playerId: pid, from: null, to: p.to, scored: false }] };
+        } else if (action === 'out' && p.scored && isLastScorer) {
+          if (!unscoreRun(pid, null)) return; // no same-half run to reverse: stale
+          st.outs += 1;
+          markKickerOut(pid);
+          st.lastAction = { kind: 'runner_out_at_home', playerId: pid, eventIdx: idx };
+          flipHalfIfThreeOuts();
+        }
+        return; // anything else: stale/duplicate tap, no-op
+      }
+      if (action === 'out') {
+        delete st.runners[pid];
+        st.outs += 1;
+        markKickerOut(pid);
+        st.lastAction = { kind: 'runner_out', playerId: pid, eventIdx: idx };
+        flipHalfIfThreeOuts();
+      } else if (action === 'set') {
+        // S1.5 round 7: absolute target base, replacing the old relative
+        // "advance by N bases" action (05-Scoring-Architecture.md
+        // amendment). Computed fresh against THIS replay's current base --
+        // not stored as a delta -- so a "set to 3rd" always lands on 3rd
+        // even if an earlier event (e.g. the force-advance that originally
+        // put them on 2nd) has since been undone.
+        const fromBase = st.runners[pid];
+        const toBase = p.to;
+        if (toBase > fromBase) {
+          // Forward: chain semantics (applyChainForwardSet) -- passed
+          // runners carried along, runners beyond the target hold unless
+          // collided into. Manual corrections credit the most recent PA
+          // and are flagged inferred (architecture doc "Honest
+          // denominators").
+          const result = applyChainForwardSet(st.runners, pid, toBase);
+          st.runners = result.runners;
+          const rec = mostRecentPaRecord();
+          result.scored.forEach(id => creditRun(id, rec, true));
+          result.movements.forEach(m => { if (!m.scored) setKickerBase(m.playerId, m.to); }); // scorecard edge fills
+          st.lastAction = { kind: 'runner_advance', playerId: pid, eventIdx: idx, movements: result.movements };
+        } else if (toBase < fromBase) {
+          // Backward: this runner moves ALONE, and may neither land on
+          // NOR pass a trailing runner (backwardBlocked -- round 2 fix,
+          // 2026-07-08). If the path isn't clear by replay time (some
+          // other event changed the board since this was tapped), treat
+          // it as stale and no-op, same convention as the
+          // undefined-runner guard above.
+          if (backwardBlocked(st.runners, fromBase, toBase)) return;
+          st.runners[pid] = toBase;
+          setKickerBase(pid, toBase); // scorecard edge fills track the corrected truth
+          st.lastAction = { kind: 'runner_advance', playerId: pid, eventIdx: idx, movements: [{ playerId: pid, from: fromBase, to: toBase, scored: false }] };
+        }
+        // toBase === fromBase: no-op: the UI never offers a runner's own
+        // current base as a target (legalSetTargets excludes it).
+      }
+    } else if (e.type === 'opp_out') {
+      st.outs += 1;
+      st.lastAction = { kind: 'opp_out', eventIdx: idx };
+      flipHalfIfThreeOuts();
+    } else if (e.type === 'opp_run') {
+      st.scoreThem += (p.delta || 0);
+      st.thisHalfRunsThem += (p.delta || 0);
+      const oppInning = p.inning || st.inning;
+      st.runsByInning.them[oppInning] = (st.runsByInning.them[oppInning] || 0) + (p.delta || 0);
+      st.lastAction = { kind: 'opp_run', eventIdx: idx };
+    } else if (e.type === 'adjust') {
+      // Score-bug direct correction -- the app never blocks on inconsistency.
+      // Setting outs carries the same 3-out consequence as reaching it any
+      // other way (e.g. the defense screen's mercy-rule "end half-inning
+      // now" action adjusts outs to 3 rather than needing a separate code path).
+      if (p.field === 'outs') { st.outs = p.value; flipHalfIfThreeOuts(); }
+      else if (p.field === 'score_us') st.scoreUs = p.value;
+      else if (p.field === 'score_them') st.scoreThem = p.value;
+      else if (p.field === 'inning') st.inning = p.value;
+      // 'half' (2026-07-12, S1.6): the adjust sheet's inning stepper walks
+      // both inning AND half (▲3 -> ▼3 -> ▲4, mockups/portal-screens.html
+      // screen 8) -- not in 05-Scoring-Architecture.md's original field
+      // enum (outs/score_us/score_them/inning only); added as a 5th field
+      // on the same event type, same "one adjust event per changed field"
+      // draft-commit convention as everything else on this sheet. Flagged
+      // for that doc's amendment.
+      else if (p.field === 'half') st.half = p.value;
+      st.lastAction = { kind: 'adjust', field: p.field, eventIdx: idx };
+    } else if (e.type === 'player_add') {
+      st.rosterOverlay.push({ id: p.playerId, name: p.name, status: p.status || 'sub', defaultClip: p.defaultClip });
+    } else if (e.type === 'game_end') {
+      st.gameEnded = true;
+      st.finalUs = p.final_us; st.finalThem = p.final_them;
+    }
+    // 'amend'/'undo' are meta-events already consumed in the passes above
+    // and produce no state transition of their own.
+  });
+
+  const _prevPa = mostRecentPaRecord();
+  st.previousKickerPlayerId = _prevPa ? _prevPa.playerId : null;
+  // Runners whose runs were credited in the half the replay ended in --
+  // the population the scored-runner correction sheet (home-plate tap)
+  // offers. Runs from finished halves are deliberately excluded: the
+  // diamond cleared, the moment passed.
+  st.scoredThisHalf = st.runsLog
+    .filter(en => en.inning === st.inning && en.half === st.half)
+    .map(en => en.playerId);
+  return st;
+}
+
+// Season/per-game batting stats from a derived state's paLog + runsLog.
+// Honest denominators (architecture doc): `ab` excludes MISSED, `pa`
+// doesn't; SKIP is excluded from both because it was never pushed to
+// paLog at all. Kept separate from deriveState() so S3's season rollups
+// can call it per-game or across a whole replayed multi-game history.
+function computeStats(st) {
+  const stats = {};
+  function ensure(id) {
+    if (!stats[id]) stats[id] = { pa: 0, ab: 0, h: 0, r: 0, rbi: 0, inferredRbi: 0 };
+    return stats[id];
+  }
+  st.paLog.forEach(rec => {
+    const s = ensure(rec.playerId);
+    s.pa += 1;
+    if (rec.result !== 'MISSED') {
+      s.ab += 1;
+      if (HIT_BASES[rec.result]) s.h += 1;
+    }
+    s.rbi += rec.rbi;
+    s.inferredRbi += rec.inferredRbi;
+  });
+  st.runsLog.forEach(en => ensure(en.playerId).r += 1);
+  return stats;
+}
+/* __SCORING_END__ */
+
 /* ============================================================
    App state
    ============================================================ */
@@ -360,6 +1694,22 @@ const allIds = DATA.players.map(p => p.id);
 let order = loadJSON('order', []).filter(id => playersById[id]); // drop any stale/unknown ids
 let pointerId = resolvePointer(order, loadJSON('pointer', null));
 let lastGameOrder = loadJSON('lastGameOrder', null);
+
+/* __SCORING_START__ */
+// Scoring runtime state -- dormant (empty array, null derived state) unless
+// scoring.enabled AND a game_start event exists with no game_end after it.
+// The classic order/pointerId above are left completely untouched by any
+// scoring code: when no game is live, Next Up is today's app, unchanged
+// (architecture doc "Degradation ladder").
+let scoringEvents = (DATA.scoring && DATA.scoring.enabled) ? loadScoringEvents() : [];
+let scoringState = (DATA.scoring && DATA.scoring.enabled) ? deriveState(scoringEvents) : null;
+// Tab wears its game-era name only in scoring builds (2026-07-11, Jason):
+// this whole block strips out of walk-on-only builds, which keep "Next Up".
+if (DATA.scoring && DATA.scoring.enabled) {
+  const tabEl = document.getElementById('tabLineup');
+  if (tabEl) tabEl.textContent = 'Scoring';
+}
+/* __SCORING_END__ */
 
 const hasSavedOrder = order.length > 0;
 // Reorder mode moved under the LINEUP tab (2026-07-07, Jason's game-1
@@ -372,6 +1722,17 @@ let state = {
   activeTab: 'lineup',
   editing: !hasSavedOrder, // first-launch routing: no saved order -> Next Up opens in the order editor
 };
+/* __SCORING_START__ */
+// Bug fix (Jason, live feedback, 2026-07-07 -- "mercy notice seems to have
+// broken, it's not appearing anymore"): `editing` above is keyed off the
+// CLASSIC order/lineup, which is empty for any session that never used the
+// classic editor (e.g. every fresh scoring-only test). That left `editing`
+// true at boot, and the render() dispatch checked it BEFORE isScoringLive()
+// -- so a live game silently booted into the classic reorder editor
+// instead of the game screen, with nothing wrong visibly signaled. A live
+// game always wins at boot, regardless of classic lineup state.
+if (isScoringLive()) state.editing = false;
+/* __SCORING_END__ */
 
 function persistOrder() { saveJSON('order', order); }
 function persistPointer() { saveJSON('pointer', pointerId); }
@@ -415,6 +1776,13 @@ function rebuildAudioContext(reason) {
 }
 createAudioContext();
 const buffers = {}; // playerId -> AudioBuffer (survive context rebuilds)
+// defaultClips decode into their own id-keyed map (S1.6): these are shared
+// hype clips a player_add sub can pick as a walk-up song, not tied to any
+// one playerId the way `buffers` is -- overlayBufferFor (below) is the
+// indirection that maps an overlay sub's chosen defaultClip id to one of
+// these. Declared unconditionally (defaultClips is manifest-general, not
+// scoring-gated -- see build.py) so this stays outside the scoring markers.
+const defaultClipBuffers = {}; // defaultClip id -> AudioBuffer
 const unavailable = new Set(); // playerId -> decode failed
 let currentSource = null;
 let currentGain = null;
@@ -442,6 +1810,13 @@ let currentDuration = null;
 // caption or a playing grid tile), or leaves it null if none is.
 let tickInterval = null;
 let liveCountdownUpdate = null;
+// Scoring auto-play's pending countdown (S1.3 live feedback, 2026-07-07):
+// {batterId, fireAtMs, timeoutHandle, scheduledEventsLength} while a result
+// tap's auto-play is armed and waiting, else null. Declared here (outside
+// the scoring markers) so render()'s shared tick-interval gating below can
+// reference it unconditionally -- it simply never becomes non-null when
+// scoring is stripped, since the only code that sets it is scoring-only.
+let scoringAutoPlayPending = null;
 // Double-tap protection: an excited operator's double-tap would otherwise
 // read as play + instant tap-to-stop -- song plays for a beat, lineup
 // advances past the kicker. Taps-to-stop inside this window are ignored;
@@ -468,6 +1843,33 @@ async function decodeAll() {
       unavailable.add(p.id);
     }
   }));
+  // defaultClips (S1.6 "+new" song picker) -- decoded the same way, keyed
+  // by their own id rather than a playerId. Empty array is a harmless no-op
+  // (Promise.all([]) resolves immediately), so this costs nothing on a
+  // manifest that hasn't added any yet.
+  await Promise.all((DATA.defaultClips || []).map(async c => {
+    try {
+      const arrBuf = b64ToArrayBuffer(c.data);
+      defaultClipBuffers[c.id] = await ctx.decodeAudioData(arrBuf);
+    } catch (e) {
+      console.error('Failed to decode defaultClip', c.id, e);
+    }
+  }));
+}
+
+// Safe wrapper (same pattern as scoringEditorActive): resolves an overlay
+// player's chosen defaultClip to a decoded buffer. playClip (below) is
+// shared/unmarked code, so this must stay callable in a stripped build --
+// it just always returns null there, since no player_add event can exist
+// without the scoring event log to hold it.
+function overlayBufferFor(playerId) {
+  /* __SCORING_START__ */
+  if (scoringState && scoringState.rosterOverlay) {
+    const ov = scoringState.rosterOverlay.find(p => p.id === playerId);
+    if (ov && ov.defaultClip && defaultClipBuffers[ov.defaultClip]) return defaultClipBuffers[ov.defaultClip];
+  }
+  /* __SCORING_END__ */
+  return null;
 }
 
 // If `source` was the lineup clip we're waiting on, advance the lineup
@@ -582,7 +1984,11 @@ async function playClip(playerId, opts) {
     }
   }
   stopCurrent(false, { advanceIfPending: false });
-  const buffer = buffers[playerId];
+  // Overlay players (mid-game player_add subs) have no entry in `buffers`
+  // -- their audio is one of the shared defaultClips, mapped through their
+  // chosen defaultClip id (S1.6; previously a known no-op gap, see
+  // _ai/handoff.md round 6).
+  const buffer = buffers[playerId] || overlayBufferFor(playerId);
   if (!buffer) return;
   const source = ctx.createBufferSource();
   source.buffer = buffer;
@@ -768,6 +2174,1989 @@ function tickCountdown() {
   if (liveCountdownUpdate) liveCountdownUpdate();
 }
 
+/* __SCORING_START__ */
+/* ============================================================
+   Scoring: game-screen rendering (06-Scoring-Specs.md S1 items 3-4:
+   offense + defense). Takes over the Next Up tab whenever a live game
+   exists -- scoring.enabled AND a game_start with no game_end after it
+   (see isScoringLive() below). Reuses playClip/stopCurrent unchanged: a
+   scoring batter's clip plays exactly like a Grid override (keyed off
+   playingId, no pendingLineupSource involvement) because advancement here
+   is driven by PA events at result-tap time, never by clip-end -- so the
+   classic deferred-advance machinery doesn't apply and isn't touched.
+   ============================================================ */
+const RESULT_TAP_GRACE_MS = 400; // mirrors STOP_TAP_GRACE_MS's rationale, scoped to the result pad
+let lastResultTapMs = 0;
+let scoringClipFiredForBatter = null; // playerId whose clip has played at least once this turn
+
+// ---- S1.5: correction states ----
+// UI-only overlay state, never persisted -- what's actually recorded is
+// always just another appended event (06-Scoring-Specs.md S1 item 5).
+// Shapes:
+//   {mode:'runner', playerId}                                  -- mockup 3
+//   {mode:'fixLast', targetId, forPlayerId, currentResult, viaRedirect} -- mockup 4
+//   {mode:'undoLast', targetId, label}  -- not in the mockups: the chip's
+//     "tap to fix or undo" promise covers every event kind (architecture
+//     doc), but only a `pa` has a "result" to re-target a pad at, so
+//     non-PA last actions (a runner correction, opp out/run, a score-bug
+//     adjust) get a minimal undo-only confirm instead of the full fix-last
+//     screen. Deliberate, documented extension, not a mockup gap.
+// Cleared defensively in render() whenever the live offense screen isn't
+// what's about to be shown, so a stale sheet can never survive a tab
+// switch, a half-flip, or a fresh game.
+let scoringCorrection = null;
+
+function closeScoringCorrection() { scoringCorrection = null; render(); }
+
+// Any correction that appends an event is an operator stepping in mid-flow
+// -- cancel rather than risk a stale autoplay timer firing the wrong clip
+// (e.g. a runner-out correction that happens to be the 3rd out, flipping
+// the half while a next-batter countdown was still running). The operator
+// can always tap NOW UP manually afterward; that's cheaper than a wrong fire.
+function cancelPendingAutoplay() {
+  if (scoringAutoPlayPending) { clearTimeout(scoringAutoPlayPending.timeoutHandle); scoringAutoPlayPending = null; }
+}
+
+// Backgrounding cancels a pending auto-play (2026-07-08 audit): iOS
+// freezes the timer while hidden and fires it on return -- music starting
+// unexpectedly, outside any gesture, possibly against a wedged context.
+// Invariant 4 treats leaving the foreground as an explicit stop; the armed
+// countdown is part of that. The operator taps NOW UP manually on return.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') cancelPendingAutoplay();
+});
+
+// Previous-kicker redirect (Jason's rule, 05-Scoring-Architecture.md
+// §Assumption engine): tapping the runner whose base placement came from
+// the most recent PA is a re-score of their at-bat, not an advance.
+function openRunnerCorrection(playerId) {
+  if (playerId === scoringState.previousKickerPlayerId) {
+    openFixLastForMostRecentPa(true);
+    return;
+  }
+  scoringCorrection = { mode: 'runner', playerId: playerId };
+  render();
+}
+
+// `lastCorrection` ({targetId, label}) rides along when the chip was
+// tapped while the newest event is a runner correction: the sheet shows a
+// dashed "undo last fix" escape hatch for it (round 2, 2026-07-08). This
+// is the ONLY route back from a mistaken OUT correction -- an out runner
+// is neither on the diamond nor at home, so no correction-on-correction
+// surface can reach them; without this line a fat-fingered OUT would be
+// permanent.
+function openFixLastForMostRecentPa(viaRedirect, lastCorrection) {
+  const paLog = scoringState.paLog;
+  const rec = paLog.length ? paLog[paLog.length - 1] : null;
+  if (!rec) return;
+  scoringCorrection = { mode: 'fixLast', targetId: rec.id, forPlayerId: rec.playerId, currentResult: rec.result, viaRedirect: !!viaRedirect, lastCorrection: lastCorrection || null };
+  render();
+}
+
+// Chip tap (round 2, Jason 2026-07-08): the chip is the AT-BAT's surface
+// -- it opens fix-last for the most recent PA whether the last event was
+// that PA itself or a runner correction made after it (a mistaken
+// correction is fixed by another correction on the diamond, not by
+// undoing from here -- the absolute-set model makes correction-on-
+// correction safe). Non-PA, non-runner events (adjust, opp) still get the
+// minimal undo confirm, since there's no at-bat to re-target.
+function openLastActionCorrection() {
+  const la = scoringState.lastAction;
+  if (!la) return;
+  if (RUNNER_CORRECTION_KINDS[la.kind]) {
+    const corrEvt = scoringEvents[la.eventIdx];
+    openFixLastForMostRecentPa(false, corrEvt ? { targetId: corrEvt.id, label: buildLastActionRecap(la) } : null);
+    return;
+  }
+  const evt = scoringEvents[la.eventIdx];
+  if (!evt) return;
+  if (la.kind === 'pa') {
+    scoringCorrection = { mode: 'fixLast', targetId: evt.id, forPlayerId: la.playerId, currentResult: la.result, viaRedirect: false };
+  } else {
+    scoringCorrection = { mode: 'undoLast', targetId: evt.id, label: buildLastActionRecap(la) };
+  }
+  render();
+}
+
+function applyRunnerOut(playerId) {
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out' });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+// ---- Scored-runner correction (2026-07-08 session; round 3 semantics) ----
+// The "auto-scored by the assumption engine, but reality disagreed" case
+// Jason flagged: runner on 2nd, kicker doubles, engine scores them -- but
+// they actually held at 3rd (or were out at home). They're not on the
+// diamond anymore, so HOME PLATE is their tap target instead. Round 3
+// (Jason, on-device): scorers can only be corrected in the REVERSE order
+// they crossed the plate, one at a time -- so home always opens the MOST
+// RECENT scorer of the half (no picker; walking one back exposes the
+// next), and the pass-blocking rules then naturally confine each
+// walk-back to bases ahead of anyone already re-placed. And when that
+// most recent scorer is the last at-bat's own kicker (the HR case),
+// fixing them IS re-scoring that at-bat -- route to fix-last, exactly
+// like the previous-kicker redirect on the bases (round 3, from Jason's
+// "Charlie walked back to 2nd but the chip still said Homered").
+function openScoredCorrection() {
+  const runsLog = scoringState.runsLog;
+  let last = null;
+  for (let i = runsLog.length - 1; i >= 0; i--) {
+    const en = runsLog[i];
+    if (en.inning === scoringState.inning && en.half === scoringState.half) { last = en; break; }
+  }
+  if (!last) return;
+  const lastRec = scoringState.paLog.length ? scoringState.paLog[scoringState.paLog.length - 1] : null;
+  if (lastRec && last.record === lastRec && last.playerId === lastRec.playerId) {
+    openFixLastForMostRecentPa(true);
+    return;
+  }
+  scoringCorrection = { mode: 'scoredRunner', playerId: last.playerId };
+  render();
+}
+function applyScoredRunnerReturn(playerId, to) {
+  cancelPendingAutoplay();
+  // Same `set` event as any other placement -- replay's un-score
+  // enforcement (deriveState) reverses the same-half run and places them.
+  scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'set', to: to });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+function applyScoredRunnerOut(playerId) {
+  cancelPendingAutoplay();
+  // `scored: true` is the explicit gate that lets replay reverse the run
+  // and record the out -- a plain runner-out for an off-base player stays
+  // a stale no-op (see the deriveState guard).
+  scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out', scored: true });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+function applyRunnerSet(playerId, to) {
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'set', to: to });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+function applyFixLastAmend(newResult) {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'fixLast') return;
+  if (newResult === c.currentResult) { scoringCorrection = null; render(); return; } // no real change -- just close
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'amend', { target_event_id: c.targetId, result: newResult });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+// Full pre-tap state restoration: tombstoning the PA event means replay
+// skips it entirely, including the lineup-pointer advance it caused -- the
+// pointer lands back on the batter being fixed with no special-case code.
+function applyFixLastUndo() {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'fixLast') return;
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: c.targetId });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  scoringClipFiredForBatter = null; // pointer reverted -- fresh turn for whoever's up now
+  render();
+}
+
+// The rundown case (architecture doc): the kicker legitimately reached,
+// then was out on the bases -- hit stays in stats, out increments.
+function applyFixLastHitStands() {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'fixLast') return;
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'runner_out_hit_stands', { playerId: c.forPlayerId });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+// Tombstones the runner correction the fix-last sheet was opened over
+// (c.lastCorrection) -- NOT the PA itself.
+function applyFixLastUndoCorrection() {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'fixLast' || !c.lastCorrection) return;
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: c.lastCorrection.targetId });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+function applyUndoLast() {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'undoLast') return;
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: c.targetId });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  render();
+}
+
+function isScoringLive() {
+  return !!(DATA.scoring && DATA.scoring.enabled && scoringState && scoringState.gameStarted && !scoringState.gameEnded);
+}
+
+// Team shorthand for the score bug / scorecard. Manifest `teamShort` wins
+// ("PICKLES" -- Jason 2026-07-11, replacing the initials-derived "PPP"
+// across the board); the initials derivation stays as the fallback so a
+// manifest without the field still gets something sane.
+function teamAbbrev() {
+  if (DATA.teamShort) return DATA.teamShort;
+  const cleaned = (DATA.team || '').replace(/[^A-Za-z ]/g, ' ');
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  return words.map(w => w[0].toUpperCase()).join('') || '?';
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// Redesigned bigger/bolder per Jason's live feedback (2026-07-07): score and
+// outs are the numbers a scorer references at a glance, and the original
+// mockup-matched 12px single row under-served that. Two-row layout: small
+// inning/half context on top, big outs + score on the bottom -- a
+// deliberate departure from mockups/scoring-screens.html's exact sizing,
+// done live at Jason's direction (mockup stays normative for the rest).
+function renderScoreBug() {
+  const isUs = scoringState.half === 'us';
+  const mainKids = [];
+  // Verb ("PPP trails") stacked above the score, smaller + dark moss, so
+  // the actual score total stays the visual focal point and reads white
+  // (Jason, live feedback, round 5 -- round 4 had made the whole line
+  // moss, which buried the score itself).
+  mainKids.push(h('div', { class: 'score-stack' }, [
+    // Tied is symmetric -- neither team "owns" it, so it just reads
+    // "TIED" on its own rather than "PPP tied" (Jason, live feedback,
+    // 2026-07-07).
+    h('div', { class: 'score-verb', text: scoringState.scoreUs === scoringState.scoreThem ? 'tied' : (teamAbbrev() + ' ' + scoreBugVerb()) }),
+    h('div', { class: 'score-total-big', text: scoringState.scoreUs + ' – ' + scoringState.scoreThem }),
+  ]));
+  // Round 6 (Jason, live feedback, 2026-07-07): outs are back in the score
+  // bug, but ONLY on the offense screen -- defense keeps its outs dots on
+  // the +OUT button and does not repeat them here. Sits BELOW the score
+  // stack now (was beside it in round 5), both centered.
+  if (isUs) {
+    const filled = Math.max(0, Math.min(3, scoringState.outs));
+    mainKids.push(h('div', { class: 'outs-block' }, [
+      h('div', { class: 'outs-big' }, [
+        h('span', { class: 'outs-dot', text: '●'.repeat(filled) }),
+        h('span', { class: 'outs-dot empty', text: '●'.repeat(3 - filled) }),
+      ]),
+      h('div', { class: 'outs-label-big', text: 'outs' }),
+    ]));
+  }
+  // S1.6: ONE tap anywhere on the score bug opens the adjust sheet (mockup
+  // screen 8 note -- per-figure tap targets inside the dense bug would be
+  // fiddly at the park). Offense only, and only when nothing else is
+  // already open -- see openAdjustSheet's own guards. The box-score chip
+  // is its own nested tap target, so its handler stops propagation rather
+  // than also triggering the adjust sheet underneath it.
+  const bugAttrs = { class: 'score-bug' };
+  if (isUs && !scoringCorrection && !scoringBoxScoreOpen) bugAttrs.onclick = openAdjustSheet;
+  return h('div', bugAttrs, [
+    h('div', { class: 'score-bug-top' }, [
+      h('span', { text: (isUs ? '▲ ' : '▼ ') + ordinal(scoringState.inning) + ' – ' }),
+      h('span', { class: 'dim-label', text: isUs ? 'kicking' : 'fielding' }),
+    ]),
+    h('button', { class: 'boxscore-chip' + (scoringBoxScoreOpen ? ' active' : ''), text: '▦ box score', onclick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); toggleBoxScore(); } }),
+    h('div', { class: 'score-bug-main' }, mainKids),
+  ]);
+}
+
+// "leads"/"trails"/"tied" -- the verb half of the score-bug's team line
+// (Jason, live feedback, 2026-07-07); the totals now render separately,
+// underneath, in scoreTotalBig.
+function scoreBugVerb() {
+  const us = scoringState.scoreUs, them = scoringState.scoreThem;
+  return us > them ? 'leads' : us < them ? 'trails' : 'tied';
+}
+
+// Diamond bases + occupant initials. `opts`:
+//  - tappable: occupied bases become buttons that open the runner
+//    correction sheet (S1.5, openRunnerCorrection) -- false while a sheet
+//    is already open (mockup 4's dimmed diamond is informational only) or
+//    scoring isn't live.
+//  - selectedId: the tapped runner (runner-correction mode) -- gets the
+//    white ring; every other occupied base dims to 40%, UNLESS it's also
+//    a legal target (see below), which takes visual priority.
+//  - legalTargets / onTapTarget: round 7 (Jason, live feedback) -- tap a
+//    base directly to move the selected runner there (legalSetTargets),
+//    replacing the old text list of +N buttons. Every base number in
+//    legalTargets (1/2/3, plus 4 for home) renders as a dashed-pickle
+//    tappable target regardless of whether it's currently empty (backward
+//    targets) or occupied by another runner (forward targets use push
+//    semantics -- see applyRunnerSet -- so landing on an occupied base is
+//    exactly the "K scored" cascade case, just discovered after the tap
+//    now instead of previewed before it).
+function renderDiamond(opts) {
+  opts = opts || {};
+  const r = scoringState.runners;
+  const legalTargets = opts.legalTargets || [];
+  const wrap = h('div', { class: 'diamond-wrap' });
+  [
+    ['pos-2nd', 2],
+    ['pos-1st', 1],
+    ['pos-3rd', 3],
+  ].forEach(([posClass, baseNum]) => {
+    const occupantId = runnerAtBase(r, baseNum);
+    const isSelected = !!(opts.selectedId && occupantId === opts.selectedId);
+    const isLegalTarget = legalTargets.indexOf(baseNum) !== -1;
+    const isDimmed = !!(opts.selectedId && occupantId && occupantId !== opts.selectedId && !isLegalTarget);
+    const cls = 'diamond-base ' + posClass
+      + (occupantId ? ' occupied' : '')
+      + (isSelected ? ' selected' : '')
+      + (isDimmed ? ' dimmed' : '')
+      + (isLegalTarget ? ' legal-target' : '');
+    let onTap = null;
+    if (opts.tappable && occupantId) onTap = () => openRunnerCorrection(occupantId);
+    else if (isLegalTarget && opts.onTapTarget) onTap = () => opts.onTapTarget(baseNum);
+    const attrs = { class: cls };
+    if (onTap) attrs.onclick = onTap;
+    wrap.appendChild(h(onTap ? 'button' : 'div', attrs));
+    if (occupantId) {
+      wrap.appendChild(h('div', { class: 'diamond-label ' + posClass + (isDimmed ? ' dimmed' : ''), text: runnerCode(occupantId) }));
+    }
+  });
+  // Home plate: a forward-set target when 4 is legal; otherwise, on the
+  // live screen, the tap target for correcting an already-scored runner
+  // (2026-07-08 -- see openScoredCorrection). opts.homeSelected white-rings
+  // it while the scored-runner sheet is open (the runner being corrected
+  // conceptually stands at home).
+  const homeIsTarget = legalTargets.indexOf(4) !== -1;
+  const homeScoredTappable = !!(opts.tappable && scoringState.scoredThisHalf && scoringState.scoredThisHalf.length > 0);
+  let homeOnTap = null;
+  if (homeIsTarget && opts.onTapTarget) homeOnTap = () => opts.onTapTarget(4);
+  else if (homeScoredTappable) homeOnTap = openScoredCorrection;
+  const homeAttrs = {
+    class: 'diamond-base pos-home' + (homeIsTarget ? ' legal-target' : '')
+      + (homeScoredTappable ? ' has-scored' : '') + (opts.homeSelected ? ' selected' : ''),
+  };
+  if (homeOnTap) homeAttrs.onclick = homeOnTap;
+  wrap.appendChild(h(homeOnTap ? 'button' : 'div', homeAttrs));
+  return wrap;
+}
+
+// Name resolution for scoring surfaces (S1.6 prep, 2026-07-08): manifest
+// players first, then the roster overlay (players added mid-game via
+// `player_add` events -- subs who aren't in the built artifact). Falls
+// back to the raw id only for genuinely unknown players.
+function playerNameOf(id) {
+  if (!id) return '';
+  if (playersById[id]) return playersById[id].name;
+  if (scoringState && scoringState.rosterOverlay) {
+    const ov = scoringState.rosterOverlay.find(p => p.id === id);
+    if (ov) return ov.name;
+  }
+  return id;
+}
+
+// Unique 2-letter runner codes for the diamond labels (2026-07-08, Jason:
+// three same-initial players on base at once -- Marcel/Mark/Ming are all
+// "M" -- was unreadable at a glance). First letter + the earliest later
+// letter of the name that yields a code nobody else has taken, in roster
+// order: MARCEL->MA, MARK->MR, MEGAN->ME, MIKE->MI, MING->MN. Fully
+// deterministic from the roster, so no manifest field and no build.py
+// change; a duplicate-name roster degrades to duplicate codes rather than
+// failing (roster hygiene is Jason's call, not the app's).
+const runnerCodeById = {};
+const _runnerCodesTaken = {};
+function assignRunnerCode(id, name) {
+  const letters = (name || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const first = letters[0] || '?';
+  let code = null;
+  for (let i = 1; i < letters.length; i++) {
+    if (!_runnerCodesTaken[first + letters[i]]) { code = first + letters[i]; break; }
+  }
+  if (!code) code = (letters.slice(0, 2) || '??');
+  _runnerCodesTaken[code] = true;
+  runnerCodeById[id] = code;
+  return code;
+}
+DATA.players.forEach(p => assignRunnerCode(p.id, p.name));
+// Overlay players (mid-game `player_add` subs) get codes lazily, on first
+// sighting, from the same collision-aware pool -- so a sub named Mia
+// still can't collide with Ming/Mike's codes (S1.6 prep, 2026-07-08).
+function runnerCode(id) {
+  if (runnerCodeById[id]) return runnerCodeById[id];
+  const name = playerNameOf(id);
+  if (name && name !== id) return assignRunnerCode(id, name);
+  return (String(id).slice(0, 2).toUpperCase() || '?');
+}
+function baseLabel(n) {
+  if (n === null || n === undefined) return 'home';
+  return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : String(n);
+}
+
+// Plain-English result names for the recap line -- the result PAD keeps
+// the shorthand codes (1B/2B/3B/... are faster to tap and standard
+// scorekeeping shorthand), but the recap a scorer glances at afterward
+// reads better in full words (Jason, live feedback, 2026-07-07).
+const RESULT_PLAIN_TEXT = {
+  '1B': 'Singled', '2B': 'Doubled', '3B': 'Tripled', 'HR': 'Homered',
+  'FLY': 'Flied Out', 'GND': 'Grounded Out', 'K': 'Struck Out',
+  'MISSED': 'Unknown Result', 'SKIP': "Didn't Kick",
+};
+
+// Structured recap of the last event -- {name, rest, details[], rbiText}
+// rather than one inline string. `name` is the headline's subject
+// (moss-colored, per Jason's live feedback -- ONLY the headline name, not
+// the detail list's names); `rest` is everything after it ("– Doubled").
+// RBI count no longer lives in the headline (Jason, live feedback,
+// 2026-07-07: it was wrapping onto its own line next to the at-bat
+// summary) -- it's now the last line of the movement `details` list,
+// via the separate `rbiText` field, rendered in white to stand out from
+// the muted movement lines.
+function buildLastActionRecap(lastAction) {
+  if (!lastAction) return null;
+  const name = playerNameOf(lastAction.playerId);
+  if (lastAction.kind === 'pa') {
+    const plain = RESULT_PLAIN_TEXT[lastAction.result] || lastAction.result;
+    const rbi = lastAction.rbi || 0;
+    const rest = ' – ' + plain;
+    const rbiText = rbi > 0 ? (rbi + ' RBI' + (rbi > 1 ? 's' : '')) : null;
+    const moves = lastAction.movements || [];
+    const details = [];
+    moves.filter(m => m.scored && m.playerId !== lastAction.playerId).forEach(m => details.push(playerNameOf(m.playerId) + ' scored'));
+    moves.filter(m => !m.scored && m.playerId !== lastAction.playerId).forEach(m => details.push(playerNameOf(m.playerId) + ' ' + baseLabel(m.from) + '→' + baseLabel(m.to)));
+    return { name: name, rest: rest, details: details, rbiText: rbiText };
+  }
+  if (lastAction.kind === 'runner_out') return { name: name, rest: ' – out on the bases', details: [] };
+  if (lastAction.kind === 'runner_out_at_home') return { name: name, rest: ' – out at home, run removed', details: [] };
+  if (lastAction.kind === 'runner_return') {
+    const mine = (lastAction.movements || []).find(m => m.playerId === lastAction.playerId);
+    return { name: name, rest: ' – back to ' + baseLabel(mine ? mine.to : null) + ', run removed', details: [] };
+  }
+  if (lastAction.kind === 'runner_advance') {
+    const moves = lastAction.movements || [];
+    const mine = moves.find(m => m.playerId === lastAction.playerId);
+    const rest = mine && mine.scored ? ' – scored' : mine ? (' – to ' + baseLabel(mine.to)) : ' – advanced';
+    const details = moves.filter(m => m.scored && m.playerId !== lastAction.playerId).map(m => playerNameOf(m.playerId) + ' scored');
+    return { name: name, rest: rest, details: details };
+  }
+  if (lastAction.kind === 'opp_out') return { name: null, rest: 'Opponent – out', details: [] };
+  if (lastAction.kind === 'opp_run') return { name: null, rest: 'Opponent – run', details: [] };
+  if (lastAction.kind === 'adjust') return { name: null, rest: 'Adjusted ' + lastAction.field, details: [] };
+  return null;
+}
+
+// Last-at-bat assessment chip (round 2, Jason's on-device feedback
+// 2026-07-08 -- replacing round 1's "PA + ✎ correction lines" merge): the
+// chip shows the NEWLY CALCULATED assessment of the most recent at-bat,
+// with any manual corrections already folded in as if they'd been scored
+// that way live -- "Megan – Doubled / Ming 2nd→3rd", not a ledger of
+// edits. Built by diffing the record's pre-PA board snapshot
+// (runnersBefore) against the CURRENT board: moved runners get a line,
+// runs credited to this PA (incl. inferred correction credits -- matched
+// by record identity in runsLog) read "scored", a runner who vanished
+// without scoring reads "out on the bases", and holds stay silent. RBI is
+// the record's live count, so un-scoring drops the line automatically.
+const RUNNER_CORRECTION_KINDS = { runner_advance: 1, runner_out: 1, runner_return: 1, runner_out_at_home: 1 };
+function buildLastPaAssessment() {
+  const paLog = scoringState.paLog;
+  const rec = paLog.length ? paLog[paLog.length - 1] : null;
+  if (!rec) return null;
+  const before = rec.runnersBefore || {};
+  const batter = rec.playerId;
+  const scoredByThisPa = {};
+  const details = [];
+  // Line order (Jason, 2026-07-08 round 4): runs first, in the order they
+  // scored (runsLog order); then basepath movements in ascending from-base
+  // order (1st→2nd before 2nd→3rd); then outs on the bases last.
+  scoringState.runsLog.forEach(en => {
+    if (en.record !== rec) return;
+    scoredByThisPa[en.playerId] = true;
+    // The kicker's own run only gets a line when it isn't the headline
+    // ("Homered" already says it; a corrected came-around does not).
+    if (en.playerId === batter && rec.result === 'HR') return;
+    details.push(playerNameOf(en.playerId) + ' scored');
+  });
+  Object.keys(before)
+    .filter(pid => !scoredByThisPa[pid] && scoringState.runners[pid] !== undefined && scoringState.runners[pid] !== before[pid])
+    .sort((a, b) => before[a] - before[b])
+    .forEach(pid => details.push(playerNameOf(pid) + ' ' + baseLabel(before[pid]) + '→' + baseLabel(scoringState.runners[pid])));
+  Object.keys(before)
+    .filter(pid => !scoredByThisPa[pid] && scoringState.runners[pid] === undefined)
+    .sort((a, b) => before[a] - before[b])
+    .forEach(pid => details.push(playerNameOf(pid) + ' out on the bases'));
+  // The kicker reached-then-erased case (hit stands, out on the bases).
+  if (HIT_BASES[rec.result] && rec.result !== 'HR' && !scoredByThisPa[batter] && scoringState.runners[batter] === undefined) {
+    details.push(playerNameOf(batter) + ' out on the bases');
+  }
+  const rbi = rec.rbi || 0;
+  return {
+    name: playerNameOf(batter),
+    rest: ' – ' + (RESULT_PLAIN_TEXT[rec.result] || rec.result),
+    details: details,
+    rbiText: rbi > 0 ? (rbi + ' RBI' + (rbi > 1 ? 's' : '')) : null,
+  };
+}
+
+function buildChipRecap() {
+  const la = scoringState.lastAction;
+  if (!la) return null;
+  // SKIP never joins paLog -- show it standalone so an accidental SKIP is
+  // still visible and fixable from the chip.
+  if (la.kind === 'pa' && la.result === 'SKIP') return buildLastActionRecap(la);
+  if (la.kind === 'pa' || RUNNER_CORRECTION_KINDS[la.kind]) {
+    return buildLastPaAssessment() || buildLastActionRecap(la);
+  }
+  return buildLastActionRecap(la); // adjust / opp events keep the plain recap + undo-only sheet
+}
+
+// Beside the diamond (Jason, live feedback: moved back from a full-width
+// row -- keep it paired with the on-base graphic it explains). Tappable
+// (S1.5): opens the correction surface for the most recent event of any
+// kind (openLastActionCorrection).
+function renderLastActionChip() {
+  const recap = buildChipRecap();
+  if (!recap) return null;
+  const headlineKids = [h('span', { text: '✎ ' })];
+  if (recap.name) headlineKids.push(h('span', { class: 'la-name', text: recap.name }));
+  headlineKids.push(h('span', { text: recap.rest }));
+  const kids = [h('div', { class: 'la-headline' }, headlineKids)];
+  recap.details.forEach(line => kids.push(h('div', { class: 'la-detail', text: line })));
+  if (recap.rbiText) kids.push(h('div', { class: 'la-detail la-detail-rbi', text: recap.rbiText }));
+  kids.push(h('div', { class: 'sub', text: 'tap to fix or undo' }));
+  return h('button', { class: 'last-action-chip', onclick: openLastActionCorrection }, kids);
+}
+
+// The diamond's side column now holds just the last-action chip -- the
+// on-base hint moved to sit under the diamond itself (Jason, live feedback).
+function renderDiamondInfoColumn() {
+  const info = h('div', { class: 'diamond-info' });
+  const chip = renderLastActionChip();
+  if (chip) info.appendChild(chip);
+  return info;
+}
+
+// position:absolute (.diamond-col-caption) -- out of flex flow entirely,
+// so it never affects the diamond's own centering (round 4, Jason, live
+// feedback). Only called where there's real caption text; the correction
+// sheets simply omit it now that it can't perturb anything by being absent.
+function renderDiamondCaptionSlot(text) {
+  return h('div', { class: 'diamond-col-caption', text: text });
+}
+
+function renderOnBaseHint() {
+  const onBaseCount = Object.keys(scoringState.runners).length;
+  const anyScored = !!(scoringState.scoredThisHalf && scoringState.scoredThisHalf.length > 0);
+  // Kept to ONE line by construction (round 2, Jason on-device 2026-07-08:
+  // the two-line version climbed up into the relocated home plate -- the
+  // caption is bottom-anchored in the reference box and only has a single
+  // line of clearance under the plate).
+  // 2026-07-11 (Jason: visual optimization over excess instructions): the
+  // "N on ·" count and the combined "or home" phrasing are gone -- with
+  // runners on, the caption is always the short single line below; the
+  // scored-runner affordance stays discoverable through the plate's moss
+  // fill, and gets the caption to itself only when the bases are empty.
+  let hintText;
+  if (onBaseCount > 0) hintText = 'tap a runner to fix';
+  else if (anyScored) hintText = 'tap home to fix a run';
+  else hintText = 'bases empty';
+  return renderDiamondCaptionSlot(hintText);
+}
+
+// ---- S1.5: correction-sheet rendering ----
+// Round 7 (Jason, live feedback): replaced the old text list of +N
+// buttons -- OUT (plum, "this ends" semantic) plus a short "tap a base"
+// hint; the diamond itself is now the input (legalSetTargets/
+// applyRunnerSet). This is also what let the panel shrink to a fixed
+// height matching the last-action chip (round 3's centering fix) instead
+// of scaling with however many bases happened to be legal.
+function renderRunnerCorrectionSheet(playerId) {
+  const runners = scoringState.runners;
+  const targets = legalSetTargets(runners, playerId);
+  const rows = [
+    h('button', { class: 'correction-out', text: 'OUT', onclick: () => applyRunnerOut(playerId) }),
+    h('div', { class: 'correction-tap-hint', text: 'tap a base to move ' + playerNameOf(playerId) }),
+    h('button', { class: 'correction-cancel', text: '✕ cancel', onclick: closeScoringCorrection }),
+  ];
+  const panel = h('div', { class: 'correction-panel' }, [
+    h('div', { class: 'correction-heading', text: playerNameOf(playerId).toUpperCase() + ' — on ' + baseLabel(runners[playerId]) }),
+  ].concat(rows));
+  // S1.5 round 1 (Jason, live feedback): dropped the transform:scale
+  // "enlarge" -- it doesn't reserve layout space (transform never affects
+  // box-model sizing/flow), so the diamond visually jumped/shifted against
+  // the taller correction panel next to it instead of just looking bigger.
+  // Same physical size as the normal diamond for now; the white-ring
+  // (selected) / dim (uninvolved) / dashed-pickle (legal target) treatment
+  // carries the emphasis.
+  const diamondCol = h('div', { class: 'diamond-col' }, [renderDiamond({
+    selectedId: playerId, tappable: false, legalTargets: targets,
+    onTapTarget: (base) => applyRunnerSet(playerId, base),
+  })]);
+  return h('div', { class: 'diamond-row' }, [diamondCol, panel]);
+}
+
+// Scored-runner sheet (2026-07-08): same layout skeleton as the runner
+// sheet -- OUT-first panel beside the diamond, tap-a-base as the input --
+// but the "runner" is at home, so the white ring sits on home plate and
+// the legal targets are the open bases they can be walked back to.
+function renderScoredRunnerSheet(playerId) {
+  const targets = legalReturnTargets(scoringState.runners);
+  const rows = [
+    h('button', { class: 'correction-out', text: 'OUT at home', onclick: () => applyScoredRunnerOut(playerId) }),
+    h('div', { class: 'correction-tap-hint', text: 'or tap the base ' + playerNameOf(playerId) + ' really reached' }),
+    h('button', { class: 'correction-cancel', text: '✕ cancel', onclick: closeScoringCorrection }),
+  ];
+  const panel = h('div', { class: 'correction-panel' }, [
+    h('div', { class: 'correction-heading', text: playerNameOf(playerId).toUpperCase() + ' — scored' }),
+  ].concat(rows));
+  const diamondCol = h('div', { class: 'diamond-col' }, [renderDiamond({
+    tappable: false, homeSelected: true, legalTargets: targets,
+    onTapTarget: (base) => applyScoredRunnerReturn(playerId, base),
+  })]);
+  return h('div', { class: 'diamond-row' }, [diamondCol, panel]);
+}
+
+// Fix-last's own result pad, minus MISSED/SKIP (mockup 4 doesn't offer
+// them as corrections -- amending "no result" isn't a case that comes up),
+// current logged result pickle-highlighted. Filtered fresh each call
+// (rather than a top-level const) since RESULT_BUTTONS is declared further
+// down the file and script-load-order would otherwise matter.
+function renderFixLastResultPad(currentResult, onSelect) {
+  const pad = h('div', { class: 'result-pad' });
+  RESULT_BUTTONS.filter(b => b.result !== 'MISSED' && b.result !== 'SKIP').forEach(btn => {
+    const isCurrent = btn.result === currentResult;
+    const bases = HIT_BASES[btn.result] || 0; // motif extends to every pad render (2026-07-11)
+    pad.appendChild(h('button', { class: 'result-tile span' + btn.span + (isCurrent ? ' current' : '') + (bases ? ' hit' : ''), onclick: () => onSelect(btn.result) }, [
+      bases ? h('span', { class: 'tile-dia dia-' + bases }) : null,
+      h('span', { class: 'tile-lb', text: btn.label }),
+      btn.sub ? h('div', { class: 'sub', text: btn.sub }) : null,
+    ]));
+  });
+  return pad;
+}
+
+// Mockup 4: no duplicate NOW UP card or live result pad underneath -- this
+// IS the whole offense body while it's open (see renderOffenseBody).
+function renderFixLastSheet() {
+  const c = scoringCorrection;
+  const name = playerNameOf(c.forPlayerId);
+  const plain = (RESULT_PLAIN_TEXT[c.currentResult] || c.currentResult).toLowerCase();
+  const wrap = h('div', {});
+  const diamondCol = h('div', { class: 'diamond-col scoring-dimmed' }, [renderDiamond({ tappable: false })]);
+  // The FIXING chip fills the same slot .last-action-chip occupies on the
+  // normal screen -- reads as "the chip is now in edit mode" (Jason, live
+  // feedback) rather than a separate note-plus-banner pair.
+  const fixingChip = h('div', { class: 'diamond-info fixlast-chip' }, [
+    h('div', { class: 'fixlast-heading', text: 'FIXING: ' + name.toUpperCase() }),
+    h('div', { class: 'fixlast-sub', text: 'logged as ' + plain + ' — tap the correct result' }),
+  ]);
+  wrap.appendChild(h('div', { class: 'diamond-row' }, [diamondCol, fixingChip]));
+  const pad = renderFixLastResultPad(c.currentResult, applyFixLastAmend);
+  pad.appendChild(h('button', { class: 'fixlast-undo', text: '↩ undo — ' + name + ' still at bat', onclick: applyFixLastUndo }));
+  pad.appendChild(h('button', { class: 'fixlast-cancel', text: '✕ cancel', onclick: closeScoringCorrection }));
+  // Rundown exception (architecture doc): only reachable via the
+  // previous-kicker redirect, and only while that batter is still actually
+  // on base -- e.g. a HR already sent them home, so "out on the bases"
+  // wouldn't make sense there.
+  if (c.viaRedirect && scoringState.runners[c.forPlayerId] !== undefined) {
+    pad.appendChild(h('button', { class: 'fixlast-hitstands', text: 'out on the bases — hit stands', onclick: applyFixLastHitStands }));
+  }
+  // Escape hatch for the newest runner correction (see
+  // openFixLastForMostRecentPa) -- same dashed idiom as hit-stands.
+  if (c.lastCorrection) {
+    const lbl = c.lastCorrection.label;
+    const txt = '↩ undo last fix' + (lbl ? (' — ' + (lbl.name || '') + lbl.rest) : '');
+    pad.appendChild(h('button', { class: 'fixlast-hitstands', text: txt, onclick: applyFixLastUndoCorrection }));
+  }
+  wrap.appendChild(pad);
+  // Round 6 (Jason, live feedback): dropped the static "Megan's turn
+  // resumes after the fix" closing line -- it's only true on the UNDO
+  // path (which already says so on its own button: "Megan still at bat").
+  // Amending to a different result does NOT revert the pointer -- whoever
+  // is now up stays up -- so a blanket claim naming the batter being fixed
+  // was actively wrong for the far more common amend case.
+  return wrap;
+}
+
+// Minimal undo-only confirm for any non-`pa` last action (not in the
+// mockups -- see the scoringCorrection shape comment above for why).
+function renderUndoLastSheet() {
+  const c = scoringCorrection;
+  const wrap = h('div', {});
+  const diamondCol = h('div', { class: 'diamond-col scoring-dimmed' }, [renderDiamond({ tappable: false })]);
+  // Bug fix (S1.5 round 3): this used to append renderOnBaseHint() here
+  // directly, which returns a bare .diamond-hint div with no 60%-column
+  // sizing class at all -- it was never given the row's right-column
+  // width the way every other use of this row is. .diamond-note both
+  // fixes that and gives it the shared 132px reference height.
+  const onBaseCount = Object.keys(scoringState.runners).length;
+  const noteText = onBaseCount > 0 ? (onBaseCount + ' on base') : 'bases empty';
+  wrap.appendChild(h('div', { class: 'diamond-row' }, [diamondCol, h('div', { class: 'diamond-note', text: noteText })]));
+  const recap = c.label;
+  const headline = recap ? ((recap.name || '') + recap.rest) : 'last action';
+  wrap.appendChild(h('div', { class: 'undolast-banner' }, [
+    h('div', { class: 'undolast-heading', text: headline }),
+    h('div', { class: 'undolast-actions' }, [
+      h('button', { class: 'undolast-btn', text: '↩ undo', onclick: applyUndoLast }),
+      h('button', { class: 'undolast-btn cancel', text: '✕ cancel', onclick: closeScoringCorrection }),
+    ]),
+  ]));
+  return wrap;
+}
+
+function renderCorrectionSheet() {
+  const c = scoringCorrection;
+  if (!c) return null;
+  if (c.mode === 'runner') return renderRunnerCorrectionSheet(c.playerId);
+  if (c.mode === 'scoredRunner') return renderScoredRunnerSheet(c.playerId);
+  if (c.mode === 'fixLast') return renderFixLastSheet();
+  if (c.mode === 'undoLast') return renderUndoLastSheet();
+  if (c.mode === 'adjust') return renderAdjustSheet();
+  return null;
+}
+
+// The compact NOW UP card: same play/stop primitives as the classic card
+// and the Grid tiles (playClip/stopCurrent/currentRemainingSeconds), just
+// keyed off the scoring lineup's current batter instead of pointerId, and
+// with no pending-lineup-advance bookkeeping -- see the section banner.
+function renderScoringNowUpCard() {
+  const batter = scoringState.lineup[scoringState.lineupPointer];
+  if (!batter) {
+    return h('div', { class: 'diamond-hint', text: 'No lineup set for this game.' });
+  }
+  const name = playerNameOf(batter) || '—'; // overlay-aware (S1.6 prep)
+  const isPlaying = playingId === batter;
+  const pending = (scoringAutoPlayPending && scoringAutoPlayPending.batterId === batter) ? scoringAutoPlayPending : null;
+  const pos = positionLabel(scoringState.lineup, batter);
+  const alreadyFired = scoringClipFiredForBatter === batter;
+  let caption;
+  if (isPlaying) {
+    const remaining = currentRemainingSeconds();
+    caption = (remaining !== null ? formatCountdown(remaining) + ' — ' : '') + 'tap to fade out';
+  } else if (pending) {
+    const remainingS = Math.max(0, Math.ceil((pending.fireAtMs - Date.now()) / 1000));
+    caption = 'plays in ' + remainingS + 's — tap to play now';
+  } else {
+    caption = alreadyFired ? 'tap to replay' : 'tap anywhere to play';
+  }
+  const captionEl = h('div', { class: 'nowup-caption', text: caption });
+  // Own line underneath the playback metadata, not prefixed onto it
+  // (Jason, live feedback, 2026-07-07).
+  const positionEl = pos ? h('div', { class: 'nowup-position', text: pos.position + ' of ' + pos.total }) : null;
+  // Icon slot is always present, at a fixed height, holding EITHER the play
+  // triangle or the stop square -- never both, never neither -- so the
+  // card's total height never jumps between idle/playing (Jason, live
+  // feedback, 2026-07-07: the old inline "▶" glyph vs. block stop-icon
+  // caused visible vertical movement between states).
+  const icon = h('div', { class: 'nowup-icon-slot' }, [
+    isPlaying ? h('div', { class: 'nowup-stop-icon' }) : h('div', { class: 'nowup-play-icon' }),
+  ]);
+  const card = h('button', {
+    class: 'nowup-card game-nowup-card compact' + (isPlaying ? ' playing' : ''),
+    onclick: () => {
+      if (isPlaying) {
+        if (Date.now() - playStartedAtMs < STOP_TAP_GRACE_MS) return; // double-tap guard, same as everywhere else
+        stopCurrent(true);
+      } else {
+        if (pending) { clearTimeout(pending.timeoutHandle); scoringAutoPlayPending = null; } // manual override cancels the wait
+        playClip(batter); // synchronous ctx check/rebuild already lives inside playClip
+        scoringClipFiredForBatter = batter;
+      }
+    },
+  }, [
+    h('div', { class: 'nowup-label', text: 'Now up' }),
+    h('div', { class: 'nowup-name', text: name.toUpperCase() }),
+    icon,
+    captionEl,
+    positionEl,
+  ]);
+  if (isPlaying) {
+    liveCountdownUpdate = () => {
+      const rr = currentRemainingSeconds();
+      if (rr !== null) captionEl.textContent = formatCountdown(rr) + ' — tap to fade out';
+    };
+  } else if (pending) {
+    liveCountdownUpdate = () => {
+      const remS = Math.max(0, Math.ceil((pending.fireAtMs - Date.now()) / 1000));
+      captionEl.textContent = 'plays in ' + remS + 's — tap to play now';
+    };
+  }
+  return card;
+}
+
+const RESULT_BUTTONS = [
+  { result: '1B', label: '1B', span: 3 },
+  { result: '2B', label: '2B', span: 3 },
+  { result: '3B', label: '3B', span: 3 },
+  { result: 'HR', label: 'HR', span: 3 },
+  { result: 'FLY', label: 'FLY', sub: 'out', span: 4 },
+  { result: 'GND', label: 'GROUND', sub: 'out', span: 4 }, // label only (2026-07-11, Jason) -- event code stays GND everywhere
+  { result: 'K', label: 'K', sub: 'strikeout', span: 4 },
+  { result: 'MISSED', label: 'MISSED', sub: 'kicked, unknown result', span: 6, dashed: true },
+  { result: 'SKIP', label: 'SKIP ⏭', sub: "didn't kick", span: 6, dashed: true },
+];
+
+function renderResultPad() {
+  const pad = h('div', { class: 'result-pad' });
+  RESULT_BUTTONS.forEach(btn => {
+    const bases = HIT_BASES[btn.result] || 0; // baseline indicator (2026-07-11)
+    const cls = 'result-tile span' + btn.span + (btn.dashed ? ' dashed' : '') + (bases ? ' hit' : '');
+    pad.appendChild(h('button', { class: cls, onclick: () => logScoringResult(btn.result) }, [
+      bases ? h('span', { class: 'tile-dia dia-' + bases }) : null,
+      h('span', { class: 'tile-lb', text: btn.label }),
+      btn.sub ? h('div', { class: 'sub', text: btn.sub }) : null,
+    ]));
+  });
+  return pad;
+}
+
+// Result tap: append the pa event, re-derive, then arm the next kicker's
+// clip after autoPlayDelayMs. The ctx readiness check/rebuild MUST happen
+// synchronously here, in the gesture -- the actual playClip() call fires
+// later from a setTimeout, which is not a gesture, and a not-yet-unlocked
+// AudioContext can only be unlocked from inside one (invariant 1 family).
+function logScoringResult(result) {
+  const now = Date.now();
+  if (now - lastResultTapMs < RESULT_TAP_GRACE_MS) return; // guard against a fat-fingered double log
+  lastResultTapMs = now;
+  const batter = scoringState.lineup[scoringState.lineupPointer];
+  if (!batter) return;
+  if (ctx.state !== 'running') rebuildAudioContext(ctx.state + ' at scoring result tap');
+  scoringEvents = appendScoringEvent(scoringEvents, 'pa', {
+    playerId: batter, result: result, inning: scoringState.inning, half: scoringState.half,
+  });
+  scoringState = deriveState(scoringEvents);
+  scoringClipFiredForBatter = null; // fresh turn for whoever's up now
+  scheduleScoringAutoPlay();
+  render();
+}
+
+// Arms the next kicker's clip after autoPlayDelayMs -- visibly: the NOW UP
+// card shows a live "plays in Ns" countdown (Jason, live feedback,
+// 2026-07-07) and a tap on the card at any point during the wait cancels
+// the timer and plays immediately instead (manual override, same tap
+// target as "tap to replay").
+function scheduleScoringAutoPlay() {
+  if (scoringAutoPlayPending) { clearTimeout(scoringAutoPlayPending.timeoutHandle); scoringAutoPlayPending = null; }
+  if (scoringState.half !== 'us') return; // this PA was the 3rd out -- nobody's kicking
+  const nextBatter = scoringState.lineup[scoringState.lineupPointer];
+  if (!nextBatter) return;
+  const eventsAtSchedule = scoringEvents.length;
+  const delayMs = DATA.autoPlayDelayMs || 2000; // fallback matches build.py's injected default; build.py always supplies the key
+  const handle = setTimeout(() => {
+    scoringAutoPlayPending = null;
+    // A correction (undo/amend) or another PA landed since scheduling --
+    // this auto-play is stale; skip rather than firing the wrong clip.
+    if (scoringEvents.length !== eventsAtSchedule) return;
+    playClip(nextBatter);
+    scoringClipFiredForBatter = nextBatter;
+    render();
+  }, delayMs);
+  scoringAutoPlayPending = { batterId: nextBatter, fireAtMs: Date.now() + delayMs, timeoutHandle: handle, scheduledEventsLength: eventsAtSchedule };
+}
+
+// +OUT: the entire defensive half is outs + runs, never opponent PAs
+// (architecture doc). Unlike a mid-inning PA-to-PA transition, the 3rd out
+// does NOT auto-play the next half's leadoff batter -- teams need real
+// time to physically swap sides (Jason, live feedback, 2026-07-07); the
+// NOW UP card just returns to its plain idle state, requiring a manual tap
+// once the kicking team is actually back up.
+function logOppOut() {
+  scoringEvents = appendScoringEvent(scoringEvents, 'opp_out', { inning: scoringState.inning });
+  scoringState = deriveState(scoringEvents);
+  scoringClipFiredForBatter = null;
+  render();
+}
+
+function adjustOppRuns(delta) {
+  if (delta < 0 && scoringState.thisHalfRunsThem <= 0) return; // stepper floor, same precedent as the disabled clear button
+  scoringEvents = appendScoringEvent(scoringEvents, 'opp_run', { inning: scoringState.inning, delta: delta });
+  scoringState = deriveState(scoringEvents);
+  render();
+}
+
+function renderOffenseBody() {
+  const wrap = h('div', {});
+  const c = scoringCorrection;
+  // Fix-last / undo-last (S1.5) replace the ENTIRE offense body -- their
+  // own diamond + banner + (for fix-last) the re-targeted result pad, no
+  // duplicate NOW UP card or live result pad underneath (mockup 4 has
+  // neither). The runner sheet, by contrast, keeps the rest of the screen
+  // visible-but-dimmed beneath it (mockup 3).
+  if (c && (c.mode === 'fixLast' || c.mode === 'undoLast' || c.mode === 'adjust')) {
+    wrap.appendChild(renderCorrectionSheet());
+    return wrap;
+  }
+  if (c && (c.mode === 'runner' || c.mode === 'scoredRunner')) {
+    wrap.appendChild(renderCorrectionSheet());
+  } else {
+    // Diamond + on-base hint underneath (left side), last-action chip
+    // beside it (Jason, live feedback, 2026-07-07). Tappable whenever
+    // scoring is live -- S1.5's runner-tap correction sheet.
+    const diamondCol = h('div', { class: 'diamond-col' }, [renderDiamond({ tappable: isScoringLive() }), renderOnBaseHint()]);
+    wrap.appendChild(h('div', { class: 'diamond-row' }, [diamondCol, renderDiamondInfoColumn()]));
+  }
+  // Everything below the diamond row goes visible-but-inert while the
+  // runner sheet is open (mockup 3's dim treatment) via a single
+  // pointer-events:none wrapper, rather than threading a "disabled" flag
+  // through every child renderer.
+  const lower = h('div', { class: c ? 'scoring-dimmed' : '' });
+  lower.appendChild(renderScoringNowUpCard());
+  // Mercy banner, offense side (Jason, live feedback, round 6 -- reverses
+  // the earlier offense-excluded decision below). Sits under the NOW UP
+  // card, same as defense's placement relative to its own outs widget.
+  // Suppressed while a correction sheet is open -- one modal-ish surface
+  // at a time.
+  if (!c) {
+    const offenseMercyBanner = renderMercyBanner();
+    if (offenseMercyBanner) lower.appendChild(offenseMercyBanner);
+  }
+  lower.appendChild(renderResultPad());
+  const batter = scoringState.lineup[scoringState.lineupPointer];
+  const deckIds = onDeckIds(scoringState.lineup, batter, 3);
+  if (deckIds.length > 0) {
+    const names = deckIds.map(id => playerNameOf(id)).join(' · '); // overlay-aware (S1.6 prep)
+    lower.appendChild(h('div', { class: 'scoring-ondeck' }, [
+      h('span', { class: 'scoring-ondeck-label', text: 'ON DECK' }),
+      h('span', { class: 'scoring-ondeck-names', text: names.toUpperCase() }),
+    ]));
+  }
+  wrap.appendChild(lower);
+  wrap.appendChild(h('div', { class: 'runs-this-inning', text: scoringState.thisHalfRunsUs + ' run' + (scoringState.thisHalfRunsUs === 1 ? '' : 's') + ' this inning' }));
+  return wrap;
+}
+
+// 8-run mercy limit per inning (except the final inning) -- Jason, live
+// feedback: this is a CHOICE prompt, not an automatic cutoff (kickball
+// leagues vary on whether to enforce it every time). "End half-inning"
+// reuses the adjust-outs-to-3 path, which now carries the same flip
+// consequence as reaching 3 outs any other way. "Keep playing" just
+// dismisses the banner for the rest of this half (tracked by inning+half
+// so it reappears next time it's relevant).
+//
+// Round 6 (Jason, live feedback, 2026-07-07): applies to EITHER half now,
+// not just defense -- originally offense was excluded on the theory that
+// ending your own half wasn't a decision the batting team's operator
+// needed to drive, but Jason reversed that call live. `runsThisHalf`
+// picks the side-appropriate run count; everything else (dismissal
+// tracking, the End/Keep actions) is already half-agnostic.
+const MERCY_RUN_LIMIT = 8;
+let mercyDismissedForHalf = null; // `${inning}-${half}` key
+
+function renderMercyBanner() {
+  const isUs = scoringState.half === 'us';
+  const isFinalInning = scoringState.inning >= scoringState.innings;
+  const runsThisHalf = isUs ? scoringState.thisHalfRunsUs : scoringState.thisHalfRunsThem;
+  const halfKey = scoringState.inning + '-' + scoringState.half;
+  if (isFinalInning || runsThisHalf < MERCY_RUN_LIMIT || mercyDismissedForHalf === halfKey) return null;
+  return h('div', { class: 'mercy-banner' }, [
+    h('div', { class: 'mercy-text', text: MERCY_RUN_LIMIT + '-run mercy limit reached this inning' }),
+    h('div', { class: 'mercy-actions' }, [
+      h('button', { class: 'mercy-btn', text: 'End half-inning', onclick: () => {
+        scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'outs', value: 3 });
+        scoringState = deriveState(scoringEvents);
+        mercyDismissedForHalf = null;
+        musicPausedForMercyHalf = null;
+        scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
+        render();
+      } }),
+      h('button', { class: 'mercy-btn dashed', text: 'Keep playing', onclick: () => {
+        mercyDismissedForHalf = halfKey;
+        // Resume music that the mercy pause interrupted (offense only --
+        // see checkMercyMusicPause), same as any other "operator confirms,
+        // play resumes" moment.
+        if (isUs && musicPausedForMercyHalf === halfKey) {
+          musicPausedForMercyHalf = null;
+          scoringClipFiredForBatter = null;
+          scheduleScoringAutoPlay();
+        }
+        render();
+      } }),
+    ]),
+  ]);
+}
+
+// Mercy-triggered music pause (Jason, live feedback, round 6): once the
+// mercy banner is showing on OUR half, any in-flight walk-up music (a
+// clip currently playing, or a pending auto-play countdown) pauses the
+// same way a real half-break already does -- "Keep playing" resumes it
+// (see renderMercyBanner's Keep-playing handler). Guarded by halfKey so
+// this only fires once per half, not on every re-render while the banner
+// stays visible (render() runs on every tick while a countdown is live).
+let musicPausedForMercyHalf = null;
+function checkMercyMusicPause() {
+  const isUs = scoringState.half === 'us';
+  const isFinalInning = scoringState.inning >= scoringState.innings;
+  const runsThisHalf = isUs ? scoringState.thisHalfRunsUs : scoringState.thisHalfRunsThem;
+  const halfKey = scoringState.inning + '-' + scoringState.half;
+  const showing = isUs && !isFinalInning && runsThisHalf >= MERCY_RUN_LIMIT && mercyDismissedForHalf !== halfKey;
+  if (showing && musicPausedForMercyHalf !== halfKey) {
+    musicPausedForMercyHalf = halfKey;
+    if (scoringAutoPlayPending) { clearTimeout(scoringAutoPlayPending.timeoutHandle); scoringAutoPlayPending = null; }
+    if (currentSource) stopCurrent(true);
+  }
+}
+
+function renderDefenseBody() {
+  const wrap = h('div', {});
+  const oppName = scoringState.opponent || 'They';
+  wrap.appendChild(h('div', { class: 'defense-chip' }, [
+    h('div', { class: 'defense-label', text: (oppName + ' are kicking').toUpperCase() }),
+    h('div', { class: 'defense-sub', text: 'walk-up music resumes next half' }),
+  ]));
+  const filledOuts = Math.max(0, Math.min(3, scoringState.outs));
+  wrap.appendChild(h('button', { class: 'out-button', onclick: logOppOut }, [
+    h('div', { class: 'out-label', text: '+ OUT' }),
+    h('div', { class: 'out-dots' }, [
+      h('span', { class: 'outs-dot', text: '●'.repeat(filledOuts) }),
+      h('span', { class: 'outs-dot empty', text: '●'.repeat(3 - filledOuts) }),
+    ]),
+    h('div', { class: 'out-sub', text: 'third out flips the half' }),
+  ]));
+  // Round 6 (Jason, live feedback): moved below the outs indicator and
+  // above the runs box (was above the outs indicator before).
+  const mercyBanner = renderMercyBanner();
+  if (mercyBanner) wrap.appendChild(mercyBanner);
+  wrap.appendChild(h('div', { class: 'runs-stepper' }, [
+    h('button', { text: '−', disabled: scoringState.thisHalfRunsThem <= 0, onclick: () => adjustOppRuns(-1) }),
+    h('div', { class: 'runs-stepper-count' }, [
+      h('div', { class: 'hdr', text: 'RUNS' }),
+      h('div', { class: 'num', text: String(scoringState.thisHalfRunsThem) }),
+      h('div', { class: 'lbl', text: 'their runs, this inning' }),
+    ]),
+    h('button', { text: '+', onclick: () => adjustOppRuns(1) }),
+  ]));
+  const lineup = scoringState.lineup;
+  const ptr = scoringState.lineupPointer;
+  const nextThreeIds = lineup.length ? [0, 1, 2].map(k => lineup[(ptr + k) % lineup.length]) : [];
+  const nextThreeNames = nextThreeIds.map(id => playerNameOf(id) || '—'); // overlay-aware (S1.6 prep)
+  const leadoffKids = [h('div', { class: 'leadoff-label', text: 'NEXT UP' }), h('div', { class: 'leadoff-name', text: (nextThreeNames[0] || '—').toUpperCase() })];
+  if (nextThreeNames.length > 1) {
+    leadoffKids.push(h('div', { class: 'leadoff-preview-rest', text: nextThreeNames.slice(1).join(' · ').toUpperCase() }));
+  }
+  wrap.appendChild(h('div', { class: 'leadoff-preview-big' }, leadoffKids));
+  return wrap;
+}
+
+/* ---- Live snake scorecard (first pass, 2026-07-08 round 5) ----
+   The box-score chip opens this as a takeover panel over the game body
+   (score bug stays, same pattern as the correction sheets). It's a pure
+   replay renderer: one <canvas> drawn fresh from scoringState on every
+   render, so corrections/undo/amend re-derive the card for free. This
+   SAME renderer is S3's share artifact later (canvas.toBlob) -- one
+   renderer, two consumers (design agreed with Jason, 2026-07-08; mockup
+   screen 6 is the visual north star; this pass is a functional draft for
+   iteration, not yet pixel-matched to the mockup).
+   Iteration 2 (Jason's first-look feedback, same day): true staircase
+   columns for bat-arounds (scorecardColumns -- one column per
+   (inning, pass), later innings pushed right); edge fills track the
+   kicker's live base via record.reachedBase (forces, pushes, manual sets,
+   walk-backs); third-out triangle in the LOWER-right corner; canvas
+   width fills the panel (dynamic cell width, floor 26px, then the
+   horizontal scroll takes over).
+   Remaining draft simplifications:
+   - no legend, no MISSED-dagger on totals;
+   - colors hardcoded to the app palette (canvas can't read CSS vars). */
+let scoringBoxScoreOpen = false;
+
+const SCORECARD_C = {
+  bg: '#101215', tile: '#1d2126', border: '#33383e', rule: '#2c3036',
+  text: '#e8eae6', muted: '#8f948f', pickle: '#82A167', badge: '#2C2E20',
+  plum: '#CBA9DD',
+};
+
+function toggleBoxScore() {
+  scoringBoxScoreOpen = !scoringBoxScoreOpen;
+  if (scoringBoxScoreOpen) scoringCorrection = null; // one takeover surface at a time
+  render();
+}
+
+// Staircase columns (iteration 2, Jason: "move into a new column and push
+// later innings over" on a bat-around): a column is an (inning, pass)
+// pair -- the Nth time the order wraps within one inning opens a fresh
+// column for it, exactly like a hand-kept card. Chronological paLog
+// iteration keeps columns in true game order; innings not yet played get
+// one empty column each.
+function scorecardColumns() {
+  const cols = [];
+  const colIdxByKey = {};
+  const passCount = {};
+  const cellMap = {}; // playerId + '|' + colIdx -> record
+  scoringState.paLog.forEach(rec => {
+    const pk = rec.playerId + '|' + rec.inning;
+    const pass = passCount[pk] || 0;
+    passCount[pk] = pass + 1;
+    const key = rec.inning + '|' + pass;
+    if (!(key in colIdxByKey)) { colIdxByKey[key] = cols.length; cols.push({ inning: rec.inning, pass: pass }); }
+    cellMap[rec.playerId + '|' + colIdxByKey[key]] = rec;
+  });
+  const maxInning = Math.max(scoringState.innings || 7, scoringState.inning);
+  for (let i = 1; i <= maxInning; i++) {
+    if (!cols.some(c => c.inning === i)) cols.push({ inning: i, pass: 0 });
+  }
+  return { cols: cols, cellMap: cellMap };
+}
+
+// Geometry shared by the layout and the draw call. Sized to FILL the
+// panel (iteration 2 -- the fixed-width draft left dead space on the
+// right): cell width is derived from the real on-screen width, clamped;
+// a bat-around's extra columns shrink cells toward the floor first, then
+// the horizontal scroll takes over.
+// Row height bumped 34 -> 46, and cell width fixed at 42 instead of
+// shrinking to fit the viewport (Jason, 2026-07-12 preview review: "bigger
+// vertically, fine to scroll horizontally for later innings"). Everything
+// the draw call sizes off a row -- diamond radius, glyph offsets, font
+// sizes -- is derived from ROW_SCALE below rather than re-tuned by hand, so
+// the two stay coupled the same way --scoring-ref-h/caption-anchor do
+// elsewhere in this file. cellW no longer reads `avail`/nCols at all: a
+// short game (few columns) just draws narrower than the panel with empty
+// margin to spare; a long one (bat-arounds) grows past the viewport and
+// the panel's existing .boxscore-scroll (overflow-x:auto) takes over --
+// exactly the tradeoff asked for, replacing the old shrink-to-fit floor/
+// ceiling clamp.
+const ROW_H_BASE = 34, ROW_H = 46;
+const ROW_SCALE = ROW_H / ROW_H_BASE;
+const CELL_W = 42;
+function scorecardLayout() {
+  const colInfo = scorecardColumns();
+  const lineup = scoringState.lineup;
+  const pad = 8, nameW = 68, totW = 54, rowH = ROW_H, headH = 16, lineH = 44;
+  const nCols = Math.max(colInfo.cols.length, 1);
+  const cellW = CELL_W;
+  return {
+    cols: colInfo.cols, cellMap: colInfo.cellMap,
+    innings: Math.max(scoringState.innings || 7, scoringState.inning),
+    lineup: lineup, pad: pad, nameW: nameW, totW: totW,
+    cellW: cellW, rowH: rowH, headH: headH, lineH: lineH,
+    w: pad * 2 + nameW + cellW * nCols + totW,
+    h: pad * 2 + lineH + headH + rowH * lineup.length,
+  };
+}
+
+// 4-edge mini diamond centered on (cx, cy): edge i is drawn in `col`
+// when its base was reached. 0 = lower-right (1st), 1 = upper-right
+// (2nd), 2 = upper-left (3rd), 3 = lower-left (home).
+function drawMiniDiamond(g, cx, cy, r, reached, scored) {
+  const pts = [
+    [cx, cy + r], [cx + r, cy], [cx, cy - r], [cx - r, cy], [cx, cy + r],
+  ]; // bottom -> right -> top -> left -> bottom
+  if (scored) {
+    g.beginPath();
+    g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < 4; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.closePath();
+    g.fillStyle = SCORECARD_C.pickle;
+    g.fill();
+    return;
+  }
+  for (let i = 0; i < 4; i++) {
+    g.beginPath();
+    g.moveTo(pts[i][0], pts[i][1]);
+    g.lineTo(pts[i + 1][0], pts[i + 1][1]);
+    g.strokeStyle = (i < reached) ? SCORECARD_C.pickle : SCORECARD_C.border;
+    g.lineWidth = (i < reached) ? 2 : 1;
+    g.stroke();
+  }
+}
+
+function drawScorecard(canvas) {
+  if (!canvas.getContext) return; // DOM-stub harness: layout only, no drawing
+  const L = scorecardLayout();
+  const g = canvas.getContext('2d');
+  const dpr = 2;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, L.w, L.h);
+  const font = "-apple-system, 'Segoe UI', system-ui, sans-serif";
+  const st = scoringState;
+  // Scales every per-row pixel constant below (diamond radius, glyph
+  // offsets, cell-content font sizes) by ROW_SCALE, so the bigger rows
+  // (2026-07-12) get proportionally bigger contents instead of the same
+  // small marks floating in more empty space.
+  const px = (n) => Math.round(n * ROW_SCALE);
+
+  // ---- line score ----
+  const lsCell = Math.min(24, (L.w - L.pad * 2 - 60 - 24) / L.innings);
+  const lsX = L.pad + 60, lsY = L.pad;
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.font = '600 10px ' + font;
+  g.fillStyle = SCORECARD_C.pickle;
+  g.fillText(teamAbbrev(), L.pad, lsY + 18);
+  g.fillStyle = SCORECARD_C.muted;
+  g.fillText((st.opponent || 'THEM').slice(0, 6).toUpperCase(), L.pad, lsY + 32);
+  g.textAlign = 'center';
+  for (let i = 1; i <= L.innings; i++) {
+    const x = lsX + (i - 0.5) * lsCell;
+    g.fillStyle = SCORECARD_C.muted;
+    g.font = '500 8px ' + font;
+    g.fillText(String(i), x, lsY + 5);
+    const usPlayed = i < st.inning || (i === st.inning);
+    const themPlayed = i < st.inning || (i === st.inning && st.half === 'them');
+    g.font = '500 10px ' + font;
+    g.fillStyle = SCORECARD_C.text;
+    g.fillText(usPlayed ? String(st.runsByInning.us[i] || 0) : '·', x, lsY + 18);
+    g.fillStyle = SCORECARD_C.muted;
+    g.fillText(themPlayed ? String(st.runsByInning.them[i] || 0) : '·', x, lsY + 32);
+  }
+  const rX = lsX + L.innings * lsCell + 12;
+  g.font = '600 10px ' + font;
+  g.fillStyle = SCORECARD_C.muted;
+  g.fillText('R', rX, lsY + 5);
+  g.fillStyle = SCORECARD_C.text;
+  g.fillText(String(st.scoreUs), rX, lsY + 18);
+  g.fillStyle = SCORECARD_C.muted;
+  g.fillText(String(st.scoreThem), rX, lsY + 32);
+  g.strokeStyle = SCORECARD_C.rule;
+  g.lineWidth = 1;
+  g.beginPath(); g.moveTo(L.pad, lsY + L.lineH - 4); g.lineTo(L.w - L.pad, lsY + L.lineH - 4); g.stroke();
+
+  // ---- column headers (staircase: one per (inning, pass)) ----
+  const nCols = L.cols.length;
+  const gridX = L.pad + L.nameW, gridY = L.pad + L.lineH + L.headH;
+  g.font = '500 ' + px(8) + 'px ' + font;
+  for (let c = 0; c < nCols; c++) {
+    // Continuation columns of a bat-around repeat the inning number,
+    // dimmer, so the pair reads as one inning spanning two columns.
+    g.fillStyle = L.cols[c].pass > 0 ? SCORECARD_C.border : SCORECARD_C.muted;
+    g.fillText(String(L.cols[c].inning), gridX + (c + 0.5) * L.cellW, gridY - px(6));
+  }
+  g.fillStyle = SCORECARD_C.muted;
+  g.fillText('H·R·RBI', gridX + nCols * L.cellW + L.totW / 2, gridY - px(6));
+
+  // ---- player rows ----
+  const stats = computeStats(st);
+  L.lineup.forEach((pid, row) => {
+    const y = gridY + row * L.rowH;
+    const cy = y + L.rowH / 2;
+    g.textAlign = 'left';
+    g.font = '500 ' + px(9) + 'px ' + font;
+    g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us') ? SCORECARD_C.pickle : SCORECARD_C.text;
+    g.fillText(playerNameOf(pid).slice(0, 8), L.pad, cy);
+    g.textAlign = 'center';
+    for (let c = 0; c < nCols; c++) {
+      const rec = L.cellMap[pid + '|' + c];
+      const cx = gridX + (c + 0.5) * L.cellW;
+      g.strokeStyle = SCORECARD_C.rule;
+      g.lineWidth = 0.5;
+      g.strokeRect(gridX + c * L.cellW, y, L.cellW, L.rowH);
+      if (!rec) continue;
+      if (rec.result === 'MISSED') {
+        g.font = '600 ' + px(12) + 'px ' + font;
+        g.fillStyle = SCORECARD_C.muted;
+        g.fillText('?', cx, cy);
+      } else if (HIT_BASES[rec.result]) {
+        // Edge fills follow the kicker's CURRENT base (reachedBase --
+        // forces, pushes and corrections included), solid when they scored.
+        drawMiniDiamond(g, cx, cy - px(4), px(7), rec.kickerScored ? 4 : (rec.reachedBase || HIT_BASES[rec.result]), rec.kickerScored);
+        g.font = '500 ' + px(7) + 'px ' + font;
+        g.fillStyle = SCORECARD_C.pickle;
+        g.fillText(rec.result, cx, y + L.rowH - px(6));
+        if (rec.kickerOut) { // erased on the bases -- hit edges stand, plum ✕ on top
+          g.font = '600 ' + px(11) + 'px ' + font;
+          g.fillStyle = SCORECARD_C.plum;
+          g.fillText('✕', cx, cy - px(4));
+        }
+      } else { // FLY / GND / K
+        drawMiniDiamond(g, cx, cy - px(4), px(7), 0, false);
+        g.font = '500 ' + px(7) + 'px ' + font;
+        g.fillStyle = SCORECARD_C.muted;
+        g.fillText(rec.result, cx, y + L.rowH - px(6));
+      }
+      if (rec.endedHalf) { // third-out marker, LOWER-right corner (iteration 2)
+        const x1 = gridX + (c + 1) * L.cellW, y1 = y + L.rowH;
+        g.beginPath();
+        g.moveTo(x1 - px(7), y1); g.lineTo(x1, y1); g.lineTo(x1, y1 - px(7));
+        g.closePath();
+        g.fillStyle = SCORECARD_C.plum; // 2026-07-11 (Jason): plum, not pickle -- reads as a boundary event like the basepath x, not a positive mark
+        g.fill();
+      }
+    }
+    const s = stats[pid] || { h: 0, r: 0, rbi: 0 };
+    g.font = '500 ' + px(9) + 'px ' + font;
+    g.fillStyle = SCORECARD_C.muted;
+    g.fillText(s.h + '·' + s.r + '·' + s.rbi, gridX + nCols * L.cellW + L.totW / 2, cy);
+  });
+}
+
+function renderBoxScoreBody() {
+  const L = scorecardLayout();
+  const canvas = h('canvas', {
+    class: 'scorecard-canvas',
+    width: L.w * 2, height: L.h * 2,
+    // Inline sizing is required here: the backing store is 2x the CSS
+    // size for retina sharpness, and the CSS size depends on runtime
+    // layout math -- the one legitimate inline-style exception in this
+    // file.
+    style: 'width:' + L.w + 'px;height:' + L.h + 'px',
+  });
+  drawScorecard(canvas);
+  const wrap = h('div', { class: 'boxscore-panel' }, [
+    h('div', { class: 'boxscore-scroll' }, [canvas]),
+    h('button', { class: 'correction-cancel boxscore-close', text: '✕ close box score', onclick: toggleBoxScore }),
+    // End game lives here, not the lineup editor (Jason, 2026-07-12 live
+    // redirect from mockup screen 5) -- glancing at the score is the
+    // natural moment to decide the game's over.
+    h('button', {
+      class: 'boxscore-endgame-btn',
+      text: '■ end game — final ' + teamAbbrev() + ' ' + scoringState.scoreUs + ' · ' + scoringState.scoreThem,
+      onclick: openEndGameConfirm,
+    }),
+    h('div', { class: 'boxscore-endgame-note', text: 'end game asks to confirm the final score' }),
+  ]);
+  return wrap;
+}
+
+function renderScoringGameScreen() {
+  const wrap = h('div', {});
+  wrap.appendChild(h('div', { class: 'topbar' }, [
+    renderWordmark(),
+    h('div', { class: 'topbar-right' }, [
+      h('button', { class: 'order-btn', text: '✎ lineup', onclick: openMidGameLineupEditor }),
+    ]),
+  ]));
+  wrap.appendChild(renderScoreBug());
+  // End-game confirm is a full takeover below the score bug -- same
+  // convention as every other correction/confirm sheet in this file
+  // (mockup screen 7: "render as takeover sheets... not modals over
+  // dimmed content"). Checked ahead of the box-score branch since that's
+  // where the button that opens it now lives.
+  if (endGameConfirmOpen) {
+    wrap.appendChild(renderEndGameConfirmSheet());
+  } else if (scoringBoxScoreOpen) {
+    wrap.appendChild(renderBoxScoreBody()); // takeover panel, either half -- read-only, music unaffected
+  } else {
+    wrap.appendChild(scoringState.half === 'us' ? renderOffenseBody() : renderDefenseBody());
+  }
+  return wrap;
+}
+
+/* ============================================================
+   S1.6: tap-to-draft lineup editor, Start/End game, PIN gate,
+   adjust steppers (06-Scoring-Specs.md S1 item 6). Appearance ground
+   truth: mockups/portal-screens.html screens 4/5/7/8.
+   ============================================================ */
+
+// ---- schedule + fixture helpers (07-Portal-Architecture.md) ----
+function scheduleFixtureById(id) {
+  return (DATA.schedule || []).find(g => g.id === id) || null;
+}
+// Combines a schedule entry's date + time into a real Date for window/
+// ordering math. Returns null when time is absent (TBD) -- those fixtures
+// are reachable only via "change game", never auto-picked as tonight's
+// default (docs/season-schedule.md convention: absent keys mean TBD).
+function fixtureStartDate(g) {
+  if (!g || !g.date) return null;
+  const dt = new Date(g.date + 'T' + (g.time || '00:00') + ':00');
+  return isNaN(dt.getTime()) ? null : dt;
+}
+const GAME_WINDOW_MS = 60 * 60 * 1000; // 60 min either side of start (07-Portal-Architecture.md)
+// The fixture Start Game pre-picks: the one currently inside its game
+// window if any, else the soonest upcoming fixture. A manifest `result`
+// (game 1's pre-app final) is never a start candidate. Returns null when
+// nothing qualifies -- Start Game then opens on the "unscheduled game"
+// fallback, which is allowed to be ugly.
+function pickDefaultScheduleGameId() {
+  const now = Date.now();
+  let inWindow = null, nextUpcoming = null, nextUpcomingMs = Infinity;
+  (DATA.schedule || []).forEach(g => {
+    if (g.result) return;
+    const start = fixtureStartDate(g);
+    if (!start) return;
+    const ms = start.getTime();
+    if (now >= ms - GAME_WINDOW_MS && now <= ms + GAME_WINDOW_MS) inWindow = g;
+    if (ms > now && ms < nextUpcomingMs) { nextUpcoming = g; nextUpcomingMs = ms; }
+  });
+  const chosen = inWindow || nextUpcoming;
+  return chosen ? chosen.id : null;
+}
+// First word of the opponent's name, upper-cased, for the adjust sheet's
+// compact team label (mockup screen 8: "OTTER" from "Otter Nonsense").
+function oppLabel() {
+  const name = scoringState.opponent || 'THEM';
+  return name.split(/\s+/)[0].toUpperCase();
+}
+
+// ---- runtime state (all UI-only, never persisted directly -- what's
+// actually recorded is always just another appended event, same
+// convention as scoringCorrection above). ----
+let scoringLineupEditor = null; // {mode:'start'|'edit', draft:[playerId,...], scheduleGameId, unscheduledOpponent}
+let pinSheet = null;            // {digits:'', shake:false, onSuccess:fn}
+let fixturePicker = false;      // true while the "change game" list sheet is open (inside scoringLineupEditor)
+let addPlayerSheet = null;      // {name:'', status:'member', clipIndex:0}
+let endGameConfirmOpen = false;
+// Scorer-device flag (07-Portal-Architecture.md "DECIDED"): the persisted
+// PIN unlock IS the flag. Once entered on this device, score-mode entry
+// never re-prompts for it.
+let pinUnlocked = loadJSON('scoringPinUnlocked', false);
+
+// ---- entry points ----
+// Stopgap direct entry point (Jason, 2026-07-12): screens 4/5 are normally
+// reached via the game-window prompt over the portal (07), but the portal
+// and prompt are explicitly out of scope this session -- without this
+// button there would be no way to actually start a scored game on the
+// team phone Monday. Superseded by the prompt once the portal build lands.
+function openStartGameFlow() {
+  const proceed = () => {
+    // Seeds the draft from today's classic walk-on order if one exists --
+    // the most natural "who's here tonight" signal already captured by the
+    // ordinary pre-game flow. Empty seed (tap-to-draft from scratch) is
+    // just as valid; nothing about Start Game requires it.
+    const seed = order.filter(id => playersById[id]);
+    scoringLineupEditor = { mode: 'start', draft: seed, scheduleGameId: pickDefaultScheduleGameId(), unscheduledOpponent: '' };
+    state.activeTab = 'lineup';
+    render();
+  };
+  if (pinUnlocked) proceed(); else openPinSheet(proceed);
+}
+function openMidGameLineupEditor() {
+  scoringLineupEditor = { mode: 'edit', draft: scoringState.lineup.slice() };
+  render();
+}
+function cancelScoringLineupEditor() {
+  // Cancel beside Done (2026-07-11 polish batch): every draft edit --
+  // including a mistaken clear -- is discarded, nothing committed.
+  scoringLineupEditor = null;
+  fixturePicker = false;
+  render();
+}
+
+function openPinSheet(onSuccess) { pinSheet = { digits: '', shake: false, onSuccess: onSuccess }; render(); }
+function closePinSheet() { pinSheet = null; render(); }
+const PIN_LENGTH = 4;
+function pinKeyTap(k) {
+  if (!pinSheet) return;
+  if (k === 'del') { pinSheet.digits = pinSheet.digits.slice(0, -1); render(); return; }
+  if (pinSheet.digits.length >= PIN_LENGTH) return;
+  pinSheet.digits += k;
+  if (pinSheet.digits.length < PIN_LENGTH) { render(); return; }
+  if (pinSheet.digits === String(DATA.scoring.teamPin)) {
+    pinUnlocked = true;
+    saveJSON('scoringPinUnlocked', true);
+    const cb = pinSheet.onSuccess;
+    pinSheet = null;
+    if (cb) cb(); else render();
+  } else {
+    pinSheet.shake = true;
+    render();
+    // Wrong PIN shakes and clears -- no error prose (mockup screen 7 note).
+    setTimeout(() => { if (pinSheet) { pinSheet.digits = ''; pinSheet.shake = false; render(); } }, 350);
+  }
+}
+
+// ---- draft list mutation (all local until Done/Start commits an event) ----
+function draftAppend(id) {
+  if (!scoringLineupEditor || scoringLineupEditor.draft.includes(id)) return;
+  scoringLineupEditor.draft.push(id);
+  render();
+}
+function draftRemove(id) {
+  if (!scoringLineupEditor) return;
+  // The current kicker can't be removed mid-game, only reordered around
+  // (mockup screen 5 note) -- the row itself has no ✕ for them, but guard
+  // here too against a stale tap racing a half-flip.
+  if (scoringLineupEditor.mode === 'edit' && isScoringLive() && scoringState.lineup[scoringState.lineupPointer] === id) return;
+  scoringLineupEditor.draft = scoringLineupEditor.draft.filter(x => x !== id);
+  render();
+}
+// Everyone not already drafted: real roster + mid-game subs added via
+// player_add (rosterOverlay), sorted the same way the classic bench is.
+function draftRosterPool() {
+  const inDraft = new Set(scoringLineupEditor.draft);
+  const real = DATA.players.filter(p => !inDraft.has(p.id)).map(p => ({ id: p.id, name: p.name, status: p.status }));
+  const overlay = (scoringState.rosterOverlay || []).filter(p => !inDraft.has(p.id));
+  return real.concat(overlay).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---- commit actions (the only points that actually append events) ----
+function commitStartGame() {
+  const ed = scoringLineupEditor;
+  if (!ed || ed.draft.length === 0) return;
+  const fixture = scheduleFixtureById(ed.scheduleGameId);
+  const payload = {
+    opponent: fixture ? (fixture.opponent || 'TBD') : (ed.unscheduledOpponent.trim() || 'Unscheduled Game'),
+    lineup: ed.draft.slice(),
+    innings: DATA.scoring.inningsPerGame || 7,
+  };
+  if (fixture) payload.scheduleGameId = fixture.id;
+  scoringEvents = appendScoringEvent(scoringEvents, 'game_start', payload);
+  scoringState = deriveState(scoringEvents);
+  scoringLineupEditor = null;
+  scoringClipFiredForBatter = null;
+  state.activeTab = 'lineup';
+  render();
+}
+function commitLineupEdit() {
+  if (!scoringLineupEditor) return;
+  scoringEvents = appendScoringEvent(scoringEvents, 'lineup_set', { lineup: scoringLineupEditor.draft.slice() });
+  scoringState = deriveState(scoringEvents);
+  scoringLineupEditor = null;
+  render();
+}
+function openEndGameConfirm() { endGameConfirmOpen = true; render(); }
+function closeEndGameConfirm() { endGameConfirmOpen = false; render(); }
+function commitEndGame() {
+  scoringEvents = appendScoringEvent(scoringEvents, 'game_end', { final_us: scoringState.scoreUs, final_them: scoringState.scoreThem });
+  scoringState = deriveState(scoringEvents);
+  endGameConfirmOpen = false;
+  scoringLineupEditor = null;
+  cancelPendingAutoplay();
+  scoringClipFiredForBatter = null;
+  render();
+}
+
+function openAddPlayerSheet() { addPlayerSheet = { name: '', status: 'member', clipIndex: 0 }; render(); }
+function closeAddPlayerSheet() { addPlayerSheet = null; render(); }
+function commitAddPlayer() {
+  const s = addPlayerSheet;
+  const name = (s.name || '').trim();
+  if (!s || !name) return;
+  const id = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  const clip = (DATA.defaultClips || [])[s.clipIndex] || null;
+  scoringEvents = appendScoringEvent(scoringEvents, 'player_add', {
+    playerId: id, name: name, status: s.status, defaultClip: clip ? clip.id : null,
+  });
+  scoringState = deriveState(scoringEvents);
+  addPlayerSheet = null;
+  // New player lands straight in the order (07's open question, resolved
+  // by this sheet's own copy -- "add to order"; flip on preview if it
+  // feels wrong per that doc's note).
+  if (scoringLineupEditor) draftAppend(id);
+  render();
+}
+
+// ---- adjust sheet (score-bug tap) ----
+function openAdjustSheet() {
+  if (scoringCorrection || scoringBoxScoreOpen || !isScoringLive() || scoringState.half !== 'us') return;
+  scoringCorrection = {
+    mode: 'adjust',
+    draft: {
+      outs: scoringState.outs, inning: scoringState.inning, half: scoringState.half,
+      scoreUs: scoringState.scoreUs, scoreThem: scoringState.scoreThem,
+    },
+  };
+  render();
+}
+function adjustStep(field, delta) {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'adjust') return;
+  const d = c.draft;
+  if (field === 'outs') {
+    d.outs = Math.max(0, Math.min(2, d.outs + delta)); // a third out is a real event, not an adjustment
+  } else if (field === 'scoreUs') {
+    d.scoreUs = Math.max(0, d.scoreUs + delta);
+  } else if (field === 'scoreThem') {
+    d.scoreThem = Math.max(0, d.scoreThem + delta);
+  } else if (field === 'inning') {
+    // Walks halves (mockup screen 8: ▲3 -> ▼3 -> ▲4): us->them stays the
+    // same inning number; them->us increments it.
+    if (delta > 0) {
+      if (d.half === 'us') d.half = 'them'; else { d.half = 'us'; d.inning += 1; }
+    } else {
+      if (d.half === 'them') d.half = 'us'; else { d.half = 'them'; d.inning = Math.max(1, d.inning - 1); }
+    }
+  }
+  render();
+}
+// Draft semantics (Jason's revision, mockup screen 8): steppers edit a
+// local draft; done commits ONE adjust event per changed field (cleaner
+// log than one event per tap); cancel discards everything, even after
+// changes -- closeScoringCorrection (existing) handles that path.
+function commitAdjust() {
+  const c = scoringCorrection;
+  if (!c || c.mode !== 'adjust') return;
+  const orig = scoringState, d = c.draft;
+  if (d.outs !== orig.outs) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'outs', value: d.outs });
+  if (d.half !== orig.half) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'half', value: d.half });
+  if (d.inning !== orig.inning) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'inning', value: d.inning });
+  if (d.scoreUs !== orig.scoreUs) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'score_us', value: d.scoreUs });
+  if (d.scoreThem !== orig.scoreThem) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'score_them', value: d.scoreThem });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  scoringClipFiredForBatter = null;
+  render();
+}
+
+// ---- vertical-only drag reorder for draft rows (simplifies the drag math
+// behind game-1 defect #2 -- see wireDragTile's header comment for the
+// full history; this is that same document-level-listener pattern,
+// restricted to Y-axis hit testing since the draft list is single-column). ----
+function flipDraftRows(listEl, exceptRow, mutate) {
+  const rows = Array.from(listEl.querySelectorAll('.draft-row'));
+  const before = new Map();
+  rows.forEach(r => before.set(r, r.getBoundingClientRect()));
+  mutate();
+  rows.forEach(r => {
+    if (r === exceptRow) return;
+    const b = before.get(r), a = r.getBoundingClientRect();
+    const dy = b.top - a.top;
+    if (!dy) return;
+    r.style.transition = 'none';
+    r.style.transform = 'translateY(' + dy + 'px)';
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(() => { r.style.transition = 'transform 150ms ease'; r.style.transform = ''; }));
+    } else { r.style.transition = ''; r.style.transform = ''; }
+  });
+}
+function wireDraftRowDrag(row, id, listEl) {
+  // `down` guards pointermove against firing a drag start from mouse HOVER
+  // alone (bug, caught by Jason on-device-in-browser 2026-07-12): a mouse
+  // sends real 'pointermove' events on hover with no button pressed, unlike
+  // a touchscreen (which only ever sends pointermove while a finger is in
+  // contact). Without this flag, startY stayed at its initial 0 until a
+  // real pointerdown ever fired on this row, so `e.clientY - startY` was
+  // just "current mouse Y" -- always past DRAG_THRESHOLD_PX -- and a bare
+  // hover over any row immediately spawned a ghost + placeholder state.
+  // Only evaluate the movement threshold after a real pointerdown on THIS
+  // row has actually happened.
+  let startY = 0, dragging = false, moved = false, ghost = null, lastSwap = null, activePointer = null, down = false;
+  function startGhost() {
+    const rect = row.getBoundingClientRect();
+    ghost = row.cloneNode(true);
+    ghost.classList.add('drag-ghost');
+    ghost.style.position = 'fixed'; ghost.style.left = rect.left + 'px'; ghost.style.top = rect.top + 'px';
+    ghost.style.width = rect.width + 'px'; ghost.style.height = rect.height + 'px';
+    ghost.style.margin = '0'; ghost.style.pointerEvents = 'none';
+    document.getElementById('app').appendChild(ghost);
+    row.classList.add('drag-placeholder');
+  }
+  function endGhost() {
+    if (ghost && ghost.parentElement) ghost.parentElement.removeChild(ghost);
+    ghost = null; lastSwap = null;
+    row.classList.remove('drag-placeholder');
+  }
+  function handleMove(e) {
+    if (e.preventDefault) e.preventDefault();
+    const dy = e.clientY - startY;
+    if (ghost) ghost.style.transform = 'translateY(' + dy + 'px)';
+    const rows = Array.from(listEl.querySelectorAll('.draft-row'));
+    const hoverRow = rows.find(r => {
+      if (r === row) return false;
+      const rc = r.getBoundingClientRect();
+      return e.clientY >= rc.top && e.clientY <= rc.bottom;
+    });
+    if (hoverRow && hoverRow !== lastSwap) {
+      lastSwap = hoverRow;
+      const from = rows.indexOf(row), to = rows.indexOf(hoverRow);
+      if (from !== -1 && to !== -1 && from !== to) {
+        flipDraftRows(listEl, row, () => { listEl.insertBefore(row, from < to ? hoverRow.nextSibling : hoverRow); });
+      }
+    } else if (!hoverRow) { lastSwap = null; }
+  }
+  function detachDocHandlers() {
+    document.removeEventListener('pointermove', onDocMove);
+    document.removeEventListener('pointerup', onDocUp);
+    document.removeEventListener('pointercancel', onDocCancel);
+  }
+  function commitFromDom() {
+    const newOrder = Array.from(listEl.querySelectorAll('.draft-row')).map(r => r._playerId);
+    if (scoringLineupEditor && newOrder.length === scoringLineupEditor.draft.length) scoringLineupEditor.draft = newOrder;
+  }
+  function finishDrag() {
+    if (!dragging) return;
+    dragging = false; detachDocHandlers(); endGhost();
+    if (row.isConnected === false) { render(); return; }
+    commitFromDom();
+    render();
+  }
+  function cancelDrag() {
+    if (!dragging) return;
+    dragging = false; detachDocHandlers(); endGhost();
+    render();
+  }
+  function onDocMove(e) { if (e.pointerId === activePointer) handleMove(e); }
+  function onDocUp(e) { if (e.pointerId === activePointer) finishDrag(); }
+  function onDocCancel(e) { if (e.pointerId === activePointer) cancelDrag(); }
+  row.addEventListener('pointerdown', (e) => {
+    startY = e.clientY; moved = false; dragging = false; activePointer = e.pointerId; down = true;
+    try { row.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  row.addEventListener('pointermove', (e) => {
+    if (!down) return; // hover guard -- see the `down` comment above
+    if (dragging) { if (e.preventDefault) e.preventDefault(); return; }
+    if (Math.abs(e.clientY - startY) > DRAG_THRESHOLD_PX) {
+      dragging = true; moved = true; startGhost();
+      document.addEventListener('pointermove', onDocMove);
+      document.addEventListener('pointerup', onDocUp);
+      document.addEventListener('pointercancel', onDocCancel);
+      handleMove(e);
+    }
+  });
+  row.addEventListener('pointerup', (e) => {
+    down = false;
+    try { row.releasePointerCapture(e.pointerId); } catch (err) {}
+    // No tap action on the row body itself -- ✕ (its own button) handles
+    // removal; a non-drag tap on the row is a no-op.
+  });
+  row.addEventListener('pointercancel', () => { down = false; if (!dragging) render(); });
+  row._playerId = id;
+}
+
+// ---- rendering ----
+function renderScoringLineupEditor() {
+  const ed = scoringLineupEditor;
+  const isStart = ed.mode === 'start';
+  const wrap = h('div', {});
+  wrap.appendChild(h('div', { class: 'topbar' }, [
+    renderWordmark(),
+    h('div', { class: 'topbar-right' }, [
+      h('button', { class: 'order-btn', text: '✕ cancel', onclick: cancelScoringLineupEditor }),
+    ]),
+  ]));
+
+  if (fixturePicker) { wrap.appendChild(renderFixturePickerSheet()); return wrap; }
+  if (addPlayerSheet) { wrap.appendChild(renderAddPlayerSheet()); return wrap; }
+
+  if (isStart) {
+    const fixture = scheduleFixtureById(ed.scheduleGameId);
+    if (fixture) {
+      const start = fixtureStartDate(fixture);
+      const dateStr = start ? start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase() : (fixture.date || 'TBD');
+      const timeStr = start ? start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
+      wrap.appendChild(h('div', { class: 'fixture-card' }, [
+        h('div', { class: 'fixture-label', text: 'Starting · ' + dateStr + (timeStr ? ' · ' + timeStr : '') }),
+        h('div', { class: 'fixture-name', text: 'vs ' + (fixture.opponent || 'TBD') }),
+        h('div', { class: 'fixture-meta' }, [
+          h('span', { text: 'from the schedule · ' }),
+          h('span', { class: 'fixture-change', text: 'change game', onclick: () => { fixturePicker = true; render(); } }),
+        ]),
+      ]));
+    } else {
+      wrap.appendChild(h('div', { class: 'fixture-card' }, [
+        h('div', { class: 'fixture-label', text: 'Starting · unscheduled game' }),
+        h('input', {
+          class: 'addplayer-input', placeholder: 'Opponent name', value: ed.unscheduledOpponent || '',
+          oninput: (e) => { ed.unscheduledOpponent = e.target.value; },
+        }),
+        h('div', { class: 'fixture-meta' }, [
+          h('span', { class: 'fixture-change', text: 'pick from schedule instead', onclick: () => { fixturePicker = true; render(); } }),
+        ]),
+      ]));
+    }
+  } else {
+    wrap.appendChild(h('div', { class: 'draft-livechip' }, [
+      h('span', { text: (scoringState.half === 'us' ? '▲ ' : '▼ ') + ordinal(scoringState.inning) + ' · live vs ' + (scoringState.opponent || 'TBD') }),
+      h('span', { text: teamAbbrev() + ' ' + scoringState.scoreUs + ' · ' + scoringState.scoreThem }),
+    ]));
+  }
+
+  wrap.appendChild(h('div', {
+    class: 'editor-sect',
+    text: (isStart ? "TONIGHT'S KICKING ORDER · " + ed.draft.length : 'KICKING ORDER · edits apply next kicker'),
+  }));
+  const list = h('div', { class: 'draft-list' });
+  const currentBatter = (!isStart && isScoringLive()) ? scoringState.lineup[scoringState.lineupPointer] : null;
+  ed.draft.forEach((id, idx) => {
+    const isUpNow = id === currentBatter;
+    const ov = (scoringState.rosterOverlay || []).find(p => p.id === id);
+    const rowKids = [
+      h('span', { class: 'draft-row-handle', text: '≡' }),
+      h('span', { class: 'draft-row-badge', text: String(idx + 1) }),
+      h('span', { class: 'draft-row-name', text: playerNameOf(id) + (ov && ov.status === 'sub' ? '' : '') }),
+    ];
+    if (ov && ov.status === 'sub') rowKids.push(h('span', { class: 'draft-row-sub', text: 'sub' }));
+    if (isUpNow) rowKids.push(h('span', { class: 'draft-row-upnow-label', text: 'up now' }));
+    // pointerdown must stop propagation before it reaches the row -- the
+    // row's own pointerdown handler (wireDraftRowDrag) calls
+    // setPointerCapture on itself for ANY pointerdown that bubbles up
+    // through it, including one that started on this nested button. Once
+    // captured, all subsequent pointer events for that gesture (including
+    // pointerup) redirect to the row instead of the button, so the
+    // button's own click never fires -- the tap-to-remove bug Jason caught
+    // on-device 2026-07-12. Stopping it here keeps the drag gesture from
+    // ever engaging for a press that started on ✕.
+    else rowKids.push(h('button', {
+      class: 'draft-row-remove', text: '✕',
+      onpointerdown: (e) => { if (e.stopPropagation) e.stopPropagation(); },
+      onclick: () => draftRemove(id),
+    }));
+    const row = h('div', { class: 'draft-row' + (isUpNow ? ' up-now' : '') }, rowKids);
+    if (!isUpNow) wireDraftRowDrag(row, id, list); else row._playerId = id;
+    list.appendChild(row);
+  });
+  wrap.appendChild(list);
+
+  const pool = draftRosterPool();
+  wrap.appendChild(h('div', { class: 'editor-sect', text: 'TAP TO ADD' + (isStart ? ' · ' + pool.length + ' ON THE ROSTER' : '') }));
+  const grid = h('div', { class: 'draft-addgrid' });
+  pool.forEach(p => {
+    grid.appendChild(h('button', { class: 'tile draft-addtile', onclick: () => draftAppend(p.id) }, [h('span', { text: p.name })]));
+  });
+  grid.appendChild(h('button', { class: 'tile draft-addtile bench-tile', onclick: openAddPlayerSheet }, [h('span', { text: '+ new' })]));
+  wrap.appendChild(grid);
+
+  const ctaKids = [];
+  if (isStart) {
+    ctaKids.push(h('button', { class: 'done-full', text: '▶ start game', disabled: ed.draft.length === 0, onclick: commitStartGame }));
+  } else {
+    ctaKids.push(h('div', { class: 'addplayer-actions' }, [
+      h('button', { class: 'addplayer-submit', text: '✓ done', onclick: commitLineupEdit }),
+      h('button', { class: 'addplayer-cancel', text: '✕ cancel', onclick: cancelScoringLineupEditor }),
+    ]));
+    // End game moved to the box-score panel (see renderBoxScoreBody) --
+    // Jason, 2026-07-12: this screen is for drafting the order, not ending
+    // the game, and (relatedly) a takeover sheet tacked onto the bottom of
+    // an already-long scrollable page read as "the button does nothing."
+  }
+  wrap.appendChild(h('div', { class: 'draft-cta-wrap' }, ctaKids));
+  return wrap;
+}
+
+function renderFixturePickerSheet() {
+  const rows = (DATA.schedule || []).filter(g => !g.result).map(g => {
+    const start = fixtureStartDate(g);
+    const label = start
+      ? start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + (g.opponent || 'TBD')
+      : ((g.date || 'TBD') + ' · ' + (g.opponent || 'TBD'));
+    return h('button', { class: 'addplayer-song', text: label, onclick: () => {
+      scoringLineupEditor.scheduleGameId = g.id;
+      fixturePicker = false;
+      render();
+    } });
+  });
+  rows.push(h('button', { class: 'addplayer-song dashed', text: '+ unscheduled game', onclick: () => {
+    scoringLineupEditor.scheduleGameId = null;
+    fixturePicker = false;
+    render();
+  } }));
+  return h('div', { class: 'sheet-wrap' }, [
+    h('div', { class: 'sheet-card' }, [h('div', { class: 'sheet-title', text: 'Change game' })].concat(rows).concat([
+      h('button', { class: 'sheet-cancel', text: '✕ cancel', onclick: () => { fixturePicker = false; render(); } }),
+    ])),
+  ]);
+}
+
+function renderAddPlayerSheet() {
+  const s = addPlayerSheet;
+  const songs = DATA.defaultClips || [];
+  const kids = [
+    h('div', { class: 'sheet-title', text: 'Add player' }),
+    h('input', { class: 'addplayer-input', placeholder: 'Name', value: s.name, oninput: (e) => { s.name = e.target.value; } }),
+    h('div', { class: 'addplayer-toggle-row' }, [
+      h('button', { class: 'addplayer-toggle' + (s.status === 'member' ? ' active' : ''), text: 'member', onclick: () => { s.status = 'member'; render(); } }),
+      h('button', { class: 'addplayer-toggle' + (s.status === 'sub' ? ' active' : ''), text: 'sub', onclick: () => { s.status = 'sub'; render(); } }),
+    ]),
+    h('div', { class: 'addplayer-songlabel', text: 'walk-up song' }),
+  ];
+  if (songs.length) {
+    songs.forEach((c, i) => kids.push(h('button', {
+      class: 'addplayer-song' + (s.clipIndex === i ? ' active' : ''),
+      text: (c.name || ('Song ' + (i + 1))) + ' · ' + formatCountdown(c.durationSec || 0),
+      onclick: () => { s.clipIndex = i; render(); },
+    })));
+  } else {
+    kids.push(h('div', { class: 'addplayer-song empty', text: 'no default songs configured yet — add clips to manifest.json defaultClips' }));
+  }
+  kids.push(h('div', { class: 'addplayer-actions' }, [
+    h('button', { class: 'addplayer-submit', text: 'add to order', disabled: !(s.name || '').trim(), onclick: commitAddPlayer }),
+    h('button', { class: 'addplayer-cancel', text: '✕ cancel', onclick: closeAddPlayerSheet }),
+  ]));
+  return h('div', { class: 'sheet-wrap' }, [h('div', { class: 'sheet-card' }, kids)]);
+}
+
+function renderEndGameConfirmSheet() {
+  return h('div', { class: 'sheet-wrap' }, [
+    h('div', { class: 'sheet-card plum' }, [
+      h('div', { class: 'sheet-title', text: 'End game?' }),
+      h('div', { class: 'endgame-score', text: teamAbbrev() + ' ' + scoringState.scoreUs + ' · ' + scoringState.scoreThem + ' final' }),
+      h('div', { class: 'endgame-meta', text: 'vs ' + (scoringState.opponent || 'TBD') + ' · after ' + ordinal(scoringState.inning) }),
+      h('button', { class: 'endgame-confirm', text: '■ end game', onclick: commitEndGame }),
+      h('button', { class: 'sheet-cancel', text: '✕ cancel — keep scoring', onclick: closeEndGameConfirm }),
+    ]),
+  ]);
+}
+
+function renderPinSheet() {
+  const s = pinSheet;
+  const dots = [];
+  for (let i = 0; i < PIN_LENGTH; i++) dots.push(h('span', { class: 'pin-dot' + (i < s.digits.length ? ' filled' : '') }));
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
+  const keyEls = keys.map(k => {
+    if (k === '') return h('span', { class: 'pin-key blank' });
+    if (k === 'del') return h('button', { class: 'pin-key del', text: '⌫', onclick: () => pinKeyTap('del') });
+    return h('button', { class: 'pin-key', text: k, onclick: () => pinKeyTap(k) });
+  });
+  return h('div', { class: 'sheet-wrap' }, [
+    h('div', { class: 'sheet-card' + (s.shake ? ' pin-shake' : '') }, [
+      h('div', { class: 'sheet-title', text: 'Scorer PIN' }),
+      h('div', { class: 'pin-dots' }, dots),
+      h('div', { class: 'pin-keypad' }, keyEls),
+      h('button', { class: 'sheet-cancel', text: '✕ cancel', onclick: closePinSheet }),
+    ]),
+  ]);
+}
+
+// Score-bug tap sheet (mockups/portal-screens.html screen 8). Renders in
+// the correction-sheet slot on the offense screen (see renderOffenseBody),
+// same full-takeover treatment as fix-last/undo-last.
+function renderAdjustSheet() {
+  const d = scoringCorrection.draft;
+  function stepper(label, value, onMinus, onPlus, minusDisabled) {
+    return h('div', { class: 'adjust-col' }, [
+      h('div', { class: 'adjust-collabel', text: label }),
+      h('div', { class: 'adjust-stepper' }, [
+        h('button', { class: 'adjust-btn', text: '−', disabled: !!minusDisabled, onclick: onMinus }),
+        h('span', { class: 'adjust-value', text: String(value) }),
+        h('button', { class: 'adjust-btn', text: '+', onclick: onPlus }),
+      ]),
+    ]);
+  }
+  const inningDisplay = (d.half === 'us' ? '▲' : '▼') + d.inning;
+  return h('div', { class: 'sheet-wrap' }, [
+    h('div', { class: 'sheet-card' }, [
+      h('div', { class: 'sheet-title', text: 'Adjust' }),
+      h('div', { class: 'adjust-box' }, [
+        stepper('OUTS', d.outs, () => adjustStep('outs', -1), () => adjustStep('outs', 1), d.outs <= 0),
+        h('div', { class: 'adjust-divider' }),
+        stepper('INNING', inningDisplay, () => adjustStep('inning', -1), () => adjustStep('inning', 1), d.inning <= 1 && d.half === 'us'),
+      ]),
+      h('div', { class: 'adjust-box scores' }, [
+        h('div', { class: 'adjust-scores-label', text: 'Scores' }),
+        h('div', { class: 'adjust-scores-row' }, [
+          stepper(teamAbbrev(), d.scoreUs, () => adjustStep('scoreUs', -1), () => adjustStep('scoreUs', 1), d.scoreUs <= 0),
+          h('div', { class: 'adjust-divider' }),
+          stepper(oppLabel(), d.scoreThem, () => adjustStep('scoreThem', -1), () => adjustStep('scoreThem', 1), d.scoreThem <= 0),
+        ]),
+      ]),
+      h('div', { class: 'adjust-actions' }, [
+        h('button', { class: 'adjust-done', text: 'done', onclick: commitAdjust }),
+        h('button', { class: 'adjust-cancel', text: '✕ cancel', onclick: closeScoringCorrection }),
+      ]),
+    ]),
+    h('div', { class: 'adjust-note', text: 'steppers edit a draft — done commits, cancel discards even after changes' }),
+  ]);
+}
+/* __SCORING_END__ */
+
+// Safe accessor for render()'s border-toggle below, which is shared/
+// unmarked code: scoringLineupEditor only EXISTS in scoring builds (its
+// declaration is inside __SCORING_START__/__SCORING_END__), so a bare
+// reference here would throw ReferenceError once build.py strips it. This
+// wrapper's own declaration stays outside the markers; only its risky
+// interior does not.
+function scoringEditorActive() {
+  /* __SCORING_START__ */
+  if (scoringLineupEditor) return true;
+  /* __SCORING_END__ */
+  return false;
+}
+
+// Same safe-wrapper pattern as scoringEditorActive() just above: renderLineupTab
+// is shared/unmarked code (it's today's classic walk-on screen, unchanged
+// when scoring is stripped), but needs to offer the S1.6 "start game"
+// entry point when scoring is enabled and no game is live yet.
+function renderStartGameButtonIfNeeded() {
+  /* __SCORING_START__ */
+  if (DATA.scoring && DATA.scoring.enabled && !isScoringLive()) {
+    return h('button', { class: 'order-btn', text: '▶ start game', onclick: openStartGameFlow });
+  }
+  /* __SCORING_END__ */
+  return null;
+}
+
 function render() {
   liveCountdownUpdate = null;
   // Defensive sweep: a drag whose pointer stream dies mid-gesture (seen
@@ -781,16 +4170,58 @@ function render() {
     if (g.parentElement) g.parentElement.removeChild(g);
   });
   appEl.querySelectorAll('.drag-placeholder').forEach(t => t.classList.remove('drag-placeholder'));
+  /* __SCORING_START__ */
+  // Defensive refresh: keeps scoringState consistent with scoringEvents
+  // even if something mutated the array without re-deriving itself (the
+  // in-app handlers already do this, but render() shouldn't depend on
+  // every future caller remembering to).
+  if (DATA.scoring && DATA.scoring.enabled) scoringState = deriveState(scoringEvents);
+  // S1.5: a correction sheet only ever makes sense on the live offense
+  // screen. Clearing it here (rather than in every handler that could
+  // navigate away or flip the half) means a stale sheet can never survive
+  // a tab switch, a half-flip mid-correction, or a fresh game -- one
+  // choke point instead of N places to remember.
+  const onLiveOffenseScreen = isScoringLive() && state.activeTab === 'lineup' && !state.editing && scoringState.half === 'us';
+  if (!onLiveOffenseScreen || scoringBoxScoreOpen) scoringCorrection = null;
+  // The box score survives half flips (it shows both halves) but not
+  // leaving the live game screen -- same choke-point pattern as
+  // scoringCorrection above.
+  if (!(isScoringLive() && state.activeTab === 'lineup' && !state.editing)) { scoringBoxScoreOpen = false; endGameConfirmOpen = false; }
+  if (isScoringLive()) checkMercyMusicPause();
+  /* __SCORING_END__ */
   screenEl.innerHTML = '';
   if (state.activeTab === 'lineup') {
-    screenEl.appendChild(state.editing ? renderGridReorder() : renderLineupTab());
+    /* __SCORING_START__ */
+    // S1.6: the PIN sheet and the tap-to-draft editor both take over the
+    // whole Lineup tab, ahead of the classic state.editing dispatch below
+    // -- neither depends on (or touches) the classic order/pointerId
+    // system, so this is purely additive; a non-scoring build never sets
+    // either flag and falls straight through to the original chain.
+    if (pinSheet) {
+      const pinWrap = h('div', {});
+      pinWrap.appendChild(h('div', { class: 'topbar' }, [renderWordmark()]));
+      pinWrap.appendChild(renderPinSheet());
+      screenEl.appendChild(pinWrap);
+    } else if (scoringLineupEditor) {
+      screenEl.appendChild(renderScoringLineupEditor());
+    } else
+    /* __SCORING_END__ */
+    if (state.editing) {
+      screenEl.appendChild(renderGridReorder());
+    /* __SCORING_START__ */
+    } else if (isScoringLive()) {
+      screenEl.appendChild(renderScoringGameScreen()); // scoring takes over Next Up while a game is live
+    /* __SCORING_END__ */
+    } else {
+      screenEl.appendChild(renderLineupTab());
+    }
   } else {
     screenEl.appendChild(renderGridPlay()); // All Songs: always the soundboard, no modes
   }
 
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
-  const inReorder = state.activeTab === 'lineup' && state.editing;
+  const inReorder = state.activeTab === 'lineup' && (state.editing || scoringEditorActive());
   document.getElementById('app').classList.toggle('reorder-frame', inReorder);
 
   // Keep the on-card countdown live: start the tick the moment something
@@ -798,9 +4229,9 @@ function render() {
   // than in playClip/stopCurrent) means every path that starts or ends
   // playback automatically keeps this in sync just by calling render(),
   // which they all already do.
-  if (currentSource && !tickInterval) {
+  if ((currentSource || scoringAutoPlayPending) && !tickInterval) {
     tickInterval = setInterval(tickCountdown, 200);
-  } else if (!currentSource && tickInterval) {
+  } else if (!currentSource && !scoringAutoPlayPending && tickInterval) {
     clearInterval(tickInterval);
     tickInterval = null;
   }
@@ -813,7 +4244,7 @@ function renderLineupTab() {
   ]);
 
   if (order.length === 0) {
-    top.appendChild(h('div', { class: 'topbar-right' }, [renderOrderButton()]));
+    top.appendChild(h('div', { class: 'topbar-right' }, [renderOrderButton(), renderStartGameButtonIfNeeded()]));
     wrap.appendChild(top);
     wrap.appendChild(h('div', { class: 'empty-state' }, [
       h('div', { text: 'No lineup set yet.' }),
@@ -823,7 +4254,7 @@ function renderLineupTab() {
   }
 
   const pos = positionLabel(order, pointerId);
-  const right = h('div', { class: 'topbar-right' }, [renderOrderButton()]);
+  const right = h('div', { class: 'topbar-right' }, [renderOrderButton(), renderStartGameButtonIfNeeded()]);
   top.appendChild(right);
   wrap.appendChild(top);
 

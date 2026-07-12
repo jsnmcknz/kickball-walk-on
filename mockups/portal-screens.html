@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal screens — normative mockups (2026-07-11 design session)</title>
+<style>
+  body { background:#26282b; margin:0; padding:24px; font-family:-apple-system,"Helvetica Neue",sans-serif; }
+  .row { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; }
+  .col { width:292px; }
+  .caption { font-size:13px; color:#b9bdb9; margin:0 0 8px; text-align:center; }
+  .note { font-size:12px; color:#8f948f; margin:6px 4px 28px; line-height:1.5; }
+  .phone { background:#101215; border-radius:28px; border:1px solid #44464a; padding:16px 14px; }
+  .hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .wordmark { font-size:11px; letter-spacing:2px; color:#82A167; font-weight:500; }
+  .lineup-btn { font-size:11px; color:#e8eae6; background:#1d2126; border:1px solid #33383e; border-radius:6px; padding:3px 8px; }
+  .card { background:#82A167; border-radius:12px; padding:14px 12px 12px; text-align:center; margin-bottom:10px; }
+  .card .lbl { font-size:11px; letter-spacing:1.5px; color:#2C2E20; font-weight:500; }
+  .card .name { font-size:24px; color:#FFFFFF; font-weight:500; margin:2px 0; }
+  .card .cap { font-size:12px; color:#D8DBBE; }
+  .sect { font-size:11px; letter-spacing:1.5px; color:#8f948f; font-weight:500; margin:12px 0 6px; }
+  .chip { background:#1d2126; border:1px solid #33383e; border-radius:8px; padding:6px 10px; }
+  .muted { font-size:12px; color:#8f948f; }
+  .prow { display:flex; align-items:center; background:#1d2126; border:1px solid #33383e; border-radius:8px; padding:7px 10px; margin-bottom:5px; }
+  .prow .nm { flex:1; font-size:13px; font-weight:500; color:#e8eae6; }
+  .prow .st { width:26px; text-align:center; font-size:12px; color:#e8eae6; }
+  .prow .st.z { color:#8f948f; }
+  .prow .play { width:26px; height:26px; margin-left:6px; border:1px solid #536840; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#82A167; }
+  .grow { display:flex; align-items:center; gap:10px; background:#1d2126; border:1px solid #33383e; border-radius:8px; padding:9px 10px; margin-bottom:6px; }
+  .drag { display:flex; align-items:center; background:#1d2126; border:1px solid #33383e; border-radius:8px; padding:10px 10px; margin-bottom:6px; }
+  .drag .h { font-size:15px; color:#8f948f; margin-right:10px; letter-spacing:-1px; }
+  .drag .n { width:18px; font-size:12px; color:#8f948f; }
+  .drag .nm { flex:1; font-size:14px; font-weight:500; color:#e8eae6; }
+  .dash { background:#101215; border:1px dashed #33383e; color:#8f948f; }
+  .dim { opacity:0.4; }
+  .drag .rm { font-size:11px; color:#8f948f; margin-left:8px; }
+  .tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .tile { background:#1d2126; border:1px solid #33383e; border-radius:8px; text-align:center; padding:12px 0; font-size:13px; font-weight:500; color:#e8eae6; }
+  .gh { width:30px; text-align:center; letter-spacing:0; cursor:pointer; }
+  .gh.on { color:#82A167; }
+</style>
+</head>
+<body>
+
+<p style="color:#e8eae6; font-size:15px; max-width:640px; margin:0 auto 6px;">Normative visual reference — season stats portal &amp; portal-era flows (designed 2026-07-11)</p>
+<p style="color:#8f948f; font-size:12px; max-width:640px; margin:0 auto 28px; line-height:1.6;">Companion to <em>scoring-screens.html</em>, same authority rules: these mockups are the design of record for <em>appearance</em>; behavior is governed by 03-Invariants.md, 05-Scoring-Architecture.md, and 07-Portal-Architecture.md (boot posture, portal, schedule). Implement inside app.template.html's conventions — do not port this markup. Screens 4–5 are additionally the appearance ground truth for S1.6 (lineup editor, Start/End game).</p>
+
+<div class="row">
+
+<div class="col">
+<p class="caption">1 — Stats portal (default boot, everyone)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn" style="color:#8f948f;">schedule</span></div>
+  <div class="card">
+    <div class="lbl">NEXT GAME &middot; MON JUL 27</div>
+    <div class="name">DOWN WITH THE KICKNESS</div>
+    <div class="cap">Game 4 of 7</div>
+    <div class="cap">9:30 PM &middot; Back Campus &mdash; North Field</div>
+  </div>
+  <div class="chip" style="display:flex; justify-content:space-between; margin-bottom:4px;">
+    <span style="font-size:12px; color:#e8eae6; font-weight:500;">Our Record &middot; 1&ndash;2</span>
+    <span class="muted">run diff -15</span>
+  </div>
+  <div class="sect">LEADERS</div>
+  <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px;">
+    <div class="chip" style="text-align:center; padding:8px 4px;"><div style="font-size:11px; color:#8f948f;">HITS</div><div style="font-size:16px; font-weight:500; color:#e8eae6;">7</div><div style="font-size:11px; color:#82A167;">Megan</div></div>
+    <div class="chip" style="text-align:center; padding:8px 4px;"><div style="font-size:11px; color:#8f948f;">RUNS</div><div style="font-size:16px; font-weight:500; color:#e8eae6;">5</div><div style="font-size:11px; color:#82A167;">Will</div></div>
+    <div class="chip" style="text-align:center; padding:8px 4px;"><div style="font-size:11px; color:#8f948f;">RBI</div><div style="font-size:16px; font-weight:500; color:#e8eae6;">6</div><div style="font-size:11px; color:#82A167;">Megan</div></div>
+  </div>
+  <div class="sect" style="display:flex; align-items:center; padding:0 11px;"><span style="flex:1;">FULL TEAM</span><span class="gh" id="sh-h" onclick="ssort('h')">H</span><span class="gh" id="sh-r" onclick="ssort('r')">R</span><span class="gh" id="sh-rbi" onclick="ssort('rbi')">RBI</span><span style="width:32px;"></span></div>
+  <div id="sl-rows"></div>
+  <div class="prow" style="border:0; background:none; justify-content:center; margin:0;"><span class="muted">&hellip; all 12 &middot; tap a kicker for their season</span></div>
+</div>
+<p class="note">Read-only, no PIN, boots here on every device outside a game context (07's boot rule). Header right is a quiet <em>Schedule</em> link to screen 2 — no operator controls anywhere. AVG/SLG live on the per-player screen, not this table (H·R·RBI first, per Jason). Leaders/table compute over known-result PAs only (honest denominators). Row play buttons are DECIDED (Jason, 2026-07-11): each plays that kicker&rsquo;s walk-up clip via the normal one-sound-at-a-time engine; the playing row becomes the plum stop control, as everywhere. This replaces soundboard access for regular members. Column headers sort exactly like screen 6&rsquo;s (live in this mockup — tap H/R/RBI; second tap flips direction).</p>
+</div>
+
+<div class="col">
+<p class="caption">2 — Season (schedule + game results)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn" style="color:#8f948f;">stats</span></div>
+  <div class="sect" style="margin-top:0;">SEASON &middot; PICKLES 1&ndash;2</div>
+  <div class="grow"><span class="muted" style="width:38px;">Jul 6</span><span style="flex:1; font-size:13px; color:#e8eae6;">COLD SHOTZ</span><span style="font-size:13px; font-weight:500; color:#CBA9DD;">L 13&ndash;27</span><span class="muted" style="margin-left:6px;">&#8224;</span></div>
+  <div class="grow"><span class="muted" style="width:38px;">Jul 13</span><span style="flex:1; font-size:13px; color:#e8eae6;">Otter Nonsense</span><span style="font-size:13px; font-weight:500; color:#82A167;">W 4&ndash;3</span><span class="muted" style="margin-left:6px;">&#9656;</span></div>
+  <div class="grow"><span class="muted" style="width:38px;">Jul 20</span><span style="flex:1; font-size:13px; color:#e8eae6;">The Brew Jays</span><span style="font-size:13px; font-weight:500; color:#CBA9DD;">L 2&ndash;5</span><span class="muted" style="margin-left:6px;">&#9656;</span></div>
+  <div class="grow" style="border-color:#536840;"><span class="muted" style="width:38px;">Jul 27</span><span style="flex:1; font-size:13px; color:#e8eae6;">Down with the Kickness</span><span style="font-size:12px; color:#82A167;">9:30 PM &middot; North</span></div>
+  <div class="grow dim"><span class="muted" style="width:38px;">Aug 10</span><span style="flex:1; font-size:13px; color:#e8eae6;">Base Invaders</span><span class="muted">8:30 PM &middot; North</span></div>
+  <div class="grow dim"><span class="muted" style="width:38px;">Aug 17</span><span style="flex:1; font-size:13px; color:#8f948f;">TBD</span><span class="muted">&mdash;</span></div>
+  <div class="grow dim"><span class="muted" style="width:38px;">Aug 24</span><span style="flex:1; font-size:13px; color:#8f948f;">TBD</span><span class="muted">&mdash;</span></div>
+  <div class="muted" style="text-align:center; margin-top:10px;">&#8224; final score only</div>
+</div>
+<p class="note">Schedule straight from the manifest (07 / docs/season-schedule.md): absent keys render as TBD, next fixture gets the moss border, played games show results. Game 1&rsquo;s result comes from the manifest <em>result</em> field (score-only, &#8224;-marked — no PA data, a hole the stats model tolerates by design). Scored games (&#9656;) tap through to screen 6 — the full game detail with line score, snake scorecard, and per-player lines. Header right flips back to screen 1.</p>
+</div>
+
+<div class="col">
+<p class="caption">3 — Game-window prompt (scorer opens app)</p>
+<div class="phone">
+  <div class="hdr dim"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn" style="color:#8f948f;">season</span></div>
+  <div class="card dim" style="padding:10px;">
+    <div class="lbl">NEXT GAME &middot; TONIGHT</div>
+    <div class="name" style="font-size:20px;">OTTER NONSENSE</div>
+  </div>
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:16px 12px 12px; text-align:center; margin:18px 0;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500;">GAME TONIGHT</div>
+    <div style="font-size:22px; font-weight:500; color:#FFFFFF; margin:4px 0 2px;">vs Otter Nonsense</div>
+    <div class="muted" style="margin-bottom:12px;">8:30 PM &middot; Back Campus &mdash; North Field</div>
+    <div style="background:#536840; border-radius:8px; padding:11px 0; font-size:14px; font-weight:500; color:#e8eae6; margin-bottom:6px;">&#9998; score this game</div>
+    <div style="background:#101215; border:1px dashed #33383e; border-radius:8px; padding:9px 0; font-size:12px; font-weight:500; color:#8f948f;">&#10005; not now &mdash; just the stats</div>
+  </div>
+  <div class="dim">
+    <div class="sect">LEADERS</div>
+    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px;">
+      <div class="chip" style="text-align:center; padding:8px 4px;"><div style="font-size:11px; color:#8f948f;">HITS</div><div style="font-size:16px; font-weight:500; color:#e8eae6;">7</div><div style="font-size:11px; color:#82A167;">Megan</div></div>
+      <div class="chip" style="text-align:center; padding:8px 4px;"><div style="font-size:11px; color:#8f948f;">RUNS</div><div style="font-size:16px; font-weight:500; color:#e8eae6;">5</div><div style="font-size:11px; color:#82A167;">Will</div></div>
+      <div class="chip" style="text-align:center; padding:8px 4px;"><div style="font-size:11px; color:#8f948f;">RBI</div><div style="font-size:16px; font-weight:500; color:#e8eae6;">6</div><div style="font-size:11px; color:#82A167;">Megan</div></div>
+    </div>
+  </div>
+</div>
+<p class="note">Appears over the portal when any device opens inside the game window — <strong>60 min before scheduled start &rarr; 60 min after</strong> (games run ~50 minutes; tightened from end-of-day, Jason 2026-07-11). Fixture and copy come from the manifest schedule. Accept &rarr; PIN sheet (skipped if this device is already unlocked) &rarr; screen 4 with tonight&rsquo;s fixture pre-picked. Decline &rarr; portal; re-offer as a quiet banner, not a repeat modal. The team phone never sees this — its role marker (07) routes it straight to screen 4 / the live game. A device with a live game open skips everything and boots to the game screen; outside the window, scoring stays reachable from the portal.</p>
+</div>
+
+<div class="col">
+<p class="caption">4 — Start game (fixture pre-picked, set the order)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#10005; cancel</span></div>
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:10px 12px; text-align:center; margin-bottom:10px;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500;">STARTING &middot; MON JUL 13 &middot; 8:30 PM</div>
+    <div style="font-size:18px; font-weight:500; color:#FFFFFF; margin-top:2px;">vs Otter Nonsense</div>
+    <div class="muted" style="margin-top:2px;">from the schedule &middot; <span style="text-decoration:underline;">change game</span></div>
+  </div>
+  <div class="sect" style="margin-top:0;">TONIGHT&rsquo;S KICKING ORDER &middot; 5</div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">1</span><span class="nm">Megan</span><span class="rm">&#10005;</span></div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">2</span><span class="nm">Charlie</span><span class="rm">&#10005;</span></div>
+  <div class="drag" style="border-color:#536840; background:#22262b;"><span class="h">&#8801;</span><span class="n">3</span><span class="nm">Franny</span><span class="rm">&#10005;</span></div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">4</span><span class="nm">Jason</span><span class="rm">&#10005;</span></div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">5</span><span class="nm">Kirsten</span><span class="rm">&#10005;</span></div>
+  <div class="sect">TAP TO ADD &middot; 7 ON THE ROSTER</div>
+  <div class="tiles">
+    <div class="tile">Marcel</div><div class="tile">Ming</div><div class="tile">Penny</div>
+    <div class="tile">Will</div><div class="tile">Elias</div><div class="tile">Clayton</div>
+    <div class="tile">Winson</div><div class="tile dash" style="color:#8f948f;">+ new</div>
+  </div>
+  <div style="background:#536840; border-radius:10px; text-align:center; padding:12px 0; font-size:15px; font-weight:500; color:#e8eae6; margin-top:10px;">&#9654; start game</div>
+</div>
+<p class="note">S1.6 appearance ground truth. <strong>Tap-to-draft (Jason, 2026-07-11):</strong> the order is built by tapping roster tiles — each tap appends the player to the bottom of the list and removes their tile. &#10005; on a row returns the player to the grid; drag handles reorder (vertical drag only — simplifies the drag math behind game-1 defect #2); row 3 shows mid-drag treatment (moss border + lift). Anyone left in the grid at start simply isn&rsquo;t kicking tonight. &ldquo;+ new&rdquo; = name &rarr; member/sub &rarr; pick a defaultClips song &rarr; player_add event, then their tile appears (or lands straight in the order — TBD on feel). Opponent comes from the fixture, never typed; <em>change game</em> lists other fixtures + an &ldquo;unscheduled game&rdquo; fallback (allowed to be ugly). Start appends game_start with scheduleGameId and enters the game screen.</p>
+</div>
+
+<div class="col">
+<p class="caption">5 — Lineup editor (game live: ✎ lineup)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn">&#10005; close</span></div>
+  <div class="chip" style="display:flex; justify-content:space-between; margin-bottom:10px;">
+    <span style="font-size:12px; color:#e8eae6;">&#9650; 3rd &middot; live vs Otter Nonsense</span>
+    <span style="font-size:12px; color:#e8eae6; font-weight:500;">PICKLES 5 &middot; 3</span>
+  </div>
+  <div class="sect" style="margin-top:0;">KICKING ORDER &middot; edits apply next kicker</div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">1</span><span class="nm">Megan</span><span class="rm">&#10005;</span></div>
+  <div class="drag" style="border-color:#82A167;"><span class="h">&#8801;</span><span class="n">2</span><span class="nm">Charlie</span><span style="font-size:11px; color:#82A167;">up now</span></div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">3</span><span class="nm">Franny</span><span class="rm">&#10005;</span></div>
+  <div class="drag"><span class="h">&#8801;</span><span class="n">4</span><span class="nm">Penny <span style="font-size:10px; color:#8f948f; font-weight:400;">sub</span></span><span class="rm">&#10005;</span></div>
+  <div class="sect">TAP TO ADD</div>
+  <div class="tiles" style="margin-bottom:12px;">
+    <div class="tile">Marcel</div><div class="tile">Elias</div><div class="tile dash" style="color:#8f948f;">+ new</div>
+  </div>
+  <div style="background:#1d2126; border:1px solid #7A5C82; border-radius:10px; text-align:center; padding:11px 0; font-size:13px; font-weight:500; color:#CBA9DD;">&#9632; end game &mdash; final PICKLES 5 &middot; 3</div>
+  <div class="muted" style="text-align:center; margin-top:8px;">end game asks to confirm the final score</div>
+</div>
+<p class="note">The existing field-tested editor, re-skinned to the same rows + tap-to-add grid as screen 4 — one editor, two entry points (Start-game flow and mid-game &#9998; lineup). Mid-game it gains the live-game chip and the plum End game action (confirm sheet &rarr; game_end). A tapped tile appends to the order (arriving-late case, one tap); &#10005; removes a leaver from the rotation (their logged PAs stand). The current kicker (&ldquo;up now&rdquo;) can&rsquo;t be removed, only reordered around. PIN gates score-mode entry upstream of this screen, once per device.</p>
+</div>
+
+<div class="col">
+<p class="caption">6 — Game detail (tap a scored game on screen 2)</p>
+<div class="phone">
+  <div class="hdr"><span class="wordmark">&#129362; PICKLES&rsquo; PARTY PALACE</span><span class="lineup-btn" style="color:#8f948f;">&#8249; schedule</span></div>
+  <div class="chip" style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
+    <span style="font-size:13px; color:#e8eae6; font-weight:500;">Jul 13 &middot; vs Otter Nonsense</span>
+    <span style="font-size:14px; font-weight:500; color:#82A167;">W 4&ndash;3</span>
+  </div>
+  <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px;">
+    <tr style="color:#8f948f;"><td style="padding:2px 4px;"></td><td style="text-align:center;">1</td><td style="text-align:center;">2</td><td style="text-align:center;">3</td><td style="text-align:center;">4</td><td style="text-align:center;">5</td><td style="text-align:center;">6</td><td style="text-align:center;">7</td><td style="text-align:center; font-weight:500;">R</td></tr>
+    <tr style="color:#e8eae6; border-top:1px solid #2c3036;"><td style="padding:2px 4px; font-weight:500;">PICKLES</td><td style="text-align:center;">0</td><td style="text-align:center;">2</td><td style="text-align:center;">0</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center; color:#82A167; font-weight:500;">4</td></tr>
+    <tr style="color:#e8eae6; border-top:1px solid #2c3036;"><td style="padding:2px 4px; font-weight:500; color:#8f948f;">ON</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center;">2</td><td style="text-align:center;">0</td><td style="text-align:center;">0</td><td style="text-align:center;">0</td><td style="text-align:center;">0</td><td style="text-align:center; font-weight:500;">3</td></tr>
+  </table>
+  <div style="background:#1d2126; border:1px solid #536840; border-radius:10px; text-align:center; padding:11px 0; font-size:13px; font-weight:500; color:#e8eae6; margin-bottom:4px;">&#9638; view scorecard</div>
+  <div class="sect" style="display:flex; align-items:center; padding:0 11px;"><span style="flex:1;">GAME LINES</span><span class="gh" id="gh-ab" onclick="gsort('ab')">AB</span><span class="gh" id="gh-h" onclick="gsort('h')">H</span><span class="gh" id="gh-r" onclick="gsort('r')">R</span><span class="gh" id="gh-rbi" onclick="gsort('rbi')">RBI</span></div>
+  <div id="gl-rows"></div>
+  <div class="prow" style="border:0; background:none; justify-content:center; margin:0;"><span class="muted">&hellip; all 10 who kicked</span></div>
+</div>
+<p class="note" id="note6">The per-game deep dive: line score (from runsByInning), the full snake scorecard behind <em>view scorecard</em> (the S3 canvas renderer already first-passed — scoring-screens.html screen 6 remains its normative reference; share/download lives there), and per-player game lines from replay: AB &middot; H &middot; R &middot; RBI, default sort H descending. <strong>Column headers are live in this mockup</strong> — tap one to sort by it (&#9662; marks the active column); tap the active header again to flip direction (&#9652;). Ties break alphabetically. Same pattern is the natural candidate for screen 1&rsquo;s season table if wanted. Read-only, part of the portal, no PIN. This same screen is the post-game recap the team opens from the group-chat link.</p>
+</div>
+
+<div class="col">
+<p class="caption">7 — Small sheets: PIN gate · add player · end game</p>
+<div class="phone" style="display:flex; flex-direction:column; gap:14px;">
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:12px; text-align:center;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500;">SCORER PIN</div>
+    <div style="display:flex; justify-content:center; gap:10px; margin:10px 0 12px;">
+      <span style="width:12px; height:12px; border-radius:50%; background:#82A167;"></span>
+      <span style="width:12px; height:12px; border-radius:50%; background:#82A167;"></span>
+      <span style="width:12px; height:12px; border-radius:50%; border:1px solid #33383e;"></span>
+      <span style="width:12px; height:12px; border-radius:50%; border:1px solid #33383e;"></span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; max-width:180px; margin:0 auto 8px;">
+      <div class="tile" style="padding:9px 0;">1</div><div class="tile" style="padding:9px 0;">2</div><div class="tile" style="padding:9px 0;">3</div>
+      <div class="tile" style="padding:9px 0;">4</div><div class="tile" style="padding:9px 0;">5</div><div class="tile" style="padding:9px 0;">6</div>
+      <div class="tile" style="padding:9px 0;">7</div><div class="tile" style="padding:9px 0;">8</div><div class="tile" style="padding:9px 0;">9</div>
+      <div></div><div class="tile" style="padding:9px 0;">0</div><div class="tile dash" style="padding:9px 0; color:#8f948f;">&#9003;</div>
+    </div>
+    <div style="background:#101215; border:1px dashed #33383e; border-radius:8px; padding:7px 0; font-size:12px; font-weight:500; color:#8f948f;">&#10005; cancel</div>
+  </div>
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:12px;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500; text-align:center; margin-bottom:8px;">ADD PLAYER</div>
+    <div style="background:#101215; border:1px solid #33383e; border-radius:8px; padding:8px 10px; font-size:13px; color:#e8eae6; margin-bottom:6px;">Dana<span style="color:#536840;">|</span></div>
+    <div style="display:flex; gap:6px; margin-bottom:6px;">
+      <div class="tile" style="flex:1; padding:8px 0; border-color:#536840; color:#82A167;">member</div>
+      <div class="tile" style="flex:1; padding:8px 0;">sub</div>
+    </div>
+    <div style="font-size:11px; color:#8f948f; margin-bottom:4px;">walk-up song</div>
+    <div class="tile" style="padding:8px 0; border-color:#536840; color:#82A167; margin-bottom:6px;">Hype Track 1 &middot; 0:12</div>
+    <div class="tile" style="padding:8px 0; margin-bottom:8px;">Hype Track 2 &middot; 0:11</div>
+    <div style="display:flex; gap:6px;">
+      <div style="flex:1; background:#536840; border-radius:8px; text-align:center; padding:9px 0; font-size:13px; font-weight:500; color:#e8eae6;">add to order</div>
+      <div style="flex:1; background:#101215; border:1px dashed #33383e; border-radius:8px; text-align:center; padding:9px 0; font-size:12px; font-weight:500; color:#8f948f;">&#10005; cancel</div>
+    </div>
+  </div>
+  <div style="background:#1d2126; border:1px solid #7A5C82; border-radius:12px; padding:12px; text-align:center;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#CBA9DD; font-weight:500;">END GAME?</div>
+    <div style="font-size:18px; font-weight:500; color:#FFFFFF; margin:6px 0 2px;">PICKLES 5 &middot; 3 final</div>
+    <div class="muted" style="margin-bottom:10px;">vs Otter Nonsense &middot; after 7</div>
+    <div style="background:#1d2126; border:1px solid #7A5C82; border-radius:8px; padding:10px 0; font-size:13px; font-weight:500; color:#CBA9DD; margin-bottom:6px;">&#9632; end game</div>
+    <div style="background:#101215; border:1px dashed #33383e; border-radius:8px; padding:8px 0; font-size:12px; font-weight:500; color:#8f948f;">&#10005; cancel &mdash; keep scoring</div>
+  </div>
+</div>
+<p class="note">The three S1.6 sheets that had no visual anywhere (the "small and unmocked breeds generic UI" guard). <strong>PIN gate</strong>: in-app keypad, not a system text field — no keyboard popping over a kiosk screen; dots fill as digits land; wrong PIN shakes and clears (no error prose); once per device, persisted. <strong>Add player</strong>: the one place typing is unavoidable (system keyboard OK, it's a rare pre-game op); member/sub segment; song list = the manifest's defaultClips with durations, tap to preview via the normal engine; primary action reads <em>add to order</em> because the new player lands straight in the order (07's open question, resolved by this sheet's copy — flip on preview if it feels wrong). <strong>End game</strong>: plum = "this ends" semantic, echoes the score for confirmation, cancel is explicit about resuming. All three render as takeover sheets in the app's existing sheet conventions, not modals over dimmed content.</p>
+</div>
+
+<div class="col">
+<p class="caption">8 — Adjust sheet (tap the score bug)</p>
+<div class="phone">
+  <div style="background:#1d2126; border:1px solid #82A167; border-radius:12px; padding:12px;">
+    <div style="font-size:11px; letter-spacing:1.5px; color:#82A167; font-weight:500; text-align:center; margin-bottom:10px;">ADJUST</div>
+    <div style="background:#101215; border:1px solid #33383e; border-radius:10px; padding:8px 6px; margin-bottom:8px; display:flex; gap:6px;">
+      <div style="flex:1; min-width:0; text-align:center;">
+        <div style="font-size:11px; letter-spacing:1px; color:#8f948f; font-weight:500; margin-bottom:6px;">OUTS</div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+          <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">&minus;</span>
+          <span style="width:24px; flex:none; text-align:center; font-size:20px; font-weight:500; color:#e8eae6;">2</span>
+          <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">+</span>
+        </div>
+      </div>
+      <div style="width:1px; flex:none; background:#2c3036;"></div>
+      <div style="flex:1; min-width:0; text-align:center;">
+        <div style="font-size:11px; letter-spacing:1px; color:#8f948f; font-weight:500; margin-bottom:6px;">INNING</div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+          <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">&minus;</span>
+          <span style="width:24px; flex:none; text-align:center; font-size:18px; font-weight:500; color:#e8eae6;">&#9650;3</span>
+          <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">+</span>
+        </div>
+      </div>
+    </div>
+    <div style="background:#101215; border:1px solid #33383e; border-radius:10px; padding:8px 6px; margin-bottom:10px;">
+      <div style="font-size:11px; letter-spacing:1.5px; color:#8f948f; font-weight:500; text-align:center; margin-bottom:6px;">SCORES</div>
+      <div style="display:flex; gap:6px;">
+        <div style="flex:1; min-width:0; text-align:center;">
+          <div style="font-size:11px; letter-spacing:1px; color:#8f948f; font-weight:500; margin-bottom:6px;">PICKLES</div>
+          <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+            <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">&minus;</span>
+            <span style="width:24px; flex:none; text-align:center; font-size:20px; font-weight:500; color:#e8eae6;">5</span>
+            <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">+</span>
+          </div>
+        </div>
+        <div style="width:1px; flex:none; background:#2c3036;"></div>
+        <div style="flex:1; min-width:0; text-align:center;">
+          <div style="font-size:11px; letter-spacing:1px; color:#8f948f; font-weight:500; margin-bottom:6px;">OTTER</div>
+          <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+            <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">&minus;</span>
+            <span style="width:24px; flex:none; text-align:center; font-size:20px; font-weight:500; color:#e8eae6;">3</span>
+            <span style="width:32px; height:32px; flex:none; border:1px solid #33383e; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; color:#e8eae6;">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; gap:6px;">
+      <div style="flex:1; background:#536840; border-radius:8px; text-align:center; padding:9px 0; font-size:13px; font-weight:500; color:#e8eae6;">done</div>
+      <div style="flex:1; background:#101215; border:1px dashed #33383e; border-radius:8px; text-align:center; padding:9px 0; font-size:12px; font-weight:500; color:#8f948f;">&#10005; cancel</div>
+    </div>
+  </div>
+  <div class="muted" style="text-align:center; margin-top:10px;">steppers edit a draft &mdash; done commits,<br>cancel discards even after changes</div>
+</div>
+<p class="note">Spec S1 item 3's "tappable figures &rarr; adjust steppers", finally drawn (confirmed IN by Jason 2026-07-11; layout per his revisions — OUTS + INNING box on top, SCORES box below it with team names above side-by-side steppers). ONE tap anywhere on the score bug opens the whole sheet — per-figure tap targets inside that dense bug would be fiddly at the park. Stepper squares 32px to fit two abreast inside the boxes. <strong>Draft semantics (Jason's revision, superseding the instant-log version):</strong> steppers edit a local draft; <em>done</em> commits — one `adjust` event per changed field; <em>cancel</em> discards everything, even after changes. Cleaner event log too (one adjust per field instead of one per tap). Inning stepper flips through halves and shows arrow + bare numeral for space (&#9650;3 &rarr; &#9660;3 &rarr; &#9650;4 — Jason 2026-07-11; ordinals stay everywhere else); outs clamp 0–2 (a third out is a real event, not an adjustment). Team shorthand is the manifest's new `teamShort` field ("PICKLES", replacing the initials-derived PPP app-wide). Renders in the correction-sheet slot on the offense screen, same dim-the-rest treatment as the runner sheet.</p>
+</div>
+
+</div>
+<script>
+(function(){
+  var LBL={ab:"AB",h:"H",r:"R",rbi:"RBI"};
+  function sorter(data, cols, headPrefix, rowsId, extraHtml){
+    var sk="h", sd=-1;
+    function render(){
+      cols.forEach(function(k){
+        var el=document.getElementById(headPrefix+k);
+        el.className="gh"+(sk===k?" on":"");
+        el.innerHTML=LBL[k]+(sk===k?(sd<0?" &#9662;":" &#9652;"):"");
+      });
+      var rows=data.slice().sort(function(a,b){ return (a[sk]===b[sk]) ? a.n.localeCompare(b.n) : (b[sk]-a[sk])*(sd<0?1:-1); });
+      document.getElementById(rowsId).innerHTML=rows.map(function(p){
+        return '<div class="prow"><span class="nm">'+p.n+(p.sub?' <span style="font-size:10px; color:#8f948f; font-weight:400;">sub</span>':'')+'</span>'+cols.map(function(k){
+          return '<span class="st'+(p[k]?"":" z")+'" style="width:30px;">'+p[k]+'</span>';
+        }).join('')+(extraHtml||'')+'</div>';
+      }).join('');
+    }
+    render();
+    return function(k){ if(sk===k){sd=-sd;}else{sk=k;sd=-1;} render(); };
+  }
+  window.gsort=sorter(
+    [{n:"Megan",ab:4,h:3,r:1,rbi:2},{n:"Will",ab:4,h:2,r:1,rbi:0},{n:"Franny",ab:3,h:1,r:1,rbi:1},{n:"Kirsten",ab:3,h:1,r:0,rbi:0}],
+    ["ab","h","r","rbi"], "gh-", "gl-rows");
+  window.ssort=sorter(
+    [{n:"Megan",h:7,r:4,rbi:6},{n:"Will",h:5,r:5,rbi:2},{n:"Franny",h:4,r:2,rbi:1},{n:"Kirsten",h:3,r:1,rbi:0},{n:"Penny",sub:1,h:2,r:0,rbi:0}],
+    ["h","r","rbi"], "sh-", "sl-rows", '<span class="play">&#9654;</span>');
+})();
+</script>
+</body>
+</html>

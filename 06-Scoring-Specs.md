@@ -1,0 +1,56 @@
+# Scoring Build Specs — S1 / S2 / S3
+
+Build-ready phases for the scoring merge. Design decisions are made in `05-Scoring-Architecture.md`; this file makes implementation mechanical. Written 2026-07-07 (Fable design session) so lower-tier build sessions don't re-derive design.
+
+**Before any build session:** read `03-Invariants.md` (behavior ground truth), `05-Scoring-Architecture.md` (data/logic ground truth), `07-Portal-Architecture.md` (app identity, boot posture, schedule — amends items 6 and 7 below), and open `mockups/scoring-screens.html` in a browser (appearance ground truth — match it pixel-for-pixel, implemented in `app.template.html`'s conventions, NOT by porting the mockup markup). Run `node dom-stub-test.js` before any ship; every phase below adds test groups to it.
+
+**Hard rules for every phase:**
+- `scoring.enabled: false` in the manifest must produce today's app — build.py strips or dead-codes the scoring layer; verify the artifact behaves identically (this is the rollout guard).
+- The walk-up play path stays synchronous tap→`source.start()` (invariant family; auto-play scheduling must not move the context unlock out of the gesture).
+- No new modes on All Songs. Grid never blocks.
+- Every user action = one appended event; no derived state is ever stored (undo/corrections/stats replay the log).
+- Existing localStorage keys and their shapes are untouched; scoring gets its own keys.
+
+---
+
+## S1 — Offline scoring core (no network; one session)
+
+**Scope:** everything a single offline device needs to score a game end-to-end. Postponing sync makes this phase pure logic + UI, testable in the DOM stub.
+
+1. **Manifest + build.py:** add `settings.autoPlayDelayMs` (default 2000), `scoring` block, `players[].status`, `teamSounds[]`, `defaultClips[]` per architecture §Manifest. Validate clips for teamSounds/defaultClips like player clips. Strip scoring code when `scoring.enabled` is false.
+2. **Event log module:** append-only array in localStorage (`scoringEvents_v1`), event shape per architecture §Event schema; `deriveState(events)` pure function returning `{inning, half, outs, scoreUs, scoreThem, runners, lineupPointer, lastAction, paLog}`. All replay rules per §Assumption engine, including previous-kicker detection, lead-runner pushes, legal-move computation, inferred-RBI flagging, tombstones and amendments.
+3. **Game screen (offense)** on the Next Up tab when a game is live: score bug (tappable figures → adjust steppers), diamond + last-action chip, shrunk NOW UP card (all existing card states preserved; new caption logic: "tap to replay" once the clip has fired this PA), result pad (mockup screen 1), on-deck strip. Result tap: append `pa` → advance pointer → schedule next clip after `autoPlayDelayMs` (context unlock/rebuild inside the tap; delayed `start()` on the running context; double-tap guard applies).
+4. **Defense screen** (mockup 2): +OUT, runs stepper, auto half-flip at 3 outs (both halves), leadoff preview.
+5. **Correction states** (mockups 3, 4; superseded in part 2026-07-07 and again 2026-07-08, see 05-Scoring-Architecture.md's Event schema and UX summary amendments): runner sheet with OUT-first + tap-a-base on the diamond itself (legal forward/backward targets, `runner`/`action:"set"`, replacing the original `+N` button list); fix-last with amend/undo/"out on the bases — hit stands"; previous-kicker redirect; dashed cancels; dim-uninvolved treatment. 2026-07-08 additions (built): chain-forward set semantics, un-scoring enforcement for absolute sets, the scored-runner sheet via home-plate tap, merged last-action recap, enlarged diamond with pentagon home plate and 2-letter runner codes.
+6. **Lineup editor extensions** *(scope amended 2026-07-11 per round-6 decisions + Jason's rulings — see `07-Portal-Architecture.md`; appearance ground truth: `mockups/portal-screens.html` screens 4–5)*: the editor becomes a **tap-to-draft surface** — a full-width drag-handle order list (vertical drag only; simplifies the drag math behind game-1 defect #2) plus a **roster tile grid**: tapping a tile appends that player to the order and removes the tile; ✕ on a row returns them to the grid; the current kicker can't be removed mid-game, only reordered around. "+ new" tile = name → member/sub → defaultClips pick → `player_add` event + localStorage roster overlay. **Start game** (**pick-from-schedule** — fixture supplies opponent, no kiosk text input; manual "unscheduled game" fallback allowed to be ugly → draft the order → `game_start` with `scheduleGameId`), **End game** (confirm final score → `game_end`). PIN prompt (against `scoring.teamPin`) gates entry to score mode, once per device (persisted). **Score-bug adjust steppers** (item 3's "tappable figures", specced but never built in S1.5) are confirmed IN and land here — Jason ruled 2026-07-11: score and out count must be manually adjustable. Requires the schedule manifest block (`docs/season-schedule.md` draft shape) to be wired in build.py first. **UI polish batch (Jason, 2026-07-11 — deltas against the BUILT app, which is the appearance baseline; scoring-screens.html screen 1's addendum illustrates the indicator motif only):** hit buttons (1B/2B/3B/HR) gain baseline indicators — mini-diamond motif behind the label, moss edges lit per bases reached, scorecard edge-mapping; label sized to sit *inside* the diamond, horizontally centered; the motif extends to every render of the pad (fix-last included); GND button reads GROUND (event code unchanged); the bottom pill tab reads **Scoring** instead of Next Up in scoring builds (walk-on-only builds keep Next Up); live diamond graphic enlarged to fill its column and last-action text one step larger (tune in preview — keep `--scoring-ref-h` and caption anchor in sync); scorecard's third-out corner triangle switches pickle → **plum**; lineup editor gets a **Cancel button beside Done** — edits (including a mistaken clear) are held until Done commits, Cancel discards.
+7. **Location field picker (flag `scoring.flyLocationField`, default true)** *(generalized 2026-07-11 per `07-Portal-Architecture.md`: fires after ALL batted-ball results — 1B/2B/3B/HR/FLY/GND, not K — same contract throughout; "FLY" below reads as "any batted ball". Header copy is result-aware — outs (FLY/GND): "WHO CAUGHT IT?"; hits: "WHERE'D IT LAND?")*: after a FLY tap, the diamond zone renders the field picker (mockup screen 7): four outfield arc zones (LF/LC/RC/RF, lighter fill) + four infield quadrants (SS/2B/3B/1B), runner chips unchanged and live on the same diamond, dashed "✕ skip — didn't see it", operator caption "optional — keep scoring and this gets out of the way". Location logs as an `amend` on the FLY event (`payload.location ∈ LF LC RC RF SS 2B 3B 1B`). Dismissal contract: zone tap, skip, ~6s timeout, or any other tap winning (prompt never captures input — the next result tap executes normally). A runner tap opens the normal runner sheet; the picker returns with a fresh timeout after the sheet resolves. A dismissed fly can still get a location via fix-last. No location capture for K.
+8. **Tests (extend dom-stub-test.js):** derive-state fixtures (each result type; pushes incl. pushed-past-home; RBI attribution incl. inferred; 3-out flips; adjust events; amend/undo restoration; previous-kicker detection; SKIP excluded from PA counts; MISSED in PA count but no rate stats); UI wiring (pad renders only with live game; gate off = today's app snapshot).
+
+## S2 — Sync + live scoreboard (one session; requires docs/03-supabase-setup.md completed by Jason first)
+
+1. **Queue:** events marked local/synced; flush on `online`, `visibilitychange`, 20s interval while game live. Batched upsert, `on conflict (game_id, device_id, seq) do nothing`. Retries safe by construction. Failure = silent (queue persists); no error modals mid-game, diagnostics to debug readout.
+2. **Sync chip:** bottom-center, only when queue > 0: "N plays waiting to sync". Nothing when synced. Debug readout gains queue depth / last flush / last error lines.
+3. **Pull + viewer mode:** on load with network, fetch open game + events; device without the scorer lock renders the read-only live scoreboard ("«device» is scoring") with take-over action. Realtime subscription on the game's events; fall back to 15s polling if realtime misbehaves on old Safari — verify, don't assume.
+4. **Scorer lock:** claim on Start game / take-over; heartbeat ~30s; stale (>90s) lock claimable. Advisory — offline scoring never blocks on it.
+5. **Tests:** queue flush idempotency (simulated); merge of two devices' event streams (replay determinism: ts then device/seq); lock staleness logic.
+
+## S3 — Stats, scorecard, recap (one session)
+
+1. **Stats view** (entry from lineup screen — keep the game screen pure): season leaderboards (AVG/SLG/OBP-equivalent over known-result PAs, runs, RBI with inferred flagged, games), per-player lines, member/sub segmentation, per-game log. Honest denominators everywhere; missing games are visible gaps, not zeros.
+2. **Scorecard renderer (mockup screen 6 is normative):** traditional grid, kickers × innings, from replay. Batting order snakes across columns (staircase — a PA renders in the row×inning cell where it happened; blank = order didn't reach the player). Per cell: mini-diamond whose edges fill pickle as bases are reached (lower-right=1st, upper-right=2nd, upper-left=3rd), solid pickle diamond = run scored, faint diamond + label for outs, plum ✕ at the base where a runner was erased (hit edges stay green — hit stands), shaded `?` for MISSED, small corner triangle on each third-out cell (**plum**, amended 2026-07-11 from pickle), `†` on AB totals where MISSED PAs are excluded, legend baked into the image. Phone-portrait proportions (~340px logical width), drawn to `<canvas>` at 2× for pinch-zoom. Line score on top with W/L-colored total.
+3. **Share/download:** button on the scorecard → `canvas.toBlob` → `navigator.share({files})` (verify old-iOS support level; fallback: render PNG into an `<img>` with "press and hold to save/share"). This is the post-game group-chat artifact.
+4. **Season export:** one-off script (not in-app) pulling Supabase events → CSV/Airtable for Jason's own querying; lives in repo `tools/`.
+5. **Tests:** stat fixtures incl. edge denominators; scorecard cell mapping fixtures.
+
+---
+
+## Sequencing and prerequisites
+
+S1 ships alone and is useful immediately on the team phone (offline log, post-hoc export via debug readout if S2 slips). Jason completes the Supabase walkthrough between S1 and S2. S3 anytime after S2 (or after S1 in export-only form). Roadmap specs A–G in `04-Feature-Specs.md` remain valid and independent; spec H is superseded (see architecture §Relationship to existing roadmap).
+
+## Open items (decide during build, flagged not blocking)
+
+- Exact PIN UX (once per device vs per game-start) — leaning once per device.
+- Realtime vs polling on the actual old-iOS Safari — test on device early in S2.
+- `navigator.share` file support on the oldest operator phones — test early in S3; fallback specced above.
+- Scorecard aesthetics — canvas render should reuse the app palette; iterate with Jason once data exists (a real game's log makes a better design surface than fixtures).

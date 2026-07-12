@@ -9,3 +9,4 @@ source/
 # is index.html + sw.js at repo root. Tracking dist/ doubled repo growth
 # with every rebuild (base64 blobs churn completely each build).
 dist/
+__pycache__/
