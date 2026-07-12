@@ -56,7 +56,18 @@
     touch-action: manipulation;
   }
   html, body {
-    height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    /* 100% first as a fallback for browsers without dvh support; 100dvh
+       overrides it where available. 2026-07-14, Jason: the meta-tag fix
+       alone didn't close the gap -- per docs he found, a static `height:
+       100%` can resolve against a stale/cached viewport in iOS standalone
+       PWA mode (worse after repeated launches/navigation), where `dvh`
+       (dynamic viewport height, iOS 15.4+) is the unit specifically built
+       to track the ACTUAL live viewport instead. #app itself still sizes
+       off top/bottom insets, not a height value, so this only fixes body's
+       own box -- but body's box is what #app's fixed positioning is
+       ultimately anchored against in this rendering mode. */
+    height: 100%; height: 100dvh;
+    margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     font-weight: 400; overscroll-behavior-y: contain;
     /* 2026-07-14, Jason (on-device, standalone home-screen app): a screen
