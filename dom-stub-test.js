@@ -256,7 +256,7 @@ global.__hooks = {
   debugClearGameData: function() { return debugClearGameData(); },
   scorecardColumns: function() { return scorecardColumns(); },
   scorecardLayout: function() { return scorecardLayout(); },
-  // Portal (07-Portal-Architecture.md, 2026-07-13)
+  // Portal (07-Portal-Architecture.md, 2026-07-12)
   segmentGamesFromEvents: function(ev) { return segmentGamesFromEvents(ev); },
   seasonGameRecords: function() { return seasonGameRecords(); },
   seasonRecord: function() { return seasonRecord(); },
@@ -276,11 +276,16 @@ global.__hooks = {
   setGameWindowPromptOpen: function(v) { gameWindowPromptOpen = v; },
   getGameWindowPromptDismissed: function() { return gameWindowPromptDismissed; },
   setPortalActiveForTest: function(v) { portalActive = v; },
-  // Tab-bar-on-scoring-subpages (2026-07-14)
+  // Tab-bar-on-scoring-subpages (2026-07-12)
   toggleBoxScore: function() { return toggleBoxScore(); },
   getScoringBoxScoreOpen: function() { return scoringBoxScoreOpen; },
   isScoringSubpageActive: function() { return isScoringSubpageActive(); },
   getTabbarHidden: function() { return document.getElementById('tabbar').classList.contains('hidden'); },
+  // Home/away (2026-07-12): glyph helper + mercy module-state access for
+  // the cross-game reset test.
+  halfGlyph: function(half, isHome) { return halfGlyph(half, isHome); },
+  getMercyState: function() { return { dismissed: mercyDismissedForHalf, paused: musicPausedForMercyHalf }; },
+  setMercyStateForTest: function(d, p) { mercyDismissedForHalf = d; musicPausedForMercyHalf = p; },
 };
 `;
 
@@ -1794,7 +1799,7 @@ async function main() {
     console.log('57. Debug panel "clear game data": confirm-gated, wipes events + localStorage, closes open overlays: OK');
   }
 
-  // 58. Scorecard out annotations (2026-07-13, Jason): every out -- a
+  // 58. Scorecard out annotations (2026-07-12, Jason): every out -- a
   // FLY/GND/K result AND a basepath/home out on a hit -- gets an
   // outNumberInHalf stamp (1/2/3) for the corner badge, and a basepath
   // out's reachedBase is available to center the X on the actual base
@@ -1818,7 +1823,7 @@ async function main() {
     console.log('58. Scorecard out annotations: outNumberInHalf stamped for FLY/GND/K and basepath outs, reachedBase available for X placement: OK');
   }
 
-  // 59. Scorecard/box score only show innings actually reached (2026-07-13,
+  // 59. Scorecard/box score only show innings actually reached (2026-07-12,
   // Jason: the game runs on a 50-minute timer, not a fixed inning count) --
   // scorecardColumns/scorecardLayout no longer pad out to
   // manifest.scoring.inningsPerGame with empty future innings.
@@ -1837,7 +1842,7 @@ async function main() {
 
   // 60. Scoring auto-play survives a routine baserunner correction, but a
   // correction that actually changes who's up next still invalidates it
-  // (2026-07-13, Jason: baserunner edits are routine mid-countdown and
+  // (2026-07-12, Jason: baserunner edits are routine mid-countdown and
   // shouldn't kill the next batter's music every time, but a real
   // half-flip still must not misfire the stale batter). The safety net
   // moved from "cancel on any correction" to scheduleScoringAutoPlay's own
@@ -1863,7 +1868,7 @@ async function main() {
     console.log('60. Scoring auto-play: routine baserunner correction no longer kills the pending clip, still fires on schedule: OK');
   }
 
-  // ---- Portal (07-Portal-Architecture.md, built 2026-07-13) ----
+  // ---- Portal (07-Portal-Architecture.md, built 2026-07-12) ----
   // Fixture dates are built relative to "now" (fixtureStartDate parses
   // date+time as local time, same convention the manifest uses), so the
   // window math below holds regardless of what day this suite actually runs.
@@ -1943,7 +1948,7 @@ async function main() {
   // portal AND the prompt layered over it), rule 3 (non-team-phone, no
   // window -> portal alone), and the team-phone branch -- ALWAYS opens
   // Start Game directly, PIN-gated, whether or not a fixture is in window
-  // (2026-07-14 correction: previously gated on the window, which left the
+  // (2026-07-12 correction: previously gated on the window, which left the
   // device falling through to the classic tile-grid/Next-Up screens
   // whenever nothing was in window -- exactly what Jason found live).
   {
@@ -2020,7 +2025,7 @@ async function main() {
     // Team phone, NOT yet unlocked -> PIN gate first, same as the existing
     // entry point -- Start Game only opens after success, and the PIN sheet
     // itself offers no cancel button (nowhere legitimate to send this
-    // device pre-game -- 2026-07-14, Jason: "the app should simply be
+    // device pre-game -- 2026-07-12, Jason: "the app should simply be
     // unusable at that #anchored URL" until the PIN succeeds).
     resetPortalVars();
     hooks.setPinUnlockedForTest(false);
@@ -2209,7 +2214,7 @@ async function main() {
     delete hooks.getDATA().schedule;
   }
 
-  // 65. Draft-row drag is scoped to the handle only (2026-07-14 fix): a
+  // 65. Draft-row drag is scoped to the handle only (2026-07-12 fix): a
   // drag gesture starting on .draft-row-handle engages (ghost/placeholder
   // appear); the identical gesture starting on plain row space does
   // nothing at all -- no listener lives there anymore, so it's free for
@@ -2246,7 +2251,7 @@ async function main() {
       'render()\'s defensive sweep (invariant 7) clears stray drag state regardless of how the gesture ended');
 
     // Drag from plain row space (not the handle): should do nothing --
-    // no listener lives there since the 2026-07-14 fix, so native scroll
+    // no listener lives there since the 2026-07-12 fix, so native scroll
     // owns this area instead of fighting a JS drag that used to hijack it.
     const charlieRow = findByClassContaining('draft-row', 'Charlie');
     charlieRow.dispatch('pointerdown', { clientY: 100, pointerId: 2 });
@@ -2261,7 +2266,7 @@ async function main() {
   // start-game draft, end-game confirm), visible on the root at-bat screen
   // (firm principle 5 still applies there). Also: the done/cancel (or start
   // game) CTA now sits between the order list and "tap to add", not after
-  // the whole add-grid (2026-07-14, Jason).
+  // the whole add-grid (2026-07-12, Jason).
   {
     function domOrderIndex(cls) {
       let counter = 0, found = -1;
@@ -2314,6 +2319,134 @@ async function main() {
     assert(hooks.getTabbarHidden() === false, 'tab bar returns once the confirm closes');
 
     console.log('66. Tab bar hidden on scoring sub-pages, visible on the root at-bat screen; CTA relocated between the order list and add-grid: OK');
+  }
+
+  // 67. Home/away (isHome, 2026-07-12): home games open in the opponent's
+  // half, inning flips are leadoff-aware, the ▲/▼ glyph derives from half
+  // AND isHome together, the Start Game toggle rides game_start.payload,
+  // and the adjust sheet's kick-order row is the post-start correction path.
+  {
+    // -- Engine: home game opens fielding; flips are leadoff-aware --
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Otters', innings: 7, lineup: ['alice', 'bob', 'charlie'], isHome: true });
+    let st = hooks.deriveState(ev);
+    assert(st.isHome === true, 'game_start.isHome lands in derived state');
+    assert(st.half === 'them' && st.inning === 1, 'home game opens in the opponent (top) half: ' + st.half + '/' + st.inning);
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    st = hooks.deriveState(ev);
+    assert(st.half === 'us' && st.inning === 1, 'top->bottom flip stays in the same inning when home: ' + st.half + '/' + st.inning);
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'K', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: 'K', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'K', inning: 1, half: 'us' });
+    st = hooks.deriveState(ev);
+    assert(st.half === 'them' && st.inning === 2, 'bottom->top flip increments the inning when home: ' + st.half + '/' + st.inning);
+
+    // -- Legacy/away replay identical to the old hardcoded behavior --
+    let evAway = [];
+    evAway = hooks.appendScoringEvent(evAway, 'game_start', { opponent: 'Foxes', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    let stAway = hooks.deriveState(evAway);
+    assert(stAway.isHome === false && stAway.half === 'us' && stAway.inning === 1,
+      'absent isHome = away = original behavior (we lead off)');
+
+    // -- Glyphs derive from half AND isHome --
+    assert(hooks.halfGlyph('us', false) === '▲' && hooks.halfGlyph('them', false) === '▼',
+      'away: our half is the top');
+    assert(hooks.halfGlyph('them', true) === '▲' && hooks.halfGlyph('us', true) === '▼',
+      'home: our half is the bottom');
+
+    // -- adjust {field:'isHome'} mid-game flips leadoff from that point on --
+    evAway = hooks.appendScoringEvent(evAway, 'adjust', { field: 'isHome', value: true });
+    stAway = hooks.deriveState(evAway);
+    assert(stAway.isHome === true && stAway.half === 'us',
+      'isHome adjust flips the flag without teleporting the current half');
+    evAway = hooks.appendScoringEvent(evAway, 'pa', { playerId: 'alice', result: 'K', inning: 1, half: 'us' });
+    evAway = hooks.appendScoringEvent(evAway, 'pa', { playerId: 'bob', result: 'K', inning: 1, half: 'us' });
+    evAway = hooks.appendScoringEvent(evAway, 'pa', { playerId: 'charlie', result: 'K', inning: 1, half: 'us' });
+    stAway = hooks.deriveState(evAway);
+    assert(stAway.half === 'them' && stAway.inning === 2,
+      'post-adjust, our 3rd out reads as bottom->top: inning increments: ' + stAway.half + '/' + stAway.inning);
+
+    // -- Start Game toggle -> game_start payload --
+    hooks.setScoringEvents([]);
+    hooks.setPinUnlockedForTest(true);
+    hooks.openStartGameFlow();
+    const ed = hooks.getScoringLineupEditor();
+    assert(ed && ed.isHome === false, 'Start Game defaults to "we kick first" (away)');
+    ed.isHome = true; // the toggle's own onclick does exactly this
+    hooks.draftAppend('alice');
+    hooks.draftAppend('bob');
+    hooks.draftAppend('charlie');
+    hooks.commitStartGame();
+    assert(hooks.getScoringState().isHome === true && hooks.getScoringState().half === 'them',
+      'committed home game opens fielding');
+
+    // -- Adjust sheet: draft carries isHome; inning stepper walks halves in
+    // home order; kick-order row commits one adjust event --
+    let live = hooks.getScoringEvents();
+    live = hooks.appendScoringEvent(live, 'opp_out', { inning: 1 });
+    live = hooks.appendScoringEvent(live, 'opp_out', { inning: 1 });
+    live = hooks.appendScoringEvent(live, 'opp_out', { inning: 1 });
+    hooks.setScoringEvents(live); // bottom 1st, our half -- adjust sheet is offense-only
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    hooks.openAdjustSheet();
+    const c = hooks.getScoringCorrection();
+    assert(c && c.mode === 'adjust' && c.draft.isHome === true, 'adjust draft carries isHome');
+    hooks.adjustStep('inning', 1);
+    assert(c.draft.half === 'them' && c.draft.inning === 2,
+      'home inning walk: ▼1 steps forward to ▲2 (them lead off): ' + c.draft.half + '/' + c.draft.inning);
+    hooks.adjustStep('inning', -1);
+    assert(c.draft.half === 'us' && c.draft.inning === 1, 'and back to ▼1');
+    hooks.adjustStep('isHome', false);
+    assert(c.draft.isHome === false, 'kick-order toggle edits the draft');
+    const evCountBefore = hooks.getScoringEvents().length;
+    hooks.commitAdjust();
+    const appended = hooks.getScoringEvents().slice(evCountBefore);
+    assert(appended.length === 1 && appended[0].type === 'adjust' && appended[0].payload.field === 'isHome' && appended[0].payload.value === false,
+      'commit appends exactly one isHome adjust event for the one changed field: ' + JSON.stringify(appended));
+    assert(hooks.getScoringState().isHome === false, 'replayed state reflects the correction');
+
+    hooks.commitEndGame();
+    hooks.setScoringEvents([]);
+    console.log('67. Home/away: leadoff-aware flips, glyph helper, Start Game toggle, adjust-sheet correction path: OK');
+  }
+
+  // 68. game_start fully resets derived state (2026-07-12 audit fix):
+  // runsByInning and lastAction must not leak from a previous game on the
+  // same device -- the second game's line score inherited the first game's
+  // per-inning tallies, and a fresh game's chip showed (and offered
+  // corrections against) the previous game's final event.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Foxes', innings: 7, lineup: ['alice', 'bob'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'HR', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'game_end', { final_us: 1, final_them: 0 });
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Bears', innings: 7, lineup: ['alice', 'bob'] });
+    let st = hooks.deriveState(ev);
+    assert(st.scoreUs === 0, 'sanity: score resets on game_start');
+    assert((st.runsByInning.us[1] || 0) === 0,
+      'runsByInning resets on game_start (was leaking the previous game\'s inning-1 run): ' + JSON.stringify(st.runsByInning));
+    assert(st.lastAction === null, 'lastAction resets on game_start (chip no longer shows the previous game\'s final event)');
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
+    st = hooks.deriveState(ev);
+    assert(st.lastAction && st.lastAction.playerId === 'bob' && (st.runsByInning.us[1] || 0) === 0,
+      'the new game\'s own events accumulate from a clean slate');
+
+    // Mercy module state must not leak across an in-session game start.
+    hooks.setScoringEvents([]);
+    hooks.setMercyStateForTest('1-us', '1-us');
+    hooks.setPinUnlockedForTest(true);
+    hooks.openStartGameFlow();
+    hooks.draftAppend('alice');
+    hooks.commitStartGame();
+    const mercy = hooks.getMercyState();
+    assert(mercy.dismissed === null && mercy.paused === null,
+      'commitStartGame clears mercy dismissal/pause keys from a previous game this session');
+    hooks.commitEndGame();
+    hooks.setScoringEvents([]);
+    console.log('68. game_start reset: runsByInning/lastAction never leak across games; mercy keys clear on a new game: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after

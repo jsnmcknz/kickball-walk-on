@@ -20,7 +20,7 @@ All games are Monday nights.
 
 - **No game listed Mon Aug 3** — bye week, or simply not shown in the screenshots. Confirm.
 - Aug 17 / Aug 24 are full TBDs — likely playoff or seeding-dependent slots. Schema must tolerate TBD opponent/time/field.
-- Home/away isn't indicated in the league listing (PPP renders first in every card — unknown whether that encodes anything). Left out of the schema until it matters.
+- Home/away isn't indicated in the league listing (PPP renders first in every card — unknown whether that encodes anything). It's deliberately NOT in this schedule schema: home/away is set per game at Start Game time (the "we kick 1st/2nd" toggle, correctable mid-game via the adjust sheet) — **built 2026-07-12**, see `05-Scoring-Architecture.md`'s Event schema section, the resolved callout under the table. Still confirm each game's status with the team captain (possible coin toss at the field); game 2 (Jul 13) status unknown as of this note.
 - Opponent records shown on the site (e.g. `0-1-0-0`) are league-derived; not our data, not captured.
 - **Game 1 (Jul 6) predates the scoring layer** — its 13–27 final exists nowhere in event data. That was walk-on v1's field debut ("game 1" throughout the invariants doc). Decide at schedule-schema time whether pre-app finals ship in the manifest entry (`result` below) so the season portal shows a complete line, honestly marked as score-only (no PA data — a known hole the stats model already tolerates).
 
@@ -30,7 +30,7 @@ All games are Monday nights.
 "schedule": [
   { "id": "2026-g1", "date": "2026-07-06", "time": "21:30", "opponent": "COLD SHOTZ",
     "field": "West Pitch — South Field", "result": { "us": 13, "them": 27 } },
-  { "id": "2026-g2", "date": "2026-07-13", "time": "20:30", "opponent": "Otter Nonsense",
+  { "id": "2026-g2", "date": "2026-07-12", "time": "20:30", "opponent": "Otter Nonsense",
     "field": "West Pitch — North Field" },
   { "id": "2026-g3", "date": "2026-07-20", "time": "20:30", "opponent": "The Brew Jays",
     "field": "West Pitch — North Field" },

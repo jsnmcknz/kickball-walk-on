@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- 2026-07-14, Jason: found a documented iOS bug where `maximum-scale`/
+<!-- 2026-07-12, Jason: found a documented iOS bug where `maximum-scale`/
      `user-scalable=no` alongside `viewport-fit=cover` throws off
      env(safe-area-inset-*) -- matches exactly what we were seeing (a
      bloated gap below the tab bar on two different standalone-installed
@@ -57,7 +57,7 @@
   }
   html, body {
     /* 100% first as a fallback for browsers without dvh support; 100dvh
-       overrides it where available. 2026-07-14, Jason: the meta-tag fix
+       overrides it where available. 2026-07-12, Jason: the meta-tag fix
        alone didn't close the gap -- per docs he found, a static `height:
        100%` can resolve against a stale/cached viewport in iOS standalone
        PWA mode (worse after repeated launches/navigation), where `dvh`
@@ -70,7 +70,7 @@
     margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     font-weight: 400; overscroll-behavior-y: contain;
-    /* 2026-07-14, Jason (on-device, standalone home-screen app): a screen
+    /* 2026-07-12, Jason (on-device, standalone home-screen app): a screen
        taller than one viewport (e.g. the mid-game lineup editor's full
        roster + full add-grid + done/cancel row) let the WHOLE PAGE drag --
        #app (position:fixed) and its sibling .tabbar visibly moved together,
@@ -91,7 +91,7 @@
      automatically from the insets -- no manual height/margin math needed.
      clamp() keeps a minimum 12px gutter even where the safe-area inset is 0
      (older non-notch phones), grows past it on notched phones so the frame
-     never sits under the status bar or home indicator -- and (2026-07-14,
+     never sits under the status bar or home indicator -- and (2026-07-12,
      Jason, on-device: a "fairly significant" gap below the tab bar on BOTH
      an XS Max and a 15 Pro Max, standalone home-screen installs, previously
      `max(12px, env(...))` with no ceiling) caps how far env() can push it,
@@ -356,7 +356,7 @@
      lineup/extra innings ever outgrow the column. */
   .boxscore-panel { margin: 0 16px 10px; }
   /* Totals (AB/H/R/RBI) are a SEPARATE canvas positioned over the scroll
-     container's right edge (2026-07-13, Jason: "fixed to the right side...
+     container's right edge (2026-07-12, Jason: "fixed to the right side...
      inning representations scrolling horizontally beneath it") -- a single
      canvas is one bitmap and can't be part-sticky, so scorecardLayout/
      drawScorecard/drawScorecardTotals share row geometry and this wrapper
@@ -862,6 +862,14 @@
   .fixture-name { font-size: 18px; font-weight: 500; color: var(--card-pop); margin-top: 2px; }
   .fixture-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .fixture-change { color: var(--text); text-decoration: underline; }
+  /* Home/away toggle (2026-07-12): inside the fixture card on Start Game,
+     and (as .adjust-box.kickorder) on the adjust sheet. Reuses the
+     .addplayer-toggle button treatment; only the row shell is new. */
+  .kickorder-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .kickorder-label { font-size: 11px; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; text-transform: uppercase; white-space: nowrap; }
+  .kickorder-row .addplayer-toggle-row { flex: 1; margin-bottom: 0; }
+  .adjust-box.kickorder { display: block; }
+  .adjust-box.kickorder .addplayer-toggle-row { margin-bottom: 0; margin-top: 6px; }
   .editor-sect {
     font-size: 11px; letter-spacing: 0.08em; color: var(--muted); font-weight: 500;
     text-transform: uppercase; margin: 14px 16px 6px;
@@ -874,7 +882,7 @@
   }
   .draft-row.up-now { border-color: var(--pickle); }
   .draft-row.drag-placeholder { opacity: 0.35; border-style: dashed; }
-  /* 2026-07-14, Jason (on-device): dragging from the middle of a row (NOT
+  /* 2026-07-12, Jason (on-device): dragging from the middle of a row (NOT
      the handle) was jerky/fighting the scroll, and the handle itself barely
      worked at all. Root cause: wireDraftRowDrag listened on the WHOLE row
      and called setPointerCapture() on every pointerdown anywhere on it, so
@@ -1024,7 +1032,7 @@
   }
   .adjust-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 10px; }
 
-  /* ---- Portal (07-Portal-Architecture.md, 2026-07-13) ----
+  /* ---- Portal (07-Portal-Architecture.md, 2026-07-12) ----
      Appearance ground truth: mockups/portal-screens.html screens 1/2/3/6.
      No bottom tab bar in portal mode -- it's a distinct top-level surface,
      not a third tab (the mockup shows none; render() hides .tabbar via
@@ -1035,7 +1043,7 @@
   .portal-link { font-size: 12px; color: var(--muted); background: none; border: none; padding: 4px 0; }
   /* Every other portal element sits inside this -- same 16px house gutter
      .topbar/.empty-state/.boxscore-panel already use, just centralized here
-     instead of repeated on every portal-* class (2026-07-14 fix: the first
+     instead of repeated on every portal-* class (2026-07-12 fix: the first
      pass left every portal screen flush to the card edges). */
   .portal-body { padding: 0 16px; }
   .portal-nextgame-card {
@@ -1065,7 +1073,7 @@
   .portal-sort-col.active { color: var(--pickle); }
   .portal-play-spacer { width: 32px; flex: none; }
   .portal-player-row {
-    /* 2026-07-14, Jason (on-device, both a 15 Pro Max and an XS Max): the
+    /* 2026-07-12, Jason (on-device, both a 15 Pro Max and an XS Max): the
        15-row full team table needs less scrolling to reach the bottom than
        this -- tightened from 7px/5px to fit 1-2 more rows in the same
        viewport without shrinking the 26px play button below a usable tap
@@ -1084,7 +1092,7 @@
   .portal-play-btn.playing { border-color: var(--plum-border); color: var(--plum-text); background: var(--plum-fill); }
   .portal-more-row { text-align: center; padding: 6px 0 0; }
   .portal-schedule-row {
-    /* Same 2026-07-14 tightening as .portal-player-row -- same list-of-rows
+    /* Same 2026-07-12 tightening as .portal-player-row -- same list-of-rows
        shape, same "less scrolling to see the season" goal. */
     display: flex; align-items: center; gap: 10px; background: var(--tile); border: 1px solid var(--tile-border);
     border-radius: 8px; padding: 7px 10px; margin-bottom: 5px;
@@ -1437,6 +1445,13 @@ function deriveState(events) {
 
   const st = {
     lineup: [], lineupPointer: 0,
+    // isHome (2026-07-12, Jason sign-off — closes the home/away gap flagged
+    // in 05-Scoring-Architecture.md): false = we kick FIRST (away, top of
+    // each inning — the engine's original hardcoded assumption, so absent/
+    // legacy game_start events replay identically). true = we kick SECOND
+    // (home, bottom). Set by game_start.payload.isHome, correctable
+    // mid-game via adjust {field:'isHome'}.
+    isHome: false,
     inning: 1, half: 'us', outs: 0,
     scoreUs: 0, scoreThem: 0,
     // thisHalfRunsThem / thisHalfRunsUs: runs scored in the CURRENT half
@@ -1568,8 +1583,11 @@ function deriveState(events) {
     st.lineupPointer = (st.lineupPointer + 1) % st.lineup.length;
   }
   // 3-out flip applies identically to either half (invariant-style shared
-  // path): clear the diamond and outs; flip 'us'->'them' same inning, or
-  // 'them'->'us' with the inning incrementing.
+  // path): clear the diamond and outs. WHICH side leads off each inning is
+  // isHome-aware (2026-07-12): the leadoff (top) side flips to the other
+  // side within the same inning; the second (bottom) side flips back to
+  // the leadoff side with the inning incrementing. isHome=false reproduces
+  // the original hardcoded behavior exactly ('us' leads off).
   function flipHalfIfThreeOuts() {
     if (st.outs < 3) return;
     // Scorecard mark (round 5): the third-out corner triangle lives on the
@@ -1580,13 +1598,14 @@ function deriveState(events) {
     }
     st.outs = 0;
     st.runners = {};
-    if (st.half === 'us') {
-      st.half = 'them';
-      st.thisHalfRunsThem = 0; // fresh tally for the half that's about to start
+    const leadoff = st.isHome ? 'them' : 'us';
+    if (st.half === leadoff) {
+      st.half = leadoff === 'us' ? 'them' : 'us';
     } else {
-      st.half = 'us'; st.inning += 1;
-      st.thisHalfRunsUs = 0; // fresh tally for the half that's about to start
+      st.half = leadoff; st.inning += 1;
     }
+    // Fresh tally for whichever half is about to start.
+    if (st.half === 'us') st.thisHalfRunsUs = 0; else st.thisHalfRunsThem = 0;
   }
   // Scorecard mark (round 5): a runner erased from the bases (or out at
   // home) gets the plum ✕ on their own most recent at-bat cell.
@@ -1636,9 +1655,22 @@ function deriveState(events) {
       // array always reflects the CURRENT (most recent) game only.
       st.lineup = (p.lineup || []).slice();
       st.lineupPointer = 0;
-      st.inning = 1; st.half = 'us'; st.outs = 0;
+      // isHome (2026-07-12): home kicks the BOTTOM of each inning, so a
+      // home game opens in the opponent's half. Absent field = false =
+      // away = the engine's original behavior, so legacy events replay
+      // unchanged.
+      st.isHome = !!p.isHome;
+      st.inning = 1; st.half = st.isHome ? 'them' : 'us'; st.outs = 0;
       st.scoreUs = 0; st.scoreThem = 0; st.thisHalfRunsThem = 0; st.thisHalfRunsUs = 0; st.runners = {};
       st.paLog = []; st.runsLog = [];
+      // Full derived-state reset (bug fix, 2026-07-12 audit): these two
+      // were being carried across game_start boundaries. runsByInning made
+      // the SECOND game on a device inherit the first game's per-inning
+      // line-score tallies (scoreUs reset correctly, the line score did
+      // not); a stale lastAction made a fresh game's last-action chip show
+      // — and offer corrections against — the PREVIOUS game's final event.
+      st.runsByInning = { us: {}, them: {} };
+      st.lastAction = null;
       st.gameStarted = true; st.gameEnded = false;
       st.opponent = p.opponent || ''; st.innings = p.innings || 7;
       st.finalUs = null; st.finalThem = null;
@@ -1684,7 +1716,7 @@ function deriveState(events) {
         // scorecard's small corner badge -- null until/unless this record
         // is the one that actually produced an out (stamped here for a
         // FLY/GND/K result, or by markKickerOut for a basepath/home out on
-        // a PREVIOUS record). 2026-07-13, Jason.
+        // a PREVIOUS record). 2026-07-12, Jason.
         outNumberInHalf: null,
         // Board as it stood when this kicker stepped up (round 2,
         // 2026-07-08): the last-action chip renders the NET assessment of
@@ -1834,6 +1866,12 @@ function deriveState(events) {
       // draft-commit convention as everything else on this sheet. Flagged
       // for that doc's amendment.
       else if (p.field === 'half') st.half = p.value;
+      // 'isHome' (2026-07-12): the adjust sheet's correction path for a
+      // coin toss that happened (or was entered wrong) after game_start —
+      // flips which side leads off from this point of the replay forward.
+      // The current half is deliberately NOT swapped here; the same sheet's
+      // inning stepper is the tool for that if it's also wrong.
+      else if (p.field === 'isHome') st.isHome = !!p.value;
       st.lastAction = { kind: 'adjust', field: p.field, eventIdx: idx };
     } else if (e.type === 'player_add') {
       st.rosterOverlay.push({ id: p.playerId, name: p.name, status: p.status || 'sub', defaultClip: p.defaultClip });
@@ -1882,7 +1920,7 @@ function computeStats(st) {
   return stats;
 }
 
-/* ---- Season portal data layer (07-Portal-Architecture.md, 2026-07-13) ----
+/* ---- Season portal data layer (07-Portal-Architecture.md, 2026-07-12) ----
    Per that doc's "Data path note": stats derive from the event log, which
    lives per-device. Until S2 sync exists, this only reflects games actually
    SCORED ON THIS DEVICE, plus score-only manifest results (pre-app games
@@ -2315,7 +2353,7 @@ function armAudioWatchdog(source, playerId, opts) {
     }
     // Both the original attempt and the one gesture-less retry above
     // failed to reach 'running' -- almost always a fully slept/locked
-    // device (2026-07-13, Jason: observed live, freezing at the initial
+    // device (2026-07-12, Jason: observed live, freezing at the initial
     // playback stage forever, no progress, no countdown). This is an iOS
     // policy, not something retryable from here: it categorically refuses
     // to resume an AudioContext outside a real tap, and neither this
@@ -2580,7 +2618,7 @@ function openLastActionCorrection() {
 }
 
 function applyRunnerOut(playerId) {
-  // No cancelPendingAutoplay() here (2026-07-13, Jason): a plain baserunner
+  // No cancelPendingAutoplay() here (2026-07-12, Jason): a plain baserunner
   // out is routine mid-countdown and doesn't touch the lineup pointer or
   // half -- scheduleScoringAutoPlay's own fire-time check is what actually
   // guards against a wrong-fire (e.g. this out being the 3rd), not this
@@ -2728,6 +2766,15 @@ function ordinal(n) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+// ▲ = top of the inning (whoever kicks first), ▼ = bottom — derived from
+// half AND isHome together (2026-07-12, closing the gap where all three
+// display sites wired the glyph to half === 'us' directly, which read
+// wrong whenever Pickles is the home team). Shared by the score bug, the
+// mid-game lineup chip, and the adjust sheet's inning stepper.
+function halfGlyph(half, isHome) {
+  return half === (isHome ? 'them' : 'us') ? '▲' : '▼';
+}
+
 // Redesigned bigger/bolder per Jason's live feedback (2026-07-07): score and
 // outs are the numbers a scorer references at a glance, and the original
 // mockup-matched 12px single row under-served that. Two-row layout: small
@@ -2772,7 +2819,7 @@ function renderScoreBug() {
   if (isUs && !scoringCorrection && !scoringBoxScoreOpen) bugAttrs.onclick = openAdjustSheet;
   return h('div', bugAttrs, [
     h('div', { class: 'score-bug-top' }, [
-      h('span', { text: (isUs ? '▲ ' : '▼ ') + ordinal(scoringState.inning) + ' – ' }),
+      h('span', { text: halfGlyph(scoringState.half, scoringState.isHome) + ' ' + ordinal(scoringState.inning) + ' – ' }),
       h('span', { class: 'dim-label', text: isUs ? 'kicking' : 'fielding' }),
     ]),
     h('button', { class: 'boxscore-chip' + (scoringBoxScoreOpen ? ' active' : ''), text: '▦ box score', onclick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); toggleBoxScore(); } }),
@@ -3355,7 +3402,7 @@ function scheduleScoringAutoPlay() {
   const handle = setTimeout(() => {
     scoringAutoPlayPending = null;
     // Re-validate against LIVE state rather than "did any event happen at
-    // all" (2026-07-13, Jason: routine baserunner corrections mid-countdown
+    // all" (2026-07-12, Jason: routine baserunner corrections mid-countdown
     // were killing the next batter's music every time, requiring a manual
     // restart -- but baserunner edits are routine and shouldn't touch
     // playback). A correction that doesn't move the lineup pointer or flip
@@ -3610,7 +3657,7 @@ function scorecardColumns() {
     cellMap[rec.playerId + '|' + colIdxByKey[key]] = rec;
   });
   // Only pad out through the CURRENT inning, not manifest.scoring's
-  // inningsPerGame (2026-07-13, Jason): the game runs on a 50-minute timer,
+  // inningsPerGame (2026-07-12, Jason): the game runs on a 50-minute timer,
   // not a fixed inning count, so a fresh game showing 6 empty future
   // innings was never meaningful -- it just varies game to game and isn't
   // knowable in advance. The current in-progress inning still gets a
@@ -3642,7 +3689,7 @@ function scorecardColumns() {
 const ROW_H_BASE = 34, ROW_H = 46;
 const ROW_SCALE = ROW_H / ROW_H_BASE;
 const CELL_W = 42;
-// Split into two canvases (2026-07-13, Jason: "AB/H/R/RBI fixed to the
+// Split into two canvases (2026-07-12, Jason: "AB/H/R/RBI fixed to the
 // right, innings scrolling beneath it"): a canvas can't be part-sticky --
 // it's one bitmap -- so the grid (name + per-inning cells) and the totals
 // column are now two separate <canvas> elements that share this same row
@@ -3669,7 +3716,7 @@ function scorecardLayout() {
 
 // Maps a base index (1=1st, 2=2nd, 3=3rd) to the same 4 points
 // drawMiniDiamond uses, so a basepath-out X can be centered on the actual
-// base a runner was erased at (2026-07-13, Jason: previously every
+// base a runner was erased at (2026-07-12, Jason: previously every
 // kickerOut X landed dead-center on the diamond regardless of which base
 // it happened at). 0 or an unset base falls back to home -- the
 // out-at-home correction path doesn't set reachedBase to anything
@@ -3723,38 +3770,53 @@ function drawScorecard(canvas) {
   // small marks floating in more empty space.
   const px = (n) => Math.round(n * ROW_SCALE);
 
-  // ---- line score ("the box score above the scorecard" -- 2026-07-13,
+  // ---- line score ("the box score above the scorecard" -- 2026-07-12,
   // Jason: bumped a couple px across the board for legibility) ----
   const lsCell = Math.min(24, (L.w - L.pad * 2 - 60 - 24) / L.innings);
   const lsX = L.pad + 60, lsY = L.pad;
+  // Row order follows convention: visitors on top (2026-07-12, Jason —
+  // pairs with halfGlyph so ▲/top always reads as the top row). Away game
+  // (isHome false) = us on top, unchanged from before; home game = them
+  // on top. `leadoff` is the side kicking the TOP half of each inning.
+  const leadoff = st.isHome ? 'them' : 'us';
+  const topRow = st.isHome
+    ? { key: 'them', label: (st.opponent || 'THEM').slice(0, 6).toUpperCase(), color: SCORECARD_C.muted, total: st.scoreThem }
+    : { key: 'us', label: teamAbbrev(), color: SCORECARD_C.pickle, total: st.scoreUs };
+  const botRow = st.isHome
+    ? { key: 'us', label: teamAbbrev(), color: SCORECARD_C.pickle, total: st.scoreUs }
+    : { key: 'them', label: (st.opponent || 'THEM').slice(0, 6).toUpperCase(), color: SCORECARD_C.muted, total: st.scoreThem };
   g.textAlign = 'left'; g.textBaseline = 'middle';
   g.font = '600 12px ' + font;
-  g.fillStyle = SCORECARD_C.pickle;
-  g.fillText(teamAbbrev(), L.pad, lsY + 18);
-  g.fillStyle = SCORECARD_C.muted;
-  g.fillText((st.opponent || 'THEM').slice(0, 6).toUpperCase(), L.pad, lsY + 32);
+  g.fillStyle = topRow.color;
+  g.fillText(topRow.label, L.pad, lsY + 18);
+  g.fillStyle = botRow.color;
+  g.fillText(botRow.label, L.pad, lsY + 32);
   g.textAlign = 'center';
   for (let i = 1; i <= L.innings; i++) {
     const x = lsX + (i - 0.5) * lsCell;
     g.fillStyle = SCORECARD_C.muted;
     g.font = '600 9px ' + font;
     g.fillText(String(i), x, lsY + 5);
-    const usPlayed = i < st.inning || (i === st.inning);
-    const themPlayed = i < st.inning || (i === st.inning && st.half === 'them');
+    // Top (leadoff) half of inning i has begun once the game reaches it;
+    // the bottom half only once the top half is done (or the game moved on).
+    const topPlayed = i <= st.inning;
+    const botPlayed = i < st.inning || (i === st.inning && st.half !== leadoff);
+    // Number emphasis travels with OUR team (white) vs theirs (muted),
+    // whichever row each ends up on.
     g.font = '600 12px ' + font;
-    g.fillStyle = SCORECARD_C.text;
-    g.fillText(usPlayed ? String(st.runsByInning.us[i] || 0) : '·', x, lsY + 18);
-    g.fillStyle = SCORECARD_C.muted;
-    g.fillText(themPlayed ? String(st.runsByInning.them[i] || 0) : '·', x, lsY + 32);
+    g.fillStyle = topRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
+    g.fillText(topPlayed ? String(st.runsByInning[topRow.key][i] || 0) : '·', x, lsY + 18);
+    g.fillStyle = botRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
+    g.fillText(botPlayed ? String(st.runsByInning[botRow.key][i] || 0) : '·', x, lsY + 32);
   }
   const rX = lsX + L.innings * lsCell + 12;
   g.font = '700 12px ' + font;
   g.fillStyle = SCORECARD_C.muted;
   g.fillText('R', rX, lsY + 5);
-  g.fillStyle = SCORECARD_C.text;
-  g.fillText(String(st.scoreUs), rX, lsY + 18);
-  g.fillStyle = SCORECARD_C.muted;
-  g.fillText(String(st.scoreThem), rX, lsY + 32);
+  g.fillStyle = topRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
+  g.fillText(String(topRow.total), rX, lsY + 18);
+  g.fillStyle = botRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
+  g.fillText(String(botRow.total), rX, lsY + 32);
   g.strokeStyle = SCORECARD_C.rule;
   g.lineWidth = 1;
   g.beginPath(); g.moveTo(L.pad, lsY + L.lineH - 4); g.lineTo(L.w - L.pad, lsY + L.lineH - 4); g.stroke();
@@ -3799,7 +3861,7 @@ function drawScorecard(canvas) {
         g.fillText(rec.result, cx, y + L.rowH - px(6));
         if (rec.kickerOut) {
           // Erased on the bases -- hit edges stand, plum ✕ on top, centered
-          // on the ACTUAL base (2026-07-13, Jason), not the diamond middle.
+          // on the ACTUAL base (2026-07-12, Jason), not the diamond middle.
           const dcx = cx, dcy = cy - px(4), r = px(7);
           const bp = diamondBasePoint(dcx, dcy, r, rec.reachedBase);
           g.font = '600 ' + px(11) + 'px ' + font;
@@ -3807,7 +3869,7 @@ function drawScorecard(canvas) {
           g.fillText('✕', bp[0], bp[1]);
         }
       } else { // FLY / GND / K
-        // 2026-07-13, Jason (round 2): the X stays plum -- matches the
+        // 2026-07-12, Jason (round 2): the X stays plum -- matches the
         // treatment of a basepath out, an out is an out -- but the result
         // LABEL (FLY/GND/K) is back to muted grey like every other cell
         // label. Plum on the label too made the whole card read as too
@@ -3821,7 +3883,7 @@ function drawScorecard(canvas) {
         g.fillText(rec.result, cx, y + L.rowH - px(6));
       }
       if (rec.outNumberInHalf) {
-        // Which out of the half-inning this was (2026-07-13, Jason),
+        // Which out of the half-inning this was (2026-07-12, Jason),
         // small badge in the cell's upper-left corner -- covers a
         // FLY/GND/K result AND a basepath/home out on a hit (markKickerOut
         // stamps the same field either way), so every out reads the same.
@@ -3843,7 +3905,7 @@ function drawScorecard(canvas) {
   });
 }
 
-// Sticky-right totals panel (2026-07-13, Jason: "AB/H/R/RBI fixed to the
+// Sticky-right totals panel (2026-07-12, Jason: "AB/H/R/RBI fixed to the
 // right, innings scrolling beneath it"). Shares scorecardLayout's row
 // geometry (pad/lineH/headH/rowH) with drawScorecard so the two canvases'
 // rows line up pixel-for-pixel when renderBoxScoreBody sits them side by
@@ -4019,7 +4081,7 @@ let endGameConfirmOpen = false;
 // never re-prompts for it.
 let pinUnlocked = loadJSON('scoringPinUnlocked', false);
 
-// ---- portal (07-Portal-Architecture.md, 2026-07-13 session -- built once
+// ---- portal (07-Portal-Architecture.md, 2026-07-12 session -- built once
 // the schedule/lineup-editor/PIN-gate machinery above already existed to
 // build on). All UI-only, decided once at boot by decidePortalBoot()
 // (a safe wrapper, declared outside these markers, near render()) and from
@@ -4049,7 +4111,10 @@ function openStartGameFlow() {
     // ordinary pre-game flow. Empty seed (tap-to-draft from scratch) is
     // just as valid; nothing about Start Game requires it.
     const seed = order.filter(id => playersById[id]);
-    scoringLineupEditor = { mode: 'start', draft: seed, scheduleGameId: pickDefaultScheduleGameId(), unscheduledOpponent: '' };
+    // isHome defaults false ("we kick first" — matches game 1 and the
+    // engine's historical assumption); the toggle on this screen and the
+    // adjust sheet's correction row are the two places it can change.
+    scoringLineupEditor = { mode: 'start', draft: seed, scheduleGameId: pickDefaultScheduleGameId(), unscheduledOpponent: '', isHome: false };
     state.activeTab = 'lineup';
     render();
   };
@@ -4123,12 +4188,19 @@ function commitStartGame() {
     opponent: fixture ? (fixture.opponent || 'TBD') : (ed.unscheduledOpponent.trim() || 'Unscheduled Game'),
     lineup: ed.draft.slice(),
     innings: DATA.scoring.inningsPerGame || 7,
+    isHome: !!ed.isHome, // 2026-07-12: home kicks second (bottom of each inning)
   };
   if (fixture) payload.scheduleGameId = fixture.id;
   scoringEvents = appendScoringEvent(scoringEvents, 'game_start', payload);
   scoringState = deriveState(scoringEvents);
   scoringLineupEditor = null;
   scoringClipFiredForBatter = null;
+  // In-session module state that must not leak into a new game (2026-07-12
+  // audit, same family as deriveState's own game_start resets): a mercy
+  // banner dismissed at {inning}-{half} in a PREVIOUS game this session
+  // would silently suppress the same-keyed banner in this one.
+  mercyDismissedForHalf = null;
+  musicPausedForMercyHalf = null;
   state.activeTab = 'lineup';
   render();
 }
@@ -4179,6 +4251,7 @@ function openAdjustSheet() {
     draft: {
       outs: scoringState.outs, inning: scoringState.inning, half: scoringState.half,
       scoreUs: scoringState.scoreUs, scoreThem: scoringState.scoreThem,
+      isHome: scoringState.isHome, // 2026-07-12: post-start home/away correction path
     },
   };
   render();
@@ -4194,13 +4267,20 @@ function adjustStep(field, delta) {
   } else if (field === 'scoreThem') {
     d.scoreThem = Math.max(0, d.scoreThem + delta);
   } else if (field === 'inning') {
-    // Walks halves (mockup screen 8: ▲3 -> ▼3 -> ▲4): us->them stays the
-    // same inning number; them->us increments it.
+    // Walks halves (mockup screen 8: ▲3 -> ▼3 -> ▲4). isHome-aware
+    // (2026-07-12): which side owns the top half depends on the draft's
+    // own isHome, so flipping the kick-order toggle re-orders this walk
+    // live within the same sheet. leadoff->second stays the same inning
+    // number; second->leadoff increments it.
+    const leadoff = d.isHome ? 'them' : 'us';
+    const second = leadoff === 'us' ? 'them' : 'us';
     if (delta > 0) {
-      if (d.half === 'us') d.half = 'them'; else { d.half = 'us'; d.inning += 1; }
+      if (d.half === leadoff) d.half = second; else { d.half = leadoff; d.inning += 1; }
     } else {
-      if (d.half === 'them') d.half = 'us'; else { d.half = 'them'; d.inning = Math.max(1, d.inning - 1); }
+      if (d.half === second) d.half = leadoff; else { d.half = second; d.inning = Math.max(1, d.inning - 1); }
     }
+  } else if (field === 'isHome') {
+    d.isHome = !!delta; // toggle buttons pass the target value, not a step
   }
   render();
 }
@@ -4212,6 +4292,9 @@ function commitAdjust() {
   const c = scoringCorrection;
   if (!c || c.mode !== 'adjust') return;
   const orig = scoringState, d = c.draft;
+  // isHome first: it changes how any half/inning value in the same commit
+  // reads, so it should be on the books before them at replay.
+  if (d.isHome !== orig.isHome) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'isHome', value: d.isHome });
   if (d.outs !== orig.outs) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'outs', value: d.outs });
   if (d.half !== orig.half) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'half', value: d.half });
   if (d.inning !== orig.inning) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'inning', value: d.inning });
@@ -4245,7 +4328,7 @@ function flipDraftRows(listEl, exceptRow, mutate) {
   });
 }
 function wireDraftRowDrag(row, id, listEl) {
-  // 2026-07-14, Jason (on-device): listeners used to live on the whole row,
+  // 2026-07-12, Jason (on-device): listeners used to live on the whole row,
   // which fought native scrolling for any touch that started off the
   // handle. Scoped to the handle only -- see the CSS comment on
   // .draft-row-handle for the full story. querySelectorAll (not
@@ -4347,6 +4430,21 @@ function wireDraftRowDrag(row, id, listEl) {
 }
 
 // ---- rendering ----
+// Home/away toggle for the Start Game fixture card (2026-07-12, Jason:
+// "we kick first / second" phrasing, home/away as the subtitle; default
+// first/away). Lives inside the fixture card on both the scheduled and
+// unscheduled branches; if the coin toss lands after Start Game commits,
+// the adjust sheet's matching row is the correction path.
+function renderKickOrderToggle(ed) {
+  return h('div', { class: 'kickorder-row' }, [
+    h('span', { class: 'kickorder-label', text: 'We kick' }),
+    h('div', { class: 'addplayer-toggle-row kickorder-toggles' }, [
+      h('button', { class: 'addplayer-toggle' + (!ed.isHome ? ' active' : ''), text: '1st · away', onclick: () => { ed.isHome = false; render(); } }),
+      h('button', { class: 'addplayer-toggle' + (ed.isHome ? ' active' : ''), text: '2nd · home', onclick: () => { ed.isHome = true; render(); } }),
+    ]),
+  ]);
+}
+
 function renderScoringLineupEditor() {
   const ed = scoringLineupEditor;
   const isStart = ed.mode === 'start';
@@ -4374,6 +4472,7 @@ function renderScoringLineupEditor() {
           h('span', { text: 'from the schedule · ' }),
           h('span', { class: 'fixture-change', text: 'change game', onclick: () => { fixturePicker = true; render(); } }),
         ]),
+        renderKickOrderToggle(ed),
       ]));
     } else {
       wrap.appendChild(h('div', { class: 'fixture-card' }, [
@@ -4385,11 +4484,12 @@ function renderScoringLineupEditor() {
         h('div', { class: 'fixture-meta' }, [
           h('span', { class: 'fixture-change', text: 'pick from schedule instead', onclick: () => { fixturePicker = true; render(); } }),
         ]),
+        renderKickOrderToggle(ed),
       ]));
     }
   } else {
     wrap.appendChild(h('div', { class: 'draft-livechip' }, [
-      h('span', { text: (scoringState.half === 'us' ? '▲ ' : '▼ ') + ordinal(scoringState.inning) + ' · live vs ' + (scoringState.opponent || 'TBD') }),
+      h('span', { text: halfGlyph(scoringState.half, scoringState.isHome) + ' ' + ordinal(scoringState.inning) + ' · live vs ' + (scoringState.opponent || 'TBD') }),
       h('span', { text: teamAbbrev() + ' ' + scoringState.scoreUs + ' · ' + scoringState.scoreThem }),
     ]));
   }
@@ -4430,7 +4530,7 @@ function renderScoringLineupEditor() {
   });
   wrap.appendChild(list);
 
-  // CTA sits between the active order and the "tap to add" pool (2026-07-14,
+  // CTA sits between the active order and the "tap to add" pool (2026-07-12,
   // Jason: on-device, this read as the natural commit point -- you finish
   // arranging who's in, act right there, without scrolling past the whole
   // roster grid first). Previously lived at the very bottom, after the grid.
@@ -4541,7 +4641,7 @@ function renderPinSheet() {
   ];
   // The team phone has nowhere legitimate to cancel BACK TO pre-game -- game
   // mode is the only surface it shows (firm principle 1 amendment). Jason,
-  // 2026-07-14: "if the PIN fails, the app should simply be unusable [stay
+  // 2026-07-12: "if the PIN fails, the app should simply be unusable [stay
   // on this screen] at that #anchored URL." Every other PIN entry point
   // (the portal's game-window prompt, the classic screen's stopgap button)
   // still offers cancel -- backing out to browse stats or the soundboard is
@@ -4569,14 +4669,25 @@ function renderAdjustSheet() {
       ]),
     ]);
   }
-  const inningDisplay = (d.half === 'us' ? '▲' : '▼') + d.inning;
+  const inningDisplay = halfGlyph(d.half, d.isHome) + d.inning;
+  const draftLeadoff = d.isHome ? 'them' : 'us';
   return h('div', { class: 'sheet-wrap' }, [
     h('div', { class: 'sheet-card' }, [
       h('div', { class: 'sheet-title', text: 'Adjust' }),
       h('div', { class: 'adjust-box' }, [
         stepper('OUTS', d.outs, () => adjustStep('outs', -1), () => adjustStep('outs', 1), d.outs <= 0),
         h('div', { class: 'adjust-divider' }),
-        stepper('INNING', inningDisplay, () => adjustStep('inning', -1), () => adjustStep('inning', 1), d.inning <= 1 && d.half === 'us'),
+        stepper('INNING', inningDisplay, () => adjustStep('inning', -1), () => adjustStep('inning', 1), d.inning <= 1 && d.half === draftLeadoff),
+      ]),
+      // Kick-order correction (2026-07-12, Jason: the coin toss can happen
+      // after Start Game is committed) — same draft/commit semantics as the
+      // steppers; commits ONE adjust {field:'isHome'} event when changed.
+      h('div', { class: 'adjust-box kickorder' }, [
+        h('div', { class: 'adjust-scores-label', text: 'We kick' }),
+        h('div', { class: 'addplayer-toggle-row' }, [
+          h('button', { class: 'addplayer-toggle' + (!d.isHome ? ' active' : ''), text: '1st · away', onclick: () => adjustStep('isHome', false) }),
+          h('button', { class: 'addplayer-toggle' + (d.isHome ? ' active' : ''), text: '2nd · home', onclick: () => adjustStep('isHome', true) }),
+        ]),
       ]),
       h('div', { class: 'adjust-box scores' }, [
         h('div', { class: 'adjust-scores-label', text: 'Scores' }),
@@ -4610,7 +4721,7 @@ function scoringEditorActive() {
 }
 
 // Same safe-wrapper pattern: the tab bar hides on these "sub-pages of the
-// main scoring screen" (2026-07-14, Jason: box score, lineup edit/start-game
+// main scoring screen" (2026-07-12, Jason: box score, lineup edit/start-game
 // draft, and end-game confirm don't contextually make sense with a
 // Scoring/Soundboard switcher sitting there, and the switcher eats space
 // better spent on their own content) -- the ROOT scoring screen (the live
@@ -4657,13 +4768,15 @@ function debugClearGameData() {
   endGameConfirmOpen = false;
   pinSheet = null;
   cancelPendingAutoplay();
+  mercyDismissedForHalf = null;
+  musicPausedForMercyHalf = null;
   lastAudioEvent = 'debug: game data cleared @ ' + new Date().toTimeString().slice(0, 8);
   updateDebugPanel();
   render();
   /* __SCORING_END__ */
 }
 
-// Team-phone role marker (07-Portal-Architecture.md, decided 2026-07-13,
+// Team-phone role marker (07-Portal-Architecture.md, decided 2026-07-12,
 // Jason): a URL fragment baked into the home-screen bookmark
 // (index.html#team), not a persisted toggle -- survives localStorage
 // eviction; re-adding the Home Screen icon with a different URL is how
@@ -4687,7 +4800,7 @@ function decidePortalBoot() {
     // amendment, 07-Portal-Architecture.md) -- there is no portal on this
     // device and no legitimate classic-screen fallback pre-game either, so
     // it always boots straight into Start Game, PIN-gated, whether or not a
-    // fixture happens to be in its window right now. (2026-07-14 correction,
+    // fixture happens to be in its window right now. (2026-07-12 correction,
     // Jason, on-device: gating this on scheduleGameInWindowNow() left the
     // device falling through to the classic tile-grid/Next-Up screens
     // outside a game window -- the "old card-style lineup page" he found
@@ -4922,7 +5035,11 @@ function renderPortalGameDetail() {
   for (let i = 1; i <= maxInning; i++) headRow.appendChild(h('th', { text: String(i) }));
   headRow.appendChild(h('th', { text: 'R' }));
   const table = h('table', { class: 'portal-linescore' }, [headRow]);
-  [['us', DATA.teamShort || teamAbbrev()], ['them', (rec.opponent || 'THEM').slice(0, 3).toUpperCase()]].forEach((pair) => {
+  // Visitors-on-top convention, same rule as drawScorecard's line score
+  // (2026-07-12): a home game lists the opponent first.
+  const usPair = ['us', DATA.teamShort || teamAbbrev()];
+  const themPair = ['them', (rec.opponent || 'THEM').slice(0, 3).toUpperCase()];
+  (st.isHome ? [themPair, usPair] : [usPair, themPair]).forEach((pair) => {
     const side = pair[0], label = pair[1];
     const tr = h('tr', {}, [h('td', { class: 'team-label', text: label })]);
     for (let i = 1; i <= maxInning; i++) tr.appendChild(h('td', { text: String((st.runsByInning[side] && st.runsByInning[side][i]) || 0) }));
@@ -5108,13 +5225,13 @@ function render() {
   document.getElementById('tabLineup').classList.toggle('active', state.activeTab === 'lineup');
   document.getElementById('tabGrid').classList.toggle('active', state.activeTab === 'grid');
   // Tab bar hidden in the portal (its own surface, no tabs) AND on the team
-  // phone pre-game (2026-07-14: the Soundboard tab was a live escape hatch
+  // phone pre-game (2026-07-12: the Soundboard tab was a live escape hatch
   // around the PIN gate / Start Game editor -- tapping it bypassed both and
   // landed on the classic grid, exactly the "unusable at the #anchored URL"
   // guarantee Jason asked for). Reappears once a game goes live: the grid
   // stays reachable as the firm-principle-5 manual-override fallback during
   // real play, same as every other device.
-  // 2026-07-14, Jason: also hidden on scoring's own sub-pages (box score,
+  // 2026-07-12, Jason: also hidden on scoring's own sub-pages (box score,
   // lineup edit/start-game draft, end-game confirm) -- a Scoring/Soundboard
   // switcher doesn't contextually belong on what's functionally a sub-page
   // of the live at-bat screen, and it was eating space better spent on
