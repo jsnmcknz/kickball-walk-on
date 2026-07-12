@@ -2449,6 +2449,115 @@ async function main() {
     console.log('68. game_start reset: runsByInning/lastAction never leak across games; mercy keys clear on a new game: OK');
   }
 
+  // 69. "Portal as neutral ground" (Jason sign-off, 2026-07-12 second
+  // round): the read-only portal is every device's legitimate non-scoring
+  // surface. Team-phone PIN sheet gains a stats link (scoring stays
+  // PIN-locked); backing out of a pre-game Start Game draft lands in the
+  // portal on every device; the portal header offers ✎ score to the team
+  // phone + PIN-unlocked devices (07's rule 3, finally built); ending a
+  // game lands in the portal; a mid-game editor cancel does NOT.
+  {
+    const farFuture = fixtureParts(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000));
+    hooks.getDATA().schedule = [{ id: 'ng1', date: farFuture.date, time: farFuture.time, opponent: 'Someday FC' }];
+    function resetPortalVars() {
+      hooks.setPortalActiveForTest(false);
+      hooks.setPortalScreen('stats');
+      hooks.setPortalGameDetailId(null);
+      hooks.setPortalScorecardOpen(false);
+      hooks.setGameWindowPromptOpen(false);
+      hooks.setScoringLineupEditor(null);
+      hooks.closePinSheet();
+    }
+    function findBtn(cls) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && node.classList.contains(cls)) { found = node; return; }
+        (node._children || []).forEach(walk);
+      };
+      walk(document.getElementById('screen'));
+      return found;
+    }
+
+    // -- Team phone, locked: PIN sheet offers stats, never a plain cancel --
+    resetPortalVars();
+    hooks.setScoringEvents([]);
+    global.location.hash = '#team';
+    hooks.setPinUnlockedForTest(false);
+    hooks.decidePortalBoot();
+    assert(hooks.getPinSheet() !== null, 'sanity: locked team phone boots to the PIN sheet');
+    render();
+    const statsLink = findBtn('pin-stats-link');
+    assert(statsLink, 'team-phone PIN sheet carries the "just the stats & sounds" link');
+    let plainCancel = null;
+    (function walkC(node) {
+      if (node.classList && node.classList.contains('sheet-cancel') && !node.classList.contains('pin-stats-link')) plainCancel = node;
+      (node._children || []).forEach(walkC);
+    })(document.getElementById('screen'));
+    assert(!plainCancel, 'no plain ✕ cancel on the team-phone PIN sheet -- scoring stays hard-locked');
+    statsLink.click();
+    assert(hooks.getPinSheet() === null && hooks.isPortalActive() === true && hooks.getPortalScreen() === 'stats',
+      'stats link closes the sheet and lands in the read-only portal');
+
+    // -- ✎ score visibility: team phone yes; never-unlocked teammate no;
+    //    PIN-unlocked teammate yes --
+    render();
+    assert(findBtn('portal-score-btn'), 'portal header offers ✎ score on the team phone');
+    global.location.hash = '';
+    render();
+    assert(!findBtn('portal-score-btn'), 'never-unlocked teammate phone: no ✎ score, portal stays clutter-free');
+    hooks.setPinUnlockedForTest(true);
+    render();
+    assert(findBtn('portal-score-btn'), 'PIN-unlocked device: ✎ score visible (07 rule 3, scoring a tap away)');
+    hooks.setPinUnlockedForTest(false);
+
+    // -- Prompt-accept stranding fix: a PIN cancel falls back INTO the
+    //    portal, because accepting no longer leaves it --
+    hooks.openStartGameFlow(); // locked -> PIN sheet; portalActive untouched
+    assert(hooks.getPinSheet() !== null && hooks.isPortalActive() === true,
+      'PIN sheet opens OVER the portal; the portal is not abandoned yet');
+    render();
+    assert(findBtn('pin-stats-link') === null && !!findBtn('sheet-cancel'),
+      'non-team-phone PIN sheet keeps its plain cancel (and no stats link -- it is already portal-bound)');
+    hooks.closePinSheet();
+    assert(hooks.isPortalActive() === true, 'cancelled PIN lands back in the portal, not on classic operator screens');
+
+    // -- Entering the PIN from the portal proceeds into Start Game and
+    //    only THEN leaves the portal --
+    hooks.openStartGameFlow();
+    hooks.pinKeyTap('0'); hooks.pinKeyTap('0'); hooks.pinKeyTap('0'); hooks.pinKeyTap('0'); // teamPin '0000'
+    assert(hooks.getScoringLineupEditor() && hooks.getScoringLineupEditor().mode === 'start' && hooks.isPortalActive() === false,
+      'correct PIN opens the Start Game draft and exits the portal at that moment');
+
+    // -- Pre-game editor cancel -> portal (every device) --
+    hooks.cancelScoringLineupEditor();
+    assert(hooks.isPortalActive() === true && hooks.getPortalScreen() === 'stats',
+      'backing out of a pre-game Start Game draft lands in the portal');
+
+    // -- Post-game -> portal --
+    hooks.setPortalActiveForTest(false);
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Foxes', innings: 7, lineup: ['alice', 'bob'] });
+    hooks.setScoringEvents(ev);
+    hooks.commitEndGame();
+    assert(hooks.isPortalActive() === true, 'ending a game lands in the portal (postgame stats + play buttons)');
+
+    // -- Mid-game editor cancel must NOT activate the portal --
+    resetPortalVars();
+    let evLive = [];
+    evLive = hooks.appendScoringEvent(evLive, 'game_start', { opponent: 'Live FC', innings: 7, lineup: ['alice', 'bob'] });
+    hooks.setScoringEvents(evLive);
+    hooks.openMidGameLineupEditor();
+    hooks.cancelScoringLineupEditor();
+    assert(hooks.isPortalActive() === false, 'mid-game editor cancel returns to the live game, never the portal');
+
+    hooks.setScoringEvents([]);
+    hooks.setPinUnlockedForTest(true); // restore the state later groups inherited before this one existed
+    global.location.hash = '';
+    resetPortalVars();
+    console.log('69. Portal as neutral ground: PIN-sheet stats link, cancel/post-game land in the portal, ✎ score entry gated to team phone + unlocked devices: OK');
+  }
+
   // Leave scoring's live-game UI state clean for anything appended after
   // this file in the future.
   hooks.getState().editing = true;

@@ -1041,6 +1041,12 @@
      mockup exactly. */
   .portal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 8px; }
   .portal-link { font-size: 12px; color: var(--muted); background: none; border: none; padding: 4px 0; }
+  /* "Portal as neutral ground" (2026-07-12): header right side can hold the
+     ✎ score entry beside the nav link; score reads pickle so it registers
+     as an action, not navigation. .pin-stats-link needs no rules of its own
+     (it rides .sheet-cancel) -- the class exists for tests + future styling. */
+  .portal-header-right { display: flex; align-items: center; gap: 16px; }
+  .portal-score-btn { color: var(--pickle); }
   /* Every other portal element sits inside this -- same 16px house gutter
      .topbar/.empty-state/.boxscore-panel already use, just centralized here
      instead of repeated on every portal-* class (2026-07-12 fix: the first
@@ -4115,6 +4121,12 @@ function openStartGameFlow() {
     // engine's historical assumption); the toggle on this screen and the
     // adjust sheet's correction row are the two places it can change.
     scoringLineupEditor = { mode: 'start', draft: seed, scheduleGameId: pickDefaultScheduleGameId(), unscheduledOpponent: '', isHome: false };
+    // Leaving the portal happens HERE, once the editor actually opens
+    // ("portal as neutral ground", 2026-07-12 second round) -- not at the
+    // game-window prompt's accept tap. A PIN cancel between the two never
+    // strands anyone outside the portal, because they never left it.
+    portalActive = false;
+    gameWindowPromptOpen = false;
     state.activeTab = 'lineup';
     render();
   };
@@ -4127,8 +4139,18 @@ function openMidGameLineupEditor() {
 function cancelScoringLineupEditor() {
   // Cancel beside Done (2026-07-11 polish batch): every draft edit --
   // including a mistaken clear -- is discarded, nothing committed.
+  const wasStartMode = !!(scoringLineupEditor && scoringLineupEditor.mode === 'start');
   scoringLineupEditor = null;
   fixturePicker = false;
+  // "Portal as neutral ground" (Jason sign-off, 2026-07-12 second round):
+  // backing out of a PRE-GAME Start Game draft lands in the portal on
+  // every device -- fixing both audit strandings at once (the team phone's
+  // cancel used to fall through to the classic screens its boot rule says
+  // it never shows; a prompt-accepting teammate used to be marooned on the
+  // operator surface). A MID-GAME editor cancel returns to the live game
+  // screen exactly as before -- render()'s live-game choke would clear
+  // portalActive anyway, so it's never set here.
+  if (wasStartMode && !isScoringLive()) { portalActive = true; portalScreen = 'stats'; }
   render();
 }
 
@@ -4220,6 +4242,14 @@ function commitEndGame() {
   scoringLineupEditor = null;
   cancelPendingAutoplay();
   scoringClipFiredForBatter = null;
+  // Post-game landing is the portal, every device ("portal as neutral
+  // ground", 2026-07-12): the game just ended is right there in the
+  // schedule with its scorecard, and the team phone keeps postgame hype
+  // one row-tap away (play buttons) instead of stranding on a tab-bar-less
+  // classic screen. A fresh open of the team phone still boots straight to
+  // Start Game -- this only shapes the in-session moment.
+  portalActive = true;
+  portalScreen = 'stats';
   render();
 }
 
@@ -4639,14 +4669,18 @@ function renderPinSheet() {
     h('div', { class: 'pin-dots' }, dots),
     h('div', { class: 'pin-keypad' }, keyEls),
   ];
-  // The team phone has nowhere legitimate to cancel BACK TO pre-game -- game
-  // mode is the only surface it shows (firm principle 1 amendment). Jason,
-  // 2026-07-12: "if the PIN fails, the app should simply be unusable [stay
-  // on this screen] at that #anchored URL." Every other PIN entry point
-  // (the portal's game-window prompt, the classic screen's stopgap button)
-  // still offers cancel -- backing out to browse stats or the soundboard is
-  // legitimate there.
-  if (!isTeamPhone()) {
+  // Team phone: no plain cancel (the "unusable at that #anchored URL"
+  // guarantee, Jason 2026-07-12, still holds for SCORING -- the PIN is the
+  // only way in), but the read-only portal became legitimate ground the
+  // same day ("portal as neutral ground" sign-off): stats, schedule,
+  // scorecards, and the per-row walk-up play buttons need no PIN. This
+  // dashed link is the amended escape: sounds and standings, never scoring.
+  if (isTeamPhone()) {
+    cardKids.push(h('button', {
+      class: 'sheet-cancel pin-stats-link', text: '‹ just the stats & sounds',
+      onclick: () => { pinSheet = null; portalActive = true; portalScreen = 'stats'; render(); },
+    }));
+  } else {
     cardKids.push(h('button', { class: 'sheet-cancel', text: '✕ cancel', onclick: closePinSheet }));
   }
   return h('div', { class: 'sheet-wrap' }, [
@@ -4873,9 +4907,21 @@ let portalStatsSortKey = 'h', portalStatsSortDir = -1;
 let portalGameLinesSortKey = 'h', portalGameLinesSortDir = -1;
 
 function renderPortalHeader(linkText, onLink) {
+  const right = [];
+  // "✎ score" -- 07's rule 3 ("scoring a tap or two away at all times"),
+  // finally built (2026-07-12, "portal as neutral ground" round). Shown on
+  // the two top-level portal screens only, and only to devices that can
+  // plausibly score: the team phone and anything already PIN-unlocked --
+  // a never-unlocked teammate's portal stays clutter-free. Opens the
+  // existing Start Game flow, which does its own PIN gating; this is also
+  // how the team phone gets BACK to Start Game after visiting the portal.
+  if ((portalScreen === 'stats' || portalScreen === 'schedule') && (isTeamPhone() || pinUnlocked) && !isScoringLive()) {
+    right.push(h('button', { class: 'portal-link portal-score-btn', text: '✎ score', onclick: openStartGameFlow }));
+  }
+  right.push(h('button', { class: 'portal-link', text: linkText, onclick: onLink }));
   return h('div', { class: 'portal-header' }, [
     renderWordmark(),
-    h('button', { class: 'portal-link', text: linkText, onclick: onLink }),
+    h('div', { class: 'portal-header-right' }, right),
   ]);
 }
 
@@ -5123,7 +5169,11 @@ function renderGameWindowPrompt() {
     h('div', { class: 'portal-prompt-when', text: fixture ? formatFixtureTimeVenue(fixture) : '' }),
     h('button', {
       class: 'portal-prompt-accept', text: '✎ score this game',
-      onclick: () => { gameWindowPromptOpen = false; portalActive = false; openStartGameFlow(); },
+      // Deliberately does NOT clear portalActive -- openStartGameFlow's
+      // proceed() does that once the editor really opens, so a cancelled
+      // PIN lands back in the portal instead of on the classic operator
+      // screens (2026-07-12 audit fix, "portal as neutral ground").
+      onclick: () => { gameWindowPromptOpen = false; openStartGameFlow(); },
     }),
     h('button', {
       class: 'portal-prompt-decline', text: '✕ not now — just the stats',
@@ -5189,23 +5239,32 @@ function render() {
   if (isScoringLive() && portalActive) { portalActive = false; gameWindowPromptOpen = false; }
   /* __SCORING_END__ */
   screenEl.innerHTML = '';
+  /* __SCORING_START__ */
+  // The PIN sheet dispatches ahead of the portal ("portal as neutral
+  // ground", 2026-07-12 second round): the game-window prompt's accept path
+  // no longer clears portalActive, so a cancelled PIN falls straight back
+  // into the portal -- which requires the sheet to render on top of an
+  // active portal rather than sitting unreachable behind it. It's fully
+  // modal either way (tab bar hidden or ignored while open).
+  if (pinSheet) {
+    const pinWrap = h('div', {});
+    pinWrap.appendChild(h('div', { class: 'topbar' }, [renderWordmark()]));
+    pinWrap.appendChild(renderPinSheet());
+    screenEl.appendChild(pinWrap);
+  } else
+  /* __SCORING_END__ */
   if (isPortalActive()) {
     /* __SCORING_START__ */
     screenEl.appendChild(renderPortalShell());
     /* __SCORING_END__ */
   } else if (state.activeTab === 'lineup') {
     /* __SCORING_START__ */
-    // S1.6: the PIN sheet and the tap-to-draft editor both take over the
-    // whole Lineup tab, ahead of the classic state.editing dispatch below
-    // -- neither depends on (or touches) the classic order/pointerId
-    // system, so this is purely additive; a non-scoring build never sets
-    // either flag and falls straight through to the original chain.
-    if (pinSheet) {
-      const pinWrap = h('div', {});
-      pinWrap.appendChild(h('div', { class: 'topbar' }, [renderWordmark()]));
-      pinWrap.appendChild(renderPinSheet());
-      screenEl.appendChild(pinWrap);
-    } else if (scoringLineupEditor) {
+    // S1.6: the tap-to-draft editor takes over the whole Lineup tab, ahead
+    // of the classic state.editing dispatch below -- it doesn't depend on
+    // (or touch) the classic order/pointerId system, so this is purely
+    // additive; a non-scoring build never sets the flag and falls straight
+    // through to the original chain.
+    if (scoringLineupEditor) {
       screenEl.appendChild(renderScoringLineupEditor());
     } else
     /* __SCORING_END__ */
