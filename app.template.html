@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<!-- 2026-07-14, Jason: found a documented iOS bug where `maximum-scale`/
+     `user-scalable=no` alongside `viewport-fit=cover` throws off
+     env(safe-area-inset-*) -- matches exactly what we were seeing (a
+     bloated gap below the tab bar on two different standalone-installed
+     devices). Dropping them costs nothing: invariant 9 (03-Invariants.md)
+     already established iOS has ignored `user-scalable=no` as a meta
+     directive since iOS 10 -- `touch-action: manipulation` (CSS, still
+     present, untouched) is what actually blocks double-tap-zoom here, not
+     this tag. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="__TEAM_NAME__">
@@ -69,14 +78,23 @@
      edges (per the locked mockups), not edge-to-edge. Using fixed
      positioning with all four insets means the box's size is computed
      automatically from the insets -- no manual height/margin math needed.
-     max() keeps a minimum 12px gutter even where the safe-area inset is 0
-     (older non-notch phones), and grows past it on notched phones so the
-     frame never sits under the status bar or home indicator. */
+     clamp() keeps a minimum 12px gutter even where the safe-area inset is 0
+     (older non-notch phones), grows past it on notched phones so the frame
+     never sits under the status bar or home indicator -- and (2026-07-14,
+     Jason, on-device: a "fairly significant" gap below the tab bar on BOTH
+     an XS Max and a 15 Pro Max, standalone home-screen installs, previously
+     `max(12px, env(...))` with no ceiling) caps how far env() can push it,
+     since a real home-indicator inset should never need more than ~40px
+     and the previous unbounded max() left room for whatever was inflating
+     it on these devices to just keep growing unchecked. If this DIDN'T
+     shrink the gap back to something reasonable, the cause isn't env()
+     over-reporting and needs a different theory -- flag it back rather
+     than stacking more guesses on top. */
   #app {
     position: fixed;
-    top: max(12px, env(safe-area-inset-top));
+    top: clamp(12px, env(safe-area-inset-top), 40px);
     left: 12px; right: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: clamp(12px, env(safe-area-inset-bottom), 40px);
     display: flex; flex-direction: column;
     background: var(--bg);
     border: 1px solid var(--tile-border);
