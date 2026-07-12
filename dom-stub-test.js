@@ -124,6 +124,10 @@ global.window = {
   AudioContext: FakeAudioContext,
   addEventListener: (type, fn) => { (winListeners[type] = winListeners[type] || []).push(fn); },
   dispatchTo: (type) => (winListeners[type] || []).forEach(fn => fn()),
+  // Reassignable per-test so debugClearGameData's confirm-gate can be
+  // exercised both ways; defaults to accept so no other test that happens
+  // to touch a confirm-gated path is silently blocked.
+  confirm: () => true,
 };
 
 const players = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eli'].map(n => ({
@@ -238,6 +242,7 @@ global.__hooks = {
   getDefaultClipBuffers: function() { return defaultClipBuffers; },
   decodeAll: function() { return decodeAll(); },
   getDATA: function() { return DATA; },
+  debugClearGameData: function() { return debugClearGameData(); },
 };
 `;
 
@@ -1719,6 +1724,36 @@ async function main() {
       'unchanged fields (inning/half) get no adjust event and stay as they were');
     assert(hooks.getScoringCorrection() === null, 'adjust sheet closes after commit');
     console.log('56. Adjust steppers: draft/commit/cancel, outs clamp, inning-walks-halves, one event per changed field: OK');
+  }
+
+  // 57. Debug panel "clear game data" action (2026-07-12 session): the
+  // test-game hygiene tool for Jason's separate test device. Gated behind
+  // window.confirm() -- declining must be a true no-op; confirming wipes
+  // the event log (memory + localStorage) and closes any open scoring
+  // overlay so a stale sheet can't survive a wipe.
+  {
+    hooks.setScoringEvents([
+      { id: 'e1', seq: 1, ts: new Date().toISOString(), type: 'game_start', payload: { lineup: ['alice', 'bob'], opponent: 'Test FC' } },
+    ]);
+    hooks.setScoringLineupEditor({ mode: 'edit', draft: ['alice', 'bob'] });
+    hooks.openPinSheet(() => {});
+
+    global.window.confirm = () => false;
+    hooks.debugClearGameData();
+    assert(hooks.getScoringEvents().length === 1, 'declining the confirm leaves the event log untouched');
+    assert(hooks.getScoringLineupEditor() !== null, 'declining the confirm leaves an open editor untouched');
+
+    global.window.confirm = () => true;
+    hooks.debugClearGameData();
+    assert(hooks.getScoringEvents().length === 0, 'confirming wipes the in-memory event log');
+    assert(hooks.getScoringState().scoreUs === 0 && hooks.getScoringState().scoreThem === 0,
+      'scoringState re-derives to a fresh/empty game after the wipe');
+    assert(hooks.getScoringLineupEditor() === null, 'the wipe closes any open lineup editor');
+    assert(hooks.getPinSheet() === null, 'the wipe closes any open PIN sheet');
+    assert(hooks.getEndGameConfirmOpen() === false, 'the wipe closes any open end-game confirm');
+
+    global.window.confirm = () => true; // restore default
+    console.log('57. Debug panel "clear game data": confirm-gated, wipes events + localStorage, closes open overlays: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after

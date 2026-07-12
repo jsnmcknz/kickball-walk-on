@@ -261,6 +261,19 @@
     border-radius: 8px; padding: 4px 8px;
     pointer-events: none; text-align: left;
   }
+  .debug-readout { pointer-events: none; }
+  /* The one interactive element inside an otherwise click-through panel --
+     re-enables pointer-events just for itself. Destructive (wipes the whole
+     scoring event log for this device), so it's styled as a clear warning
+     even though it only ever surfaces behind the same 5-tap gate as the
+     rest of the debug readout. Confirmed via window.confirm() before it
+     does anything -- see debugClearGameData(). */
+  .debug-clear-btn {
+    pointer-events: auto; display: block; margin-top: 6px;
+    background: transparent; border: 1px solid #a24; color: #e88;
+    border-radius: 6px; padding: 4px 8px; font: 11px/1.4 ui-monospace, Menlo, monospace;
+  }
+  .debug-clear-btn:active { opacity: 0.7; }
 
   /* __SCORING_START__ */
   /* Shared reference height for the diamond row's matched columns
@@ -2093,15 +2106,15 @@ document.addEventListener('visibilitychange', () => {
 // readout answers "which build is this phone actually running?" -- the only
 // reliable way to confirm an update landed when a change has no visible UI.
 const BUILD_ID = '__BUILD_ID__';
-let debugPanel = null, debugTimer = null;
+let debugPanel = null, debugTimer = null, debugReadoutEl = null;
 let debugTapCount = 0, debugTapLastMs = 0;
 function noteAudioEvent(msg) {
   lastAudioEvent = msg + ' @ ' + new Date().toTimeString().slice(0, 8);
   updateDebugPanel();
 }
 function updateDebugPanel() {
-  if (!debugPanel) return;
-  debugPanel.textContent =
+  if (!debugPanel || !debugReadoutEl) return;
+  debugReadoutEl.textContent =
     'build: ' + BUILD_ID +
     ' · audio: ' + ctx.state +
     ' · rebuilds: ' + audioRebuilds +
@@ -2112,10 +2125,20 @@ function toggleDebugPanel() {
   if (debugPanel) {
     if (debugPanel.parentElement) debugPanel.parentElement.removeChild(debugPanel);
     debugPanel = null;
+    debugReadoutEl = null;
     if (debugTimer) { clearInterval(debugTimer); debugTimer = null; }
     return;
   }
   debugPanel = h('div', { class: 'debug-panel' });
+  debugReadoutEl = h('div', { class: 'debug-readout' });
+  debugPanel.appendChild(debugReadoutEl);
+  // Plain data check, not a reference to any scoring-only state -- safe to
+  // leave unmarked. There's nothing to clear until a game can exist at all.
+  if (DATA.scoring && DATA.scoring.enabled) {
+    debugPanel.appendChild(h('button', {
+      class: 'debug-clear-btn', text: 'clear game data', onclick: debugClearGameData,
+    }));
+  }
   document.getElementById('app').appendChild(debugPanel);
   updateDebugPanel();
   debugTimer = setInterval(updateDebugPanel, 1000);
@@ -4155,6 +4178,33 @@ function renderStartGameButtonIfNeeded() {
   }
   /* __SCORING_END__ */
   return null;
+}
+
+// Same safe-wrapper pattern again: the "clear game data" button in the
+// unmarked debug panel (toggleDebugPanel above) needs to call this, but
+// everything it actually does -- wiping scoringEvents, re-deriving state,
+// closing any open scoring overlay -- only makes sense/exists in a scoring
+// build. Test-game hygiene tool for Jason (2026-07-12): lets him run
+// unscheduled test games on a separate device and wipe them afterward
+// without touching Safari's site data wholesale. Confirmed via
+// window.confirm() first -- this is destructive and unrecoverable (no undo
+// event for a full wipe, unlike every other scoring action in this file).
+function debugClearGameData() {
+  /* __SCORING_START__ */
+  if (!window.confirm("Clear all recorded game data on this device? This can't be undone.")) return;
+  scoringEvents = [];
+  saveScoringEvents(scoringEvents);
+  scoringState = deriveState(scoringEvents);
+  scoringLineupEditor = null;
+  scoringCorrection = null;
+  scoringBoxScoreOpen = false;
+  endGameConfirmOpen = false;
+  pinSheet = null;
+  cancelPendingAutoplay();
+  lastAudioEvent = 'debug: game data cleared @ ' + new Date().toTimeString().slice(0, 8);
+  updateDebugPanel();
+  render();
+  /* __SCORING_END__ */
 }
 
 function render() {
