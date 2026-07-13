@@ -56,7 +56,8 @@
       "clips": [
         "Kirsten-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "code": "KB"
     },
     {
       "id": "marcel",
@@ -129,12 +130,27 @@
         "Winson-01.m4a"
       ],
       "status": "member"
+    },
+    {
+      "id": "alex",
+      "name": "Alex",
+      "clips": [
+        "Alex-01.mp3"
+      ],
+      "status": "sub"
+    },
+    {
+      "id": "natalie",
+      "name": "Natalie",
+      "clips": [
+        "Sub-Thunderstruck.mp3"
+      ],
+      "status": "sub"
     }
   ],
   "teamSounds": [],
   "defaultClips": [
-    "homerun_horn.mp3",
-    "placeholder-hype-2.mp3"
+    "homerun_horn.mp3"
   ],
   "schedule": [
     {

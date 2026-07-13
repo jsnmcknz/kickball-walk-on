@@ -248,12 +248,17 @@ def build(manifest_path: Path, out_path: Path):
             for clip_name in p["clips"]:
                 print(f"  processing {p['id']}: {clip_name} ...", file=sys.stderr)
                 clip_entries.append(process_and_encode(clip_name, workdir))
-            players_out.append({
+            entry = {
                 "id": p["id"],
                 "name": p["name"],
                 "status": p.get("status", "member"),
                 "clips": clip_entries,
-            })
+            }
+            # Optional manual 2-letter runner code (2026-07-13, Jason):
+            # overrides the app's derived code for the diamond labels.
+            if p.get("code"):
+                entry["code"] = str(p["code"]).upper()[:2]
+            players_out.append(entry)
         for s in manifest["teamSounds"]:
             clip_entries = []
             for clip_name in s["clips"]:

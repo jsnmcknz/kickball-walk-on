@@ -3113,7 +3113,18 @@ function assignRunnerCode(id, name) {
   runnerCodeById[id] = code;
   return code;
 }
-DATA.players.forEach(p => assignRunnerCode(p.id, p.name));
+// Manual codes claim their letters FIRST (2026-07-13, Jason: manifest
+// players[].code overrides the derivation), so an auto-assigned player
+// can never steal a hand-picked pair; the rest derive as before, in
+// roster order. Duplicate manual codes are honored as given -- roster
+// hygiene stays Jason's call, same policy as duplicate names.
+DATA.players.forEach(p => {
+  if (p.code) {
+    runnerCodeById[p.id] = p.code;
+    _runnerCodesTaken[p.code] = true;
+  }
+});
+DATA.players.forEach(p => { if (!runnerCodeById[p.id]) assignRunnerCode(p.id, p.name); });
 // Overlay players (mid-game `player_add` subs) get codes lazily, on first
 // sighting, from the same collision-aware pool -- so a sub named Mia
 // still can't collide with Ming/Mike's codes (S1.6 prep, 2026-07-08).
