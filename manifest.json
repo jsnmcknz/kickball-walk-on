@@ -46,7 +46,7 @@
       "id": "jason",
       "name": "Jason",
       "clips": [
-        "Jason-01.m4a"
+        "Jason-02.mp3"
       ],
       "status": "member"
     },
@@ -150,7 +150,8 @@
   ],
   "teamSounds": [],
   "defaultClips": [
-    "homerun_horn.mp3"
+    "homerun_horn.mp3",
+    "sub-all_i_do_is_win.mp3"
   ],
   "schedule": [
     {
