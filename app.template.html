@@ -381,7 +381,15 @@
      canvas is one bitmap and can't be part-sticky, so scorecardLayout/
      drawScorecard/drawScorecardTotals share row geometry and this wrapper
      just stacks the two visually. */
-  .boxscore-grid-wrap { position: relative; }
+  /* The FRAME lives on this static wrapper since 2026-07-13 (Jason: the
+     totals canvas' own border read as a separate floating box). The
+     canvases inside are borderless; overflow:hidden clips the scrolling
+     grid to the rounded frame, and the totals panel sits INSIDE it,
+     pinned right. */
+  .boxscore-grid-wrap {
+    position: relative; background: var(--tile);
+    border: 1px solid var(--tile-border); border-radius: 10px; overflow: hidden;
+  }
   /* touch-action: pan-x pan-y made explicit (2026-07-13): the global `*`
      rule's `manipulation` should permit panning, but Jason saw the snake
      refuse to scroll horizontally on-device -- an explicit pan grant on
@@ -394,8 +402,7 @@
      (runtime geometry, same exception as the canvas sizing). */
   .boxscore-totals-sticky { position: absolute; top: 0; right: 0; z-index: 2; }
   .scorecard-canvas, .scorecard-totals-canvas {
-    display: block; background: var(--tile);
-    border: 1px solid var(--tile-border); border-radius: 10px;
+    display: block; background: transparent; border: none; /* frame moved to .boxscore-grid-wrap, 2026-07-13 */
   }
   .boxscore-close { margin-top: 8px; }
   .score-bug-top { font-size: 12px; margin-bottom: 4px; }
@@ -1754,6 +1761,12 @@ function deriveState(events) {
       // S1.6 / 07-Portal-Architecture.md: links this game to its manifest
       // schedule fixture; absent for the "unscheduled game" fallback.
       st.scheduleGameId = p.scheduleGameId || null;
+      // Which inning each player joined the lineup (2026-07-13, Jason:
+      // the scorecard greys a late arrival's pre-join innings so the
+      // "skipped" cells read as not-rostered-yet rather than a scoring
+      // gap). Original lineup = inning 1 = nothing ever greys.
+      st.joinedInning = {};
+      st.lineup.forEach(pid => { st.joinedInning[pid] = 1; });
     } else if (e.type === 'lineup_set') {
       // S1.6 addition (2026-07-12, Jason sign-off): the tap-to-draft
       // editor's Done commit for a MID-GAME lineup edit -- add/remove/
@@ -1771,6 +1784,12 @@ function deriveState(events) {
       st.lineup = (p.lineup || []).slice();
       const idx = st.lineup.indexOf(currentBatter);
       st.lineupPointer = idx !== -1 ? idx : 0;
+      // First appearance in the lineup stamps the join inning (see
+      // game_start). Removed-and-re-added players keep their original
+      // stamp -- the scorecard question is "when did they arrive", not
+      // "were they ever benched".
+      st.joinedInning = st.joinedInning || {};
+      st.lineup.forEach(pid => { if (!(pid in st.joinedInning)) st.joinedInning[pid] = st.inning; });
     } else if (e.type === 'pa') {
       const result = p.result, batter = p.playerId;
       if (result === 'SKIP') {
@@ -2515,7 +2534,19 @@ function updateDebugPanel() {
     ' · rebuilds: ' + audioRebuilds +
     ' · clips: ' + Object.keys(buffers).length + '/' + DATA.players.length +
     ' · last: ' + lastAudioEvent +
+    viewportDebugSuffix() +
     syncDebugSuffix();
+}
+// Invariant 10c diagnostics (2026-07-13): every viewport source the
+// height fix chooses between, so a single debug screenshot tells us
+// which number iOS is lying about. sh=screen.height, vv=visualViewport,
+// ih=innerHeight, ce=documentElement.clientHeight, ->N = what --real-vh
+// was actually set to. SA/tab = standalone vs browser-tab mode.
+function viewportDebugSuffix() {
+  if (!lastViewportMeasure) return ' · vp: unmeasured';
+  const m = lastViewportMeasure;
+  return ' · vp[' + (m.standalone ? 'SA' : 'tab') + ']: sh' + m.sh + ' vv' + m.vv
+    + ' ih' + m.ih + ' ce' + m.ce + ' →' + m.h;
 }
 // Sync diagnostics ride the same readout (S2 item 2: "diagnostics to
 // debug readout", never a modal). Defined outside the strip markers with
@@ -3190,7 +3221,19 @@ function buildChipRecap() {
 // kind (openLastActionCorrection).
 function renderLastActionChip() {
   const recap = buildChipRecap();
-  if (!recap) return null;
+  if (!recap) {
+    // Fresh game, nothing logged yet (2026-07-13, Jason: the empty slot
+    // read as a missing element). A quiet, non-tappable placeholder --
+    // there's no event to fix or undo, so no onclick and no "tap to fix".
+    const first = scoringState.lineup[scoringState.lineupPointer];
+    if (!isScoringLive() || !first) return null;
+    return h('div', { class: 'last-action-chip' }, [
+      h('div', { class: 'la-headline' }, [
+        h('span', { text: 'New game — 1st up: ' }),
+        h('span', { class: 'la-name', text: playerNameOf(first) }),
+      ]),
+    ]);
+  }
   const headlineKids = [h('span', { text: '✎ ' })];
   if (recap.name) headlineKids.push(h('span', { class: 'la-name', text: recap.name }));
   headlineKids.push(h('span', { text: recap.rest }));
@@ -3317,28 +3360,42 @@ function renderFixLastSheet() {
   const plain = (RESULT_PLAIN_TEXT[c.currentResult] || c.currentResult).toLowerCase();
   const wrap = h('div', {});
   // Live diamond while the fixed kicker is on base (2026-07-13, Jason's
-  // on-device round: "the base interface should remain interactive like
-  // any other baserunner assignment"). Their base white-rings as selected
-  // (tap-again = cancel, same as every correction sheet), legal targets
-  // stay tappable as a plain runner set, and the result re-log pad below
-  // is unchanged -- so the previous kicker's tap now offers BOTH kinds of
-  // correction at once instead of greying the diamond out. When they're
-  // NOT on a base (FLY/K out, or already scored -- the HR home-tap route),
-  // there's nothing legal to move, and the old dimmed treatment stands.
-  const kickerOnBase = scoringState.runners[c.forPlayerId] !== undefined;
+  // on-device rounds -- TWO passes). Their base white-rings as selected
+  // (tap-again = cancel, same as every correction sheet) and the other
+  // bases are tappable. Round 2 semantics: a base tap here is an AMEND of
+  // the logged result (1st=1B, 2nd=2B, 3rd=3B, home=HR), byte-identical
+  // to tapping that pad button below -- NOT a runner `set`. The first
+  // pass used sets, and Jason immediately hit both order-of-operations
+  // artifacts: a backward set moved the kicker alone (no cascade of the
+  // runners their hit had pushed), and a subsequent amend visibly changed
+  // the logged result but not the icon (the later set event out-replayed
+  // the amended push -- absolute observations win by design). Amends
+  // re-derive the whole board, so runners cascade honestly in both
+  // directions and the two surfaces can never disagree. The cost, eyes
+  // open: "took an extra base on the throw" is no longer expressible for
+  // the previous kicker as placement-only -- amending IS the correction
+  // model here, same accepted-simplification family as fielder's choice.
+  // When they're NOT on a base (FLY/K out, or already scored -- the HR
+  // home-tap route), the old dimmed treatment stands.
+  const FIXLAST_BASE_RESULT = { 1: '1B', 2: '2B', 3: '3B', 4: 'HR' };
+  const kickerBase = scoringState.runners[c.forPlayerId];
+  const kickerOnBase = kickerBase !== undefined;
   const diamondCol = kickerOnBase
     ? h('div', { class: 'diamond-col' }, [renderDiamond({
         selectedId: c.forPlayerId, tappable: false,
-        legalTargets: legalSetTargets(scoringState.runners, c.forPlayerId),
-        onTapTarget: (base) => applyRunnerSet(c.forPlayerId, base),
+        legalTargets: [1, 2, 3, 4].filter(b => b !== kickerBase),
+        onTapTarget: (base) => applyFixLastAmend(FIXLAST_BASE_RESULT[base]),
       })])
     : h('div', { class: 'diamond-col scoring-dimmed' }, [renderDiamond({ tappable: false })]);
   // The FIXING chip fills the same slot .last-action-chip occupies on the
   // normal screen -- reads as "the chip is now in edit mode" (Jason, live
-  // feedback) rather than a separate note-plus-banner pair.
-  const fixingChip = h('div', { class: 'diamond-info fixlast-chip' }, [
+  // feedback) rather than a separate note-plus-banner pair. A button since
+  // 2026-07-13 (Jason): the chip that opened the edit also cancels it,
+  // mirroring the bases' tap-again-to-cancel.
+  const fixingChip = h('button', { class: 'diamond-info fixlast-chip', onclick: closeScoringCorrection }, [
     h('div', { class: 'fixlast-heading', text: 'FIXING: ' + name.toUpperCase() }),
     h('div', { class: 'fixlast-sub', text: 'logged as ' + plain + ' — tap the correct result' }),
+    h('div', { class: 'fixlast-sub', text: 'tap here to cancel' }),
   ]);
   wrap.appendChild(h('div', { class: 'diamond-row' }, [diamondCol, fixingChip]));
   const pad = renderFixLastResultPad(c.currentResult, applyFixLastAmend);
@@ -3875,17 +3932,20 @@ const CELL_W = 42;
 function scorecardLayout() {
   const colInfo = scorecardColumns();
   const lineup = scoringState.lineup;
-  // lineH 44 -> 58 (2026-07-13, Jason: line-score fonts up a step, plus a
-  // few px of real margin between the line score and the snake grid).
-  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 58;
+  // lineH 44 -> 58 -> 62 (2026-07-13, Jason, two passes: line-score fonts
+  // up a step, then a few px more air under the line score before the
+  // snake grid). rColW: the line score's R totals column now hangs past
+  // the last inning column, since the inning cells themselves align with
+  // the snake columns below (same 2026-07-13 pass).
+  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 62, rColW = 30;
   const nCols = Math.max(colInfo.cols.length, 1);
   const cellW = CELL_W;
   return {
     cols: colInfo.cols, cellMap: colInfo.cellMap,
     innings: scoringState.inning, // only innings actually played -- see scorecardColumns
-    lineup: lineup, pad: pad, nameW: nameW, totW: totW,
+    lineup: lineup, pad: pad, nameW: nameW, totW: totW, rColW: rColW,
     cellW: cellW, rowH: rowH, headH: headH, lineH: lineH,
-    w: pad * 2 + nameW + cellW * nCols, // grid canvas: name + inning cells only, no totals
+    w: pad * 2 + nameW + cellW * nCols + rColW, // grid canvas: name + inning cells + the line score's R overhang
     totalsW: pad + totW, // totals canvas: its own small sticky panel
     // Totals panel starts BELOW the line score (2026-07-13, Jason: its
     // frame used to run the full canvas height, boxing the line score in
@@ -3955,9 +4015,18 @@ function drawScorecard(canvas) {
   const px = (n) => Math.round(n * ROW_SCALE);
 
   // ---- line score ("the box score above the scorecard" -- 2026-07-12,
-  // Jason: bumped a couple px across the board for legibility) ----
-  const lsCell = Math.min(24, (L.w - L.pad * 2 - 60 - 24) / L.innings);
-  const lsX = L.pad + 60, lsY = L.pad;
+  // Jason: bumped a couple px across the board for legibility; 2026-07-13:
+  // inning cells now share the SNAKE GRID's own column geometry, so
+  // inning 1 up top sits exactly over inning 1's column below -- a
+  // bat-around inning centers on its first column) ----
+  const lsY = L.pad;
+  const lsGridX = L.pad + L.nameW;
+  const firstColOfInning = {};
+  L.cols.forEach((col, ci) => { if (!(col.inning in firstColOfInning)) firstColOfInning[col.inning] = ci; });
+  const inningCellX = (i) => {
+    const ci = firstColOfInning[i] !== undefined ? firstColOfInning[i] : (i - 1);
+    return lsGridX + (ci + 0.5) * L.cellW;
+  };
   // Row order follows convention: visitors on top (2026-07-12, Jason —
   // pairs with halfGlyph so ▲/top always reads as the top row). Away game
   // (isHome false) = us on top, unchanged from before; home game = them
@@ -3982,7 +4051,7 @@ function drawScorecard(canvas) {
   g.fillText(botRow.label, L.pad, lsY + 38);
   g.textAlign = 'center';
   for (let i = 1; i <= L.innings; i++) {
-    const x = lsX + (i - 0.5) * lsCell;
+    const x = inningCellX(i);
     g.fillStyle = SCORECARD_C.muted;
     g.font = '600 10px ' + font;
     g.fillText(String(i), x, lsY + 6);
@@ -3998,7 +4067,7 @@ function drawScorecard(canvas) {
     g.fillStyle = botRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
     g.fillText(botPlayed ? String(st.runsByInning[botRow.key][i] || 0) : '·', x, lsY + 38);
   }
-  const rX = lsX + L.innings * lsCell + 12;
+  const rX = lsGridX + L.cols.length * L.cellW + L.rColW / 2;
   g.font = '700 10px ' + font;
   g.fillStyle = SCORECARD_C.muted;
   g.fillText('R', rX, lsY + 6);
@@ -4031,9 +4100,17 @@ function drawScorecard(canvas) {
     g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us') ? SCORECARD_C.pickle : SCORECARD_C.text;
     g.fillText(playerNameOf(pid).slice(0, 8), L.pad, cy);
     g.textAlign = 'center';
+    const joinedInning = (st.joinedInning && st.joinedInning[pid]) || 1;
     for (let c = 0; c < nCols; c++) {
       const rec = L.cellMap[pid + '|' + c];
       const cx = gridX + (c + 0.5) * L.cellW;
+      // Late arrival's pre-join innings read as not-rostered-yet, not as
+      // scoring gaps (2026-07-13, Jason: "it's not clear why the at-bat
+      // order skipped them") -- a quiet wash over the whole cell.
+      if (L.cols[c].inning < joinedInning) {
+        g.fillStyle = 'rgba(255, 255, 255, 0.045)';
+        g.fillRect(gridX + c * L.cellW, y, L.cellW, L.rowH);
+      }
       g.strokeStyle = SCORECARD_C.rule;
       g.lineWidth = 0.5;
       g.strokeRect(gridX + c * L.cellW, y, L.cellW, L.rowH);
@@ -4118,8 +4195,11 @@ function drawScorecardTotals(canvas) {
   const gridY = L.pad + L.lineH + L.headH;
 
   // Solid fill so the grid canvas visually disappears underneath this one
-  // when scrolled, rather than showing through at the seam.
-  g.fillStyle = SCORECARD_C.bg;
+  // when scrolled, rather than showing through at the seam. Tile-colored
+  // since 2026-07-13 (frame moved to the wrapper): the totals column now
+  // blends into the shared box, divided only by the left seam rule,
+  // instead of reading as its own darker floating panel.
+  g.fillStyle = SCORECARD_C.tile;
   g.fillRect(0, L.totalsTop, L.totalsW, L.totalsH);
   g.strokeStyle = SCORECARD_C.rule;
   g.lineWidth = 1;
@@ -6204,9 +6284,33 @@ document.getElementById('tabGrid').addEventListener('click', () => {
    on every resize/orientation/pageshow, plus settle timers at boot --
    iOS is known to report stale numbers for a beat after launch.
    ============================================================ */
+let lastViewportMeasure = null; // surfaced in the debug readout -- see updateDebugPanel
 function syncRealViewportHeight() {
-  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-  if (h) document.documentElement.style.setProperty('--real-vh', Math.round(h) + 'px');
+  // Attempt #5 refinement (2026-07-13, gap survived #4): if the JS
+  // sources themselves report the stale/short viewport, measuring them
+  // doesn't help. In STANDALONE mode with viewport-fit=cover the web view
+  // spans the entire physical screen by definition, so screen.height (the
+  // full logical screen, orientation-guarded) is admissible as a floor --
+  // we take the MAX of it and the live-viewport reports. In a Safari tab,
+  // browser chrome makes screen.height an overestimate, so it's excluded
+  // there. Every number feeds the debug readout so the next on-device
+  // screenshot settles which source lies.
+  const standalone = navigator.standalone === true
+    || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  const portrait = window.innerHeight >= window.innerWidth;
+  const vv = (window.visualViewport && window.visualViewport.height) || 0;
+  const candidates = [vv, window.innerHeight];
+  if (standalone && portrait) candidates.push(window.screen && screen.height);
+  const usable = candidates.filter(n => typeof n === 'number' && n > 0);
+  if (!usable.length) return;
+  const h = Math.round(Math.max.apply(null, usable));
+  document.documentElement.style.setProperty('--real-vh', h + 'px');
+  lastViewportMeasure = {
+    h: h, standalone: standalone,
+    vv: Math.round(vv), ih: window.innerHeight,
+    ce: document.documentElement.clientHeight,
+    sh: (window.screen && screen.height) || 0,
+  };
 }
 syncRealViewportHeight();
 if (window.visualViewport) window.visualViewport.addEventListener('resize', syncRealViewportHeight);

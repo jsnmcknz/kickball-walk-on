@@ -2933,10 +2933,13 @@ async function main() {
     console.log('75. Game-start leadoff prompt: away prompts the first kicker, home waits for the turnover: OK');
   }
 
-  // 76. Fix-last live diamond (2026-07-13, Jason on-device): the previous
-  // kicker's base tap opens fix-last with the diamond STILL interactive --
-  // move them via a legal-target tap (plain runner set), or tap their own
-  // base to cancel. Result pad below unchanged.
+  // 76. Fix-last live diamond, round 2 semantics (2026-07-13, Jason
+  // on-device twice): the previous kicker's base tap opens fix-last with
+  // the diamond STILL interactive, and a base tap AMENDS the logged
+  // result (1st=1B, 2nd=2B, 3rd=3B, home=HR) -- identical to the pad
+  // buttons, so runners cascade honestly in both directions. Round 1's
+  // runner-set wiring is the regression this guards against: a backward
+  // set didn't cascade, and set-then-amend froze the icon.
   {
     function findByClasses(classes) {
       let found = null;
@@ -2961,27 +2964,124 @@ async function main() {
     const sel = findByClasses(['diamond-base', 'pos-2nd', 'selected']);
     assert(sel && sel.tagName === 'BUTTON', 'the kicker\'s own base white-rings and stays tappable');
     const target = findByClasses(['diamond-base', 'pos-3rd', 'legal-target']);
-    assert(target && target.tagName === 'BUTTON', '3rd offered as a live legal target inside fix-last');
+    assert(target && target.tagName === 'BUTTON', '3rd offered as a live target inside fix-last');
     target.dispatch('click');
-    assert(hooks.getScoringCorrection() === null, 'legal-target tap commits the runner set and closes fix-last');
+    assert(hooks.getScoringCorrection() === null, 'base tap commits and closes fix-last');
     assert(hooks.getScoringState().runners.alice === 3, 'alice moved to 3rd: ' + JSON.stringify(hooks.getScoringState().runners));
+    let alicePa = hooks.getScoringEvents().filter(e => e.type === 'pa' && e.payload.playerId === 'alice')[0];
+    let lastAmend = hooks.getScoringEvents().filter(e => e.type === 'amend').pop();
+    assert(lastAmend && lastAmend.payload.target_event_id === alicePa.id && lastAmend.payload.result === '3B',
+      'the base tap logged an AMEND to 3B, not a runner set: ' + JSON.stringify(lastAmend && lastAmend.payload));
 
     findByClasses(['diamond-base', 'pos-3rd', 'occupied']).dispatch('click'); // reopen fix-last from her new base
     assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode === 'fixLast', 'reopens fix-last');
     findByClasses(['diamond-base', 'pos-3rd', 'selected']).dispatch('click'); // tap own base = cancel
     assert(hooks.getScoringCorrection() === null, 'tap-again on the kicker\'s base cancels fix-last');
 
-    // Kicker NOT on base (FLY out): dimmed treatment stands.
-    hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'pa', { playerId: 'bob', result: 'FLY', inning: 1, half: 'us' }));
+    // Jason's exact field case: bob on base ahead of alice's double; walk
+    // the double back to a single via the diamond -> bob cascades BACK too.
+    let ev2 = [];
+    ev2 = hooks.appendScoringEvent(ev2, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['bob', 'alice', 'charlie'] });
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });   // bob 1st
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'alice', result: '2B', inning: 1, half: 'us' }); // bob -> 3rd, alice 2nd
+    hooks.setScoringEvents(ev2);
     render();
-    hooks.openLastActionCorrection(); // chip route into fix-last for bob's FLY
+    assert(hooks.getScoringState().runners.bob === 3, 'sanity: bob pushed to 3rd by the double');
+    findByClasses(['diamond-base', 'pos-2nd', 'occupied']).dispatch('click'); // alice = previous kicker
+    findByClasses(['diamond-base', 'pos-1st', 'legal-target']).dispatch('click'); // "it was really a single"
+    const st2 = hooks.getScoringState();
+    assert(st2.runners.alice === 1 && st2.runners.bob === 2,
+      'amend-to-1B cascades BOTH runners back (alice 1st, bob 2nd): ' + JSON.stringify(st2.runners));
+    const bobPa = hooks.getScoringEvents().filter(e => e.type === 'pa' && e.payload.playerId === 'alice')[0];
+    assert(hooks.getScoringEvents().filter(e => e.type === 'amend').pop().payload.result === '1B', 'logged as an amend to 1B');
+
+    // Kicker NOT on base (FLY out): dimmed treatment stands. Charlie is
+    // up next and lands nowhere on the diamond.
+    hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'pa', { playerId: 'charlie', result: 'FLY', inning: 1, half: 'us' }));
+    render();
+    hooks.openLastActionCorrection(); // chip route into fix-last for charlie's FLY
     assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode === 'fixLast', 'chip opens fix-last for the FLY');
     render();
     assert(findByClasses(['diamond-col', 'scoring-dimmed']), 'diamond dimmed when the fixed kicker is not on a base');
     hooks.closeScoringCorrection();
     hooks.setScoringEvents([]);
     render();
-    console.log('76. Fix-last live diamond: move-or-relog for the previous kicker, tap-own-base cancels, dimmed when off base: OK');
+    console.log('76. Fix-last live diamond: base taps amend the result (cascade both ways), tap-own-base cancels, dimmed when off base: OK');
+  }
+
+  // 77. Last-action chip extras (2026-07-13, Jason): a fresh game shows a
+  // quiet "New game — 1st up" placeholder instead of an empty slot, and
+  // the FIXING chip cancels the edit it opened (tap-again idiom).
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+    function chipText(node) {
+      let out = '';
+      const walk = (n) => { if (n.textContent) out += n.textContent; (n._children || []).forEach(walk); };
+      walk(node);
+      return out;
+    }
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob'] });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    // (The away-start leadoff prompt isn't open here -- it's handler
+    // state from commitStartGame, and this log was seeded directly.)
+    const chip = findByClasses(['last-action-chip']);
+    assert(chip, 'fresh game renders the placeholder chip');
+    assert(chip.tagName !== 'BUTTON', 'placeholder chip is NOT tappable (nothing to fix or undo)');
+    const txt = chipText(chip);
+    assert(txt.indexOf('New game') !== -1 && txt.indexOf('Alice') !== -1, 'placeholder names the first kicker: ' + txt);
+
+    // FIXING chip cancels.
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '2B', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    render();
+    hooks.openLastActionCorrection();
+    render();
+    const fixChip = findByClasses(['fixlast-chip']);
+    assert(fixChip && fixChip.tagName === 'BUTTON', 'FIXING chip is a button');
+    fixChip.dispatch('click');
+    assert(hooks.getScoringCorrection() === null, 'tapping the FIXING chip cancels fix-last');
+    hooks.setScoringEvents([]);
+    render();
+    console.log('77. Chip extras: new-game placeholder (non-tappable), FIXING chip cancels: OK');
+  }
+
+  // 78. joinedInning tracking (2026-07-13, Jason: late arrivals' pre-join
+  // innings grey out on the scorecard). Original lineup stamps inning 1;
+  // a lineup_set newcomer stamps the inning it lands in; re-adding a
+  // removed player keeps their original stamp.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob'] });
+    // Burn inning 1 both ways: 3 our outs, 3 opp outs -> inning 2.
+    ['alice', 'bob', 'alice'].forEach(pid => {
+      ev = hooks.appendScoringEvent(ev, 'pa', { playerId: pid, result: 'FLY', inning: 1, half: 'us' });
+    });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    let st = hooks.deriveState(ev);
+    assert(st.inning === 2 && st.half === 'us', 'sanity: inning 2, our half');
+    ev = hooks.appendScoringEvent(ev, 'lineup_set', { lineup: ['alice', 'bob', 'charlie'] }); // charlie arrives late
+    st = hooks.deriveState(ev);
+    assert(st.joinedInning.alice === 1 && st.joinedInning.bob === 1, 'original lineup joined inning 1');
+    assert(st.joinedInning.charlie === 2, 'late arrival stamped with the inning they joined: ' + st.joinedInning.charlie);
+    ev = hooks.appendScoringEvent(ev, 'lineup_set', { lineup: ['alice', 'bob'] });            // charlie leaves...
+    ev = hooks.appendScoringEvent(ev, 'lineup_set', { lineup: ['alice', 'bob', 'charlie'] }); // ...and returns, same inning-2 stamp
+    st = hooks.deriveState(ev);
+    assert(st.joinedInning.charlie === 2, 're-added player keeps the ORIGINAL join stamp: ' + st.joinedInning.charlie);
+    console.log('78. joinedInning: originals=1, late arrival stamped, re-add keeps first stamp: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
