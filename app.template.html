@@ -362,7 +362,16 @@
      drawScorecard/drawScorecardTotals share row geometry and this wrapper
      just stacks the two visually. */
   .boxscore-grid-wrap { position: relative; }
-  .boxscore-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* touch-action: pan-x pan-y made explicit (2026-07-13): the global `*`
+     rule's `manipulation` should permit panning, but Jason saw the snake
+     refuse to scroll horizontally on-device -- an explicit pan grant on
+     the scroller is the cheap first hypothesis. If this alone doesn't fix
+     it on-device, the next suspect is the sticky overlay eating the
+     gesture (its z-index panel isn't part of the scroller). */
+  .boxscore-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+  .boxscore-scroll-inner { width: max-content; }
+  /* top offset is set inline per-render from scorecardLayout().totalsTop
+     (runtime geometry, same exception as the canvas sizing). */
   .boxscore-totals-sticky { position: absolute; top: 0; right: 0; z-index: 2; }
   .scorecard-canvas, .scorecard-totals-canvas {
     display: block; background: var(--tile);
@@ -1040,7 +1049,14 @@
      ping-pongs between the stats and schedule screens, matching the
      mockup exactly. */
   .portal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 8px; }
-  .portal-link { font-size: 12px; color: var(--muted); background: none; border: none; padding: 4px 0; }
+  /* Bordered like .order-btn (2026-07-13, Jason: the borderless header
+     links read as labels, not buttons -- match scoring mode's lineup/
+     cancel treatment). */
+  .portal-link {
+    font-size: 12px; color: var(--muted); background: transparent;
+    border: 1px solid var(--tile-border); border-radius: 10px; padding: 8px 12px;
+  }
+  .portal-link:active { opacity: 0.7; }
   /* "Portal as neutral ground" (2026-07-12): header right side can hold the
      ✎ score entry beside the nav link; score reads pickle so it registers
      as an action, not navigation. .pin-stats-link needs no rules of its own
@@ -1110,6 +1126,7 @@
   .portal-schedule-result { font-size: 13px; font-weight: 500; }
   .portal-schedule-result.win { color: var(--pickle); }
   .portal-schedule-result.loss { color: var(--plum-text); }
+  .portal-schedule-result.tie { color: var(--muted); } /* ties exist in this league (2026-07-13) */
   .portal-schedule-time { font-size: 12px; color: var(--pickle); }
   .portal-schedule-tbd { font-size: 13px; color: var(--muted); }
   .portal-schedule-dagger { font-size: 12px; color: var(--muted); margin-left: 4px; }
@@ -1123,6 +1140,7 @@
   .portal-gd-result { font-size: 14px; font-weight: 500; }
   .portal-gd-result.win { color: var(--pickle); }
   .portal-gd-result.loss { color: var(--plum-text); }
+  .portal-gd-result.tie { color: var(--muted); }
   .portal-linescore { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; }
   .portal-linescore th { padding: 2px 4px; color: var(--muted); font-weight: 400; text-align: center; }
   .portal-linescore td { padding: 2px 4px; color: var(--text); text-align: center; border-top: 1px solid var(--tile-border); }
@@ -1148,6 +1166,43 @@
   .portal-prompt-decline {
     display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border); border-radius: 8px;
     padding: 9px 0; font-size: 12px; font-weight: 500; color: var(--muted);
+  }
+  /* Leadoff walk-on prompt (2026-07-13, Jason's game-2 list): when the
+     opponent's half turns over, the leadoff kicker's music needed an
+     unprompted NOW UP tap -- easy to forget mid-chaos. This card takes
+     the offense body's slot until answered (play or not-now), same
+     takeover-sheet convention as everything else here. */
+  .leadoff-card {
+    background: var(--tile); border: 1px solid var(--pickle); border-radius: 12px;
+    padding: 18px 12px 12px; text-align: center; margin: 18px 16px;
+  }
+  .leadoff-label { font-size: 11px; letter-spacing: 0.1em; color: var(--pickle); font-weight: 500; text-transform: uppercase; }
+  .leadoff-name { font-size: 26px; font-weight: 600; color: #fff; margin: 6px 0 14px; }
+  .leadoff-play {
+    display: block; width: 100%; background: var(--olive); border-radius: 8px; padding: 14px 0;
+    font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px;
+  }
+  .leadoff-skip {
+    display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border); border-radius: 8px;
+    padding: 9px 0; font-size: 12px; font-weight: 500; color: var(--muted);
+  }
+  /* S2 sync chip (2026-07-13): "N plays waiting to sync". Absolute inside
+     #app (invariant 16: viewport-fixed bottoms drown under the home
+     indicator), floating above the tab bar; pointer-events none so it can
+     never eat a game tap. Only exists while the queue is non-empty. */
+  .sync-chip {
+    position: absolute; bottom: 68px; left: 50%; transform: translateX(-50%);
+    background: var(--tile); border: 1px solid var(--tile-border); border-radius: 999px;
+    color: var(--muted); font-size: 11px; font-weight: 500; padding: 4px 12px;
+    z-index: 40; pointer-events: none; white-space: nowrap;
+  }
+  /* Start Game draft: one-tap wipe (2026-07-13). Dashed + muted -- an
+     escape hatch, not a primary action; sits directly under the list it
+     clears. */
+  .draft-clear {
+    display: block; width: calc(100% - 32px); margin: 6px 16px 0; background: var(--bg);
+    border: 1px dashed var(--tile-border); border-radius: 8px;
+    padding: 8px 0; font-size: 12px; font-weight: 500; color: var(--muted);
   }
   /* __SCORING_END__ */
 </style>
@@ -1255,7 +1310,11 @@ const HIT_BASES = { '1B': 1, '2B': 2, '3B': 3, 'HR': 4 };
 const OUT_RESULTS = new Set(['FLY', 'GND', 'K']);
 
 function loadScoringEvents() { return loadJSON(SCORING_STORAGE_KEY, []); }
-function saveScoringEvents(events) { saveJSON(SCORING_STORAGE_KEY, events); }
+// scheduleSyncFlush (S2 sync module, further down -- function hoisting
+// makes the forward reference fine) piggybacks on every persist: a logged
+// play asks to leave the phone within ~a second, not at the next timer.
+// No-ops entirely unless the manifest carries real Supabase credentials.
+function saveScoringEvents(events) { saveJSON(SCORING_STORAGE_KEY, events); scheduleSyncFlush('append'); }
 
 // Local id generator -- unique within one device's own array, which is all
 // appendScoringEvent/amend/undo need for S1 (offline, single device). Real
@@ -1565,25 +1624,9 @@ function deriveState(events) {
     moved.forEach(m => { if (!m.scored) setKickerBase(m.playerId, m.to); }); // scorecard edge fills (iteration 2)
     return moved;
   }
-  // Force-chain for 1B only (Jason, 2026-07-07 live feedback): a runner is
-  // forced to advance one base ONLY if the base behind them was occupied,
-  // cascading from 1st -- so a runner on 3rd with 1st/2nd empty simply
-  // holds on a single (e.g. a ball hit to the left side), rather than
-  // being auto-pushed like the old uniform-delta model. 2B/3B/HR keep the
-  // uniform push deliberately (an extra-base hit overwhelmingly clears the
-  // bases in practice; scoped narrowly per Jason's explicit example, not
-  // generalized to every hit type).
-  function forcedBasesFor1B(runners) {
-    const forced = new Set();
-    if (runnerAtBase(runners, 1)) {
-      forced.add(1);
-      if (runnerAtBase(runners, 2)) {
-        forced.add(2);
-        if (runnerAtBase(runners, 3)) forced.add(3);
-      }
-    }
-    return forced;
-  }
+  // (forcedBasesFor1B lived here 2026-07-07 .. 2026-07-13: 1B advanced a
+  // runner only when force-chained from behind. Reverted to the uniform
+  // push -- see the comment at the HIT_BASES branch in the pa handler.)
   function advanceLineupPointer() {
     if (st.lineup.length === 0) return;
     st.lineupPointer = (st.lineupPointer + 1) % st.lineup.length;
@@ -1689,9 +1732,9 @@ function deriveState(events) {
       // reorder existing or newly-added (player_add) players. One event
       // per commit, payload {lineup:[playerId,...]}, mirroring game_start's
       // own lineup field exactly -- keeps the append-only/one-event-per-
-      // action pattern rather than one event per drag/tap. Not in
-      // 05-Scoring-Architecture.md's original event table; documented here
-      // and flagged for that doc's amendment. The current batter (if any)
+      // action pattern rather than one event per drag/tap. Folded into
+      // 05-Scoring-Architecture.md's event table 2026-07-13 (Jason's
+      // sign-off). The current batter (if any)
       // is carried forward by identity, not index, so an edit that only
       // reorders/adds around them never visibly "moves the pointer" --
       // the UI itself refuses to let the current batter be removed, so
@@ -1732,22 +1775,13 @@ function deriveState(events) {
         runnersBefore: Object.assign({}, st.runners),
       };
       st.paLog.push(record);
-      if (result === '1B') {
-        // Force-chain only (see forcedBasesFor1B) -- process forced bases
-        // highest-first so a forced runner is never overwritten mid-cascade.
-        const forced = forcedBasesFor1B(st.runners);
-        [3, 2, 1].forEach(b => {
-          if (!forced.has(b)) return;
-          const pid = runnerAtBase(st.runners, b);
-          if (!pid) return;
-          const nb = b + 1;
-          delete st.runners[pid];
-          if (nb >= 4) { creditRun(pid, record, false); record.movements.push({ playerId: pid, from: b, to: null, scored: true }); }
-          else { st.runners[pid] = nb; record.movements.push({ playerId: pid, from: b, to: nb, scored: false }); setKickerBase(pid, nb); }
-        });
-        st.runners[batter] = 1;
-      } else if (HIT_BASES[result]) {
-        // 2B/3B/HR: uniform push, unchanged (see forcedBasesFor1B's comment).
+      if (HIT_BASES[result]) {
+        // ALL hits, 1B included, are a uniform push (every runner advances
+        // by the hit's bases). 1B briefly used a force-chain-only model
+        // (2026-07-07 live feedback) -- reverted 2026-07-13, Jason: a
+        // runner advancing on a base hit is the overwhelmingly common
+        // case, so the default advances everyone and the rare hold is a
+        // one-tap manual correction backwards, not the other way around.
         const delta = HIT_BASES[result];
         record.movements = pushAndCredit(1, delta, record, false);
         if (delta < 4) st.runners[batter] = delta;
@@ -1866,11 +1900,10 @@ function deriveState(events) {
       else if (p.field === 'inning') st.inning = p.value;
       // 'half' (2026-07-12, S1.6): the adjust sheet's inning stepper walks
       // both inning AND half (▲3 -> ▼3 -> ▲4, mockups/portal-screens.html
-      // screen 8) -- not in 05-Scoring-Architecture.md's original field
-      // enum (outs/score_us/score_them/inning only); added as a 5th field
-      // on the same event type, same "one adjust event per changed field"
-      // draft-commit convention as everything else on this sheet. Flagged
-      // for that doc's amendment.
+      // screen 8) -- added as a 5th field on the same event type, same
+      // "one adjust event per changed field" draft-commit convention as
+      // everything else on this sheet. Folded into 05's field enum
+      // 2026-07-13 (Jason's sign-off).
       else if (p.field === 'half') st.half = p.value;
       // 'isHome' (2026-07-12): the adjust sheet's correction path for a
       // coin toss that happened (or was entered wrong) after game_start —
@@ -1978,13 +2011,25 @@ function seasonGameRecords() {
   return records;
 }
 
+// Ties are real in this league (Jason, 2026-07-13) -- counted and shown
+// as a third W–L–T segment, but only when at least one exists.
 function seasonRecord() {
-  let w = 0, l = 0, runDiff = 0;
+  let w = 0, l = 0, t = 0, runDiff = 0;
   seasonGameRecords().forEach((r) => {
-    if (r.final.us > r.final.them) w += 1; else if (r.final.us < r.final.them) l += 1;
+    if (r.final.us > r.final.them) w += 1;
+    else if (r.final.us < r.final.them) l += 1;
+    else t += 1;
     runDiff += (r.final.us - r.final.them);
   });
-  return { w: w, l: l, runDiff: runDiff };
+  return { w: w, l: l, t: t, runDiff: runDiff };
+}
+// Shared W/L/T verdict for result rows (schedule, game detail): letter,
+// CSS class, and the score text. Tie renders 'T', muted -- it used to
+// fall through the `us > them` boolean and read as a loss.
+function resultVerdict(final) {
+  const cls = final.us > final.them ? 'win' : (final.us < final.them ? 'loss' : 'tie');
+  const letter = cls === 'win' ? 'W ' : (cls === 'loss' ? 'L ' : 'T ');
+  return { cls: cls, text: letter + final.us + '–' + final.them };
 }
 
 // Sums per-player stats across every device-scored game only -- a
@@ -2441,7 +2486,21 @@ function updateDebugPanel() {
     ' · audio: ' + ctx.state +
     ' · rebuilds: ' + audioRebuilds +
     ' · clips: ' + Object.keys(buffers).length + '/' + DATA.players.length +
-    ' · last: ' + lastAudioEvent;
+    ' · last: ' + lastAudioEvent +
+    syncDebugSuffix();
+}
+// Sync diagnostics ride the same readout (S2 item 2: "diagnostics to
+// debug readout", never a modal). Defined outside the strip markers with
+// the scoring-only body inside -- same shell pattern as decidePortalBoot.
+function syncDebugSuffix() {
+  /* __SCORING_START__ */
+  if (DATA.scoring && DATA.scoring.enabled) {
+    return ' · sync q:' + syncQueueDepth()
+      + ' · flush: ' + (syncLastFlushAt || '—') + ' ' + syncLastResult
+      + (syncLastError ? ' · err: ' + syncLastError : '');
+  }
+  /* __SCORING_END__ */
+  return '';
 }
 function toggleDebugPanel() {
   if (debugPanel) {
@@ -2649,16 +2708,33 @@ function applyRunnerOut(playerId) {
 // fixing them IS re-scoring that at-bat -- route to fix-last, exactly
 // like the previous-kicker redirect on the bases (round 3, from Jason's
 // "Charlie walked back to 2nd but the chip still said Homered").
-function openScoredCorrection() {
+// 2026-07-13 (Jason, game-2 prep): the correction window CLOSES once the
+// next at-bat is logged -- a scorer from a previous play no longer stays
+// tappable at home a turn later. The gate: the newest same-half run must
+// have been credited against the MOST RECENT PA record. Runner-correction
+// events don't create PA records, so walking back one of two runs (or
+// re-placing runners) keeps the window open mid-correction; only a new
+// logged result (or the half ending) shuts it. Late-noticed run errors
+// fall back to the score-bug adjust steppers.
+function newestSameHalfRunEntry() {
   const runsLog = scoringState.runsLog;
-  let last = null;
   for (let i = runsLog.length - 1; i >= 0; i--) {
     const en = runsLog[i];
-    if (en.inning === scoringState.inning && en.half === scoringState.half) { last = en; break; }
+    if (en.inning === scoringState.inning && en.half === scoringState.half) return en;
   }
-  if (!last) return;
+  return null;
+}
+function scoredCorrectionWindowOpen() {
+  const last = newestSameHalfRunEntry();
+  if (!last) return false;
   const lastRec = scoringState.paLog.length ? scoringState.paLog[scoringState.paLog.length - 1] : null;
-  if (lastRec && last.record === lastRec && last.playerId === lastRec.playerId) {
+  return !!(lastRec && last.record === lastRec);
+}
+function openScoredCorrection() {
+  if (!scoredCorrectionWindowOpen()) return;
+  const last = newestSameHalfRunEntry();
+  const lastRec = scoringState.paLog[scoringState.paLog.length - 1];
+  if (last.playerId === lastRec.playerId) {
     openFixLastForMostRecentPa(true);
     return;
   }
@@ -2880,6 +2956,10 @@ function renderDiamond(opts) {
     let onTap = null;
     if (opts.tappable && occupantId) onTap = () => openRunnerCorrection(occupantId);
     else if (isLegalTarget && opts.onTapTarget) onTap = () => opts.onTapTarget(baseNum);
+    // Tap the SELECTED base again = cancel (2026-07-13, Jason's game-2
+    // list): the base that opened the correction sheet mirrors its ✕
+    // cancel button, so backing out never requires reaching for the panel.
+    else if (isSelected) onTap = closeScoringCorrection;
     const attrs = { class: cls };
     if (onTap) attrs.onclick = onTap;
     wrap.appendChild(h(onTap ? 'button' : 'div', attrs));
@@ -2893,10 +2973,13 @@ function renderDiamond(opts) {
   // it while the scored-runner sheet is open (the runner being corrected
   // conceptually stands at home).
   const homeIsTarget = legalTargets.indexOf(4) !== -1;
-  const homeScoredTappable = !!(opts.tappable && scoringState.scoredThisHalf && scoringState.scoredThisHalf.length > 0);
+  const homeScoredTappable = !!(opts.tappable && scoredCorrectionWindowOpen());
   let homeOnTap = null;
   if (homeIsTarget && opts.onTapTarget) homeOnTap = () => opts.onTapTarget(4);
   else if (homeScoredTappable) homeOnTap = openScoredCorrection;
+  // Same tap-again-to-cancel as the bases (2026-07-13): while the
+  // scored-runner sheet is open, home is the selected "base".
+  else if (opts.homeSelected) homeOnTap = closeScoringCorrection;
   const homeAttrs = {
     class: 'diamond-base pos-home' + (homeIsTarget ? ' legal-target' : '')
       + (homeScoredTappable ? ' has-scored' : '') + (opts.homeSelected ? ' selected' : ''),
@@ -3109,7 +3192,7 @@ function renderDiamondCaptionSlot(text) {
 
 function renderOnBaseHint() {
   const onBaseCount = Object.keys(scoringState.runners).length;
-  const anyScored = !!(scoringState.scoredThisHalf && scoringState.scoredThisHalf.length > 0);
+  const anyScored = scoredCorrectionWindowOpen(); // caption tracks the same window as the plate's tap/fill (2026-07-13)
   // Kept to ONE line by construction (round 2, Jason on-device 2026-07-08:
   // the two-line version climbed up into the relocated home plate -- the
   // caption is bottom-anchored in the reference box and only has a single
@@ -3434,9 +3517,11 @@ function scheduleScoringAutoPlay() {
 // NOW UP card just returns to its plain idle state, requiring a manual tap
 // once the kicking team is actually back up.
 function logOppOut() {
+  const prevHalf = scoringState.half;
   scoringEvents = appendScoringEvent(scoringEvents, 'opp_out', { inning: scoringState.inning });
   scoringState = deriveState(scoringEvents);
   scoringClipFiredForBatter = null;
+  maybeOpenLeadoffPrompt(prevHalf);
   render();
 }
 
@@ -3515,6 +3600,44 @@ function renderOffenseBody() {
 const MERCY_RUN_LIMIT = 8;
 let mercyDismissedForHalf = null; // `${inning}-${half}` key
 
+// ---- Leadoff walk-on prompt (2026-07-13, Jason's game-2 list) ----
+// When THEIR half turns over to ours, the leadoff kicker's clip used to
+// need an unprompted NOW UP tap that nothing drew the eye to. Any commit
+// path that can flip them->us calls maybeOpenLeadoffPrompt with the
+// pre-commit half; the card then replaces the offense body until answered.
+// The ▶ tap is a REAL user gesture, so it's also the audio unlock for the
+// new half -- invariant 6's timer wall never applies to this path.
+let leadoffPromptOpen = false;
+function maybeOpenLeadoffPrompt(prevHalf) {
+  if (prevHalf !== 'them' || scoringState.half !== 'us') return;
+  if (!isScoringLive()) return;
+  if (!scoringState.lineup[scoringState.lineupPointer]) return;
+  leadoffPromptOpen = true;
+}
+// Validity re-checked at render time; any state change that invalidates
+// the moment (half flipped back by a correction, game ended, lineup
+// emptied) quietly drops the flag instead of showing a stale prompt.
+function leadoffPromptBatter() {
+  if (!leadoffPromptOpen) return null;
+  if (!isScoringLive() || scoringState.half !== 'us') { leadoffPromptOpen = false; return null; }
+  const batter = scoringState.lineup[scoringState.lineupPointer];
+  if (!batter) { leadoffPromptOpen = false; return null; }
+  return batter;
+}
+function renderLeadoffPrompt(batter) {
+  return h('div', { class: 'leadoff-card' }, [
+    h('div', { class: 'leadoff-label', text: 'our half — now up' }),
+    h('div', { class: 'leadoff-name', text: playerNameOf(batter).toUpperCase() }),
+    h('button', { class: 'leadoff-play', text: '▶ play walk-up', onclick: () => {
+      leadoffPromptOpen = false;
+      playClip(batter); // in-gesture: playClip's own synchronous rebuild path applies (invariants 1-2)
+      scoringClipFiredForBatter = batter;
+      render();
+    } }),
+    h('button', { class: 'leadoff-skip', text: '✕ not now', onclick: () => { leadoffPromptOpen = false; render(); } }),
+  ]);
+}
+
 function renderMercyBanner() {
   const isUs = scoringState.half === 'us';
   const isFinalInning = scoringState.inning >= scoringState.innings;
@@ -3525,11 +3648,13 @@ function renderMercyBanner() {
     h('div', { class: 'mercy-text', text: MERCY_RUN_LIMIT + '-run mercy limit reached this inning' }),
     h('div', { class: 'mercy-actions' }, [
       h('button', { class: 'mercy-btn', text: 'End half-inning', onclick: () => {
+        const prevHalf = scoringState.half;
         scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'outs', value: 3 });
         scoringState = deriveState(scoringEvents);
         mercyDismissedForHalf = null;
         musicPausedForMercyHalf = null;
         scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
+        maybeOpenLeadoffPrompt(prevHalf); // mercy-ending THEIR half is a turnover like any other
         render();
       } }),
       h('button', { class: 'mercy-btn dashed', text: 'Keep playing', onclick: () => {
@@ -3706,7 +3831,9 @@ const CELL_W = 42;
 function scorecardLayout() {
   const colInfo = scorecardColumns();
   const lineup = scoringState.lineup;
-  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 44;
+  // lineH 44 -> 58 (2026-07-13, Jason: line-score fonts up a step, plus a
+  // few px of real margin between the line score and the snake grid).
+  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 58;
   const nCols = Math.max(colInfo.cols.length, 1);
   const cellW = CELL_W;
   return {
@@ -3716,6 +3843,13 @@ function scorecardLayout() {
     cellW: cellW, rowH: rowH, headH: headH, lineH: lineH,
     w: pad * 2 + nameW + cellW * nCols, // grid canvas: name + inning cells only, no totals
     totalsW: pad + totW, // totals canvas: its own small sticky panel
+    // Totals panel starts BELOW the line score (2026-07-13, Jason: its
+    // frame used to run the full canvas height, boxing the line score in
+    // and hiding its right edge under the overlay -- the frame should end
+    // just above the AB·H·R·RBI header). Render sites offset the sticky
+    // wrapper by totalsTop and size the canvas to totalsH.
+    totalsTop: pad + lineH,
+    totalsH: headH + rowH * lineup.length + pad,
     h: pad * 2 + lineH + headH + rowH * lineup.length,
   };
 }
@@ -3791,41 +3925,47 @@ function drawScorecard(canvas) {
   const botRow = st.isHome
     ? { key: 'us', label: teamAbbrev(), color: SCORECARD_C.pickle, total: st.scoreUs }
     : { key: 'them', label: (st.opponent || 'THEM').slice(0, 6).toUpperCase(), color: SCORECARD_C.muted, total: st.scoreThem };
+  // 2026-07-13 (Jason, game-2 list): fonts up a step again (12 -> 14 for
+  // team labels and run counts, 9 -> 10 for the inning indices), rows
+  // re-spaced for the larger text, and the closing rule sits higher above
+  // the snake grid so the two sections get visible breathing room
+  // (lineH 44 -> 58 in scorecardLayout is the other half of this change).
   g.textAlign = 'left'; g.textBaseline = 'middle';
-  g.font = '600 12px ' + font;
+  g.font = '600 14px ' + font;
   g.fillStyle = topRow.color;
-  g.fillText(topRow.label, L.pad, lsY + 18);
+  g.fillText(topRow.label, L.pad, lsY + 22);
   g.fillStyle = botRow.color;
-  g.fillText(botRow.label, L.pad, lsY + 32);
+  g.fillText(botRow.label, L.pad, lsY + 38);
   g.textAlign = 'center';
   for (let i = 1; i <= L.innings; i++) {
     const x = lsX + (i - 0.5) * lsCell;
     g.fillStyle = SCORECARD_C.muted;
-    g.font = '600 9px ' + font;
-    g.fillText(String(i), x, lsY + 5);
+    g.font = '600 10px ' + font;
+    g.fillText(String(i), x, lsY + 6);
     // Top (leadoff) half of inning i has begun once the game reaches it;
     // the bottom half only once the top half is done (or the game moved on).
     const topPlayed = i <= st.inning;
     const botPlayed = i < st.inning || (i === st.inning && st.half !== leadoff);
     // Number emphasis travels with OUR team (white) vs theirs (muted),
     // whichever row each ends up on.
-    g.font = '600 12px ' + font;
+    g.font = '600 14px ' + font;
     g.fillStyle = topRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
-    g.fillText(topPlayed ? String(st.runsByInning[topRow.key][i] || 0) : '·', x, lsY + 18);
+    g.fillText(topPlayed ? String(st.runsByInning[topRow.key][i] || 0) : '·', x, lsY + 22);
     g.fillStyle = botRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
-    g.fillText(botPlayed ? String(st.runsByInning[botRow.key][i] || 0) : '·', x, lsY + 32);
+    g.fillText(botPlayed ? String(st.runsByInning[botRow.key][i] || 0) : '·', x, lsY + 38);
   }
   const rX = lsX + L.innings * lsCell + 12;
-  g.font = '700 12px ' + font;
+  g.font = '700 10px ' + font;
   g.fillStyle = SCORECARD_C.muted;
-  g.fillText('R', rX, lsY + 5);
+  g.fillText('R', rX, lsY + 6);
+  g.font = '700 14px ' + font;
   g.fillStyle = topRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
-  g.fillText(String(topRow.total), rX, lsY + 18);
+  g.fillText(String(topRow.total), rX, lsY + 22);
   g.fillStyle = botRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
-  g.fillText(String(botRow.total), rX, lsY + 32);
+  g.fillText(String(botRow.total), rX, lsY + 38);
   g.strokeStyle = SCORECARD_C.rule;
   g.lineWidth = 1;
-  g.beginPath(); g.moveTo(L.pad, lsY + L.lineH - 4); g.lineTo(L.w - L.pad, lsY + L.lineH - 4); g.stroke();
+  g.beginPath(); g.moveTo(L.pad, lsY + 50); g.lineTo(L.w - L.pad, lsY + 50); g.stroke();
 
   // ---- column headers (staircase: one per (inning, pass)) ----
   const nCols = L.cols.length;
@@ -3921,8 +4061,14 @@ function drawScorecardTotals(canvas) {
   const L = scorecardLayout();
   const g = canvas.getContext('2d');
   const dpr = 2;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, L.totalsW, L.h);
+  // The canvas is only totalsH tall and its sticky wrapper sits at
+  // totalsTop (2026-07-13, Jason: the panel's frame must end just above
+  // the AB·H·R·RBI header, not box in the line score above it). The
+  // vertical translate keeps every drawing call below in the SAME shared
+  // absolute coordinates as drawScorecard, so row alignment stays
+  // pixel-for-pixel without touching any of the row math.
+  g.setTransform(dpr, 0, 0, dpr, 0, -L.totalsTop * dpr);
+  g.clearRect(0, L.totalsTop, L.totalsW, L.totalsH);
   const font = "-apple-system, 'Segoe UI', system-ui, sans-serif";
   const px = (n) => Math.round(n * ROW_SCALE);
   const gridY = L.pad + L.lineH + L.headH;
@@ -3930,10 +4076,10 @@ function drawScorecardTotals(canvas) {
   // Solid fill so the grid canvas visually disappears underneath this one
   // when scrolled, rather than showing through at the seam.
   g.fillStyle = SCORECARD_C.bg;
-  g.fillRect(0, 0, L.totalsW, L.h);
+  g.fillRect(0, L.totalsTop, L.totalsW, L.totalsH);
   g.strokeStyle = SCORECARD_C.rule;
   g.lineWidth = 1;
-  g.beginPath(); g.moveTo(0.5, 0); g.lineTo(0.5, L.h); g.stroke();
+  g.beginPath(); g.moveTo(0.5, L.totalsTop); g.lineTo(0.5, L.h); g.stroke();
 
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.font = '600 ' + px(8) + 'px ' + font;
@@ -3965,14 +4111,22 @@ function renderBoxScoreBody() {
   drawScorecard(canvas);
   const totalsCanvas = h('canvas', {
     class: 'scorecard-totals-canvas',
-    width: L.totalsW * 2, height: L.h * 2,
-    style: 'width:' + L.totalsW + 'px;height:' + L.h + 'px',
+    width: L.totalsW * 2, height: L.totalsH * 2,
+    style: 'width:' + L.totalsW + 'px;height:' + L.totalsH + 'px',
   });
   drawScorecardTotals(totalsCanvas);
   const wrap = h('div', { class: 'boxscore-panel' }, [
     h('div', { class: 'boxscore-grid-wrap' }, [
-      h('div', { class: 'boxscore-scroll' }, [canvas]),
-      h('div', { class: 'boxscore-totals-sticky' }, [totalsCanvas]),
+      // Inner width:max-content wrapper carries padding-right = the sticky
+      // panel's width, so a FULL horizontal scroll clears the overlay and
+      // the last inning columns are actually reachable (2026-07-13, Jason:
+      // "the snake does not scroll horizontally as it should" -- padding
+      // on the scroller itself is the classic unreliable spot; padding on
+      // an inner max-content box is included in scroll width dependably).
+      h('div', { class: 'boxscore-scroll' }, [
+        h('div', { class: 'boxscore-scroll-inner', style: 'padding-right:' + L.totalsW + 'px' }, [canvas]),
+      ]),
+      h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
     ]),
     h('button', { class: 'correction-cancel boxscore-close', text: '✕ close box score', onclick: toggleBoxScore }),
     // End game lives here, not the lineup editor (Jason, 2026-07-12 live
@@ -3986,6 +4140,208 @@ function renderBoxScoreBody() {
     h('div', { class: 'boxscore-endgame-note', text: 'end game asks to confirm the final score' }),
   ]);
   return wrap;
+}
+
+/* ============================================================
+   S2 sync — queue + opportunistic flush (2026-07-13 build session).
+   Design of record: 05-Scoring-Architecture.md §Sync layer; spec:
+   06-Scoring-Specs.md S2 items 1–2; Supabase setup + traps:
+   docs/03-supabase-setup.md §6.
+
+   Offline-first is the LAW (firm principle 2 as amended 2026-07-07):
+   everything here is fire-and-forget bonus work. The event log in
+   localStorage IS the queue -- nothing is copied anywhere; per-game sync
+   bookkeeping (scoringSync_v1) just remembers how far each game has been
+   pushed. A flush failure is silent (diagnostics go to the debug readout
+   and the sync chip, never a modal), and no live path ever awaits a
+   network response.
+
+   The two documented traps, handled here: local event ids are short
+   strings, NOT uuids -- inserts omit the `id` column and let the table
+   default generate it; dedup identity is the (game_id, device_id, seq)
+   unique constraint, hence the on_conflict + ignore-duplicates upsert,
+   which makes retries safe by construction. Local events also carry no
+   game_id/device_id -- this layer stamps them at flush time.
+   ============================================================ */
+const SYNC_STATE_KEY = 'scoringSync_v1';
+let syncState = null; // { deviceId, games: { [gameStartEventId]: { remoteId, syncedThroughSeq, finalSynced } } }
+let syncFlushInFlight = false;
+let syncFlushTimer = null;
+let syncLastFlushAt = null, syncLastResult = 'never', syncLastError = '';
+let syncChipEl = null;
+
+function getSyncState() {
+  if (!syncState) {
+    syncState = loadJSON(SYNC_STATE_KEY, null) || { deviceId: 'd' + Math.random().toString(36).slice(2, 10), games: {} };
+    saveJSON(SYNC_STATE_KEY, syncState);
+  }
+  return syncState;
+}
+function persistSyncState() { saveJSON(SYNC_STATE_KEY, syncState); }
+function scoringSyncEnabled() {
+  return !!(DATA.scoring && DATA.scoring.enabled && DATA.scoring.supabaseUrl
+    && DATA.scoring.supabaseAnonKey && typeof fetch === 'function');
+}
+
+// The local log holds EVERY game this device has scored, back to back;
+// game_start is the boundary (deriveState resets on it the same way).
+// A game's stable local key is its game_start event's id. Events before
+// the first game_start (shouldn't exist) have no game to live in remotely
+// and are skipped by design.
+function partitionScoringGames(events) {
+  const games = [];
+  let cur = null;
+  events.forEach((e) => {
+    if (e.type === 'game_start') { cur = { key: e.id, startEvent: e, events: [] }; games.push(cur); }
+    if (cur) cur.events.push(e);
+  });
+  return games;
+}
+
+// Pure planning half (unit-testable): what needs to go up, per game.
+// `seq` is monotonic across the device's whole log, so "synced through
+// seq N" is a complete per-game cursor -- late-appended corrections
+// always carry higher seqs than anything already pushed.
+function computeSyncPlan(events, st) {
+  return partitionScoringGames(events).map((g) => {
+    const rec = st.games[g.key] || {};
+    const synced = rec.syncedThroughSeq || 0;
+    const endEvent = g.events.filter(e => e.type === 'game_end').pop() || null;
+    return {
+      key: g.key,
+      remoteId: rec.remoteId || null,
+      opponent: (g.startEvent.payload && g.startEvent.payload.opponent) || 'TBD',
+      date: (g.startEvent.ts || '').slice(0, 10) || undefined,
+      lineup: (g.startEvent.payload && g.startEvent.payload.lineup) || [],
+      unsynced: g.events.filter(e => e.seq > synced),
+      endEvent: endEvent,
+      needsFinalPatch: !!endEvent && !rec.finalSynced,
+    };
+  }).filter(p => p.unsynced.length > 0 || p.needsFinalPatch);
+}
+function syncQueueDepth() {
+  if (!(DATA.scoring && DATA.scoring.enabled)) return 0;
+  const st = getSyncState();
+  return partitionScoringGames(scoringEvents).reduce((n, g) => {
+    const synced = (st.games[g.key] || {}).syncedThroughSeq || 0;
+    return n + g.events.filter(e => e.seq > synced).length;
+  }, 0);
+}
+
+function supabaseRequest(method, path, body, extraHeaders) {
+  const headers = {
+    'apikey': DATA.scoring.supabaseAnonKey,
+    'Authorization': 'Bearer ' + DATA.scoring.supabaseAnonKey,
+    'Content-Type': 'application/json',
+  };
+  Object.keys(extraHeaders || {}).forEach(k => { headers[k] = extraHeaders[k]; });
+  return fetch(DATA.scoring.supabaseUrl + '/rest/v1/' + path, {
+    method: method, headers: headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }).then((res) => {
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' · ' + method + ' ' + path.split('?')[0]);
+    return res;
+  });
+}
+
+function flushOneGame(p, st) {
+  let ensureRow = Promise.resolve(p.remoteId);
+  if (!p.remoteId) {
+    ensureRow = supabaseRequest('POST', 'games',
+      { opponent: p.opponent, date: p.date, status: 'live', lineup: p.lineup },
+      { 'Prefer': 'return=representation' })
+      .then(res => res.json())
+      .then((rows) => {
+        const id = rows && rows[0] && rows[0].id;
+        if (!id) throw new Error('games insert returned no id');
+        st.games[p.key] = st.games[p.key] || {};
+        st.games[p.key].remoteId = id;
+        persistSyncState();
+        return id;
+      });
+  }
+  return ensureRow.then((gameId) => {
+    let step = Promise.resolve();
+    if (p.unsynced.length) {
+      const rows = p.unsynced.map(e => ({
+        // No `id` field on purpose (docs/03-supabase-setup.md §6): local
+        // ids aren't uuids; the column default generates one, and dedup
+        // identity is the tuple below.
+        game_id: gameId, device_id: st.deviceId, seq: e.seq, ts: e.ts,
+        type: e.type, payload: e.payload || {},
+      }));
+      step = supabaseRequest('POST', 'events?on_conflict=game_id,device_id,seq', rows,
+        { 'Prefer': 'resolution=ignore-duplicates' })
+        .then(() => {
+          const maxSeq = p.unsynced[p.unsynced.length - 1].seq;
+          st.games[p.key].syncedThroughSeq = Math.max(st.games[p.key].syncedThroughSeq || 0, maxSeq);
+          persistSyncState();
+        });
+    }
+    if (p.needsFinalPatch) {
+      step = step.then(() => supabaseRequest('PATCH', 'games?id=eq.' + gameId, {
+        status: 'final',
+        final_us: p.endEvent.payload.final_us,
+        final_them: p.endEvent.payload.final_them,
+      })).then(() => { st.games[p.key].finalSynced = true; persistSyncState(); });
+    }
+    return step;
+  });
+}
+
+// Returns its promise chain for the test harness; every in-app caller
+// fires and forgets. Failure = silent by spec (S2 item 1): the queue is
+// the log itself, so an aborted flush loses nothing and the next trigger
+// retries the identical (idempotent) work.
+function flushScoringSync(reason) {
+  if (!scoringSyncEnabled() || syncFlushInFlight) return Promise.resolve();
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve();
+  const st = getSyncState();
+  const plan = computeSyncPlan(scoringEvents, st);
+  if (plan.length === 0) { updateSyncChip(); return Promise.resolve(); }
+  syncFlushInFlight = true;
+  let chain = Promise.resolve();
+  plan.forEach((p) => { chain = chain.then(() => flushOneGame(p, st)); });
+  return chain
+    .then(() => { syncLastResult = 'ok (' + reason + ')'; syncLastError = ''; })
+    .catch((err) => {
+      syncLastResult = 'failed (' + reason + ')';
+      syncLastError = String((err && err.message) || err).slice(0, 90);
+    })
+    .then(() => {
+      syncLastFlushAt = new Date().toTimeString().slice(0, 8);
+      syncFlushInFlight = false;
+      updateSyncChip();
+      updateDebugPanel();
+    });
+}
+
+// Debounced kick, wired into saveScoringEvents -- every logged play asks
+// for a flush ~1s later (coalescing bursts like a PA + its corrections),
+// which is what actually delivers Jason's durability goal: plays leave
+// the phone within seconds of being logged, not at the next 20s tick.
+function scheduleSyncFlush(reason) {
+  if (!scoringSyncEnabled()) return;
+  if (syncFlushTimer) clearTimeout(syncFlushTimer);
+  syncFlushTimer = setTimeout(() => { syncFlushTimer = null; flushScoringSync(reason || 'append'); }, 1200);
+  updateSyncChip();
+}
+
+// "N plays waiting to sync" -- bottom-center, only while the queue is
+// non-empty (S2 item 2). Lives INSIDE the #app card (invariant 16's
+// lesson: viewport-fixed bottoms land in the home-indicator gutter),
+// pointer-events: none so it can never eat a game tap.
+function updateSyncChip() {
+  const appEl = document.getElementById('app');
+  if (!appEl) return;
+  const depth = scoringSyncEnabled() ? syncQueueDepth() : 0;
+  if (depth > 0) {
+    if (!syncChipEl) { syncChipEl = h('div', { class: 'sync-chip' }); appEl.appendChild(syncChipEl); }
+    syncChipEl.textContent = depth + (depth === 1 ? ' play' : ' plays') + ' waiting to sync';
+  } else if (syncChipEl) {
+    if (syncChipEl.parentElement) syncChipEl.parentElement.removeChild(syncChipEl);
+    syncChipEl = null;
+  }
 }
 
 function renderScoringGameScreen() {
@@ -4007,7 +4363,9 @@ function renderScoringGameScreen() {
   } else if (scoringBoxScoreOpen) {
     wrap.appendChild(renderBoxScoreBody()); // takeover panel, either half -- read-only, music unaffected
   } else {
-    wrap.appendChild(scoringState.half === 'us' ? renderOffenseBody() : renderDefenseBody());
+    const leadoff = leadoffPromptBatter();
+    if (leadoff) wrap.appendChild(renderLeadoffPrompt(leadoff));
+    else wrap.appendChild(scoringState.half === 'us' ? renderOffenseBody() : renderDefenseBody());
   }
   return wrap;
 }
@@ -4097,12 +4455,14 @@ let portalScreen = 'stats';           // 'stats' | 'schedule' | 'gameDetail' (mo
 let portalGameDetailId = null;        // scheduleGameId of the game screen 6 is showing
 let portalScorecardOpen = false;      // "view scorecard" takeover within game detail
 let gameWindowPromptOpen = false;     // screen 3, over the portal
-// In-memory only (not persisted): declining the prompt hides it for the
-// rest of this session, but it returns on a fresh reload within the same
-// window. 07 flags the exact re-offer behavior ("quiet banner vs repeat
-// modal") as still undecided -- this is a deliberately simple default,
-// not a final answer.
-let gameWindowPromptDismissed = false;
+// Dismissal note: declining just clears gameWindowPromptOpen, which only
+// decidePortalBoot() ever sets -- so a decline holds for the rest of the
+// session and the prompt returns on a fresh launch within the window.
+// That is the whole mechanism. (A separate gameWindowPromptDismissed flag
+// lived here 2026-07-12 -> 2026-07-13; it was written on decline and read
+// by nothing -- removed in the session-9-audit cleanup batch. 07 still
+// carries the real open question: whether a long-resident app should
+// re-offer without a relaunch, e.g. a quiet banner.)
 
 // ---- entry points ----
 // Stopgap direct entry point (Jason, 2026-07-12): screens 4/5 are normally
@@ -4112,11 +4472,14 @@ let gameWindowPromptDismissed = false;
 // team phone Monday. Superseded by the prompt once the portal build lands.
 function openStartGameFlow() {
   const proceed = () => {
-    // Seeds the draft from today's classic walk-on order if one exists --
-    // the most natural "who's here tonight" signal already captured by the
-    // ordinary pre-game flow. Empty seed (tap-to-draft from scratch) is
-    // just as valid; nothing about Start Game requires it.
-    const seed = order.filter(id => playersById[id]);
+    // ALWAYS an empty draft (2026-07-13, Jason -- reverses the original
+    // seed-from-walk-up-order behavior): with the portal-first boot, the
+    // classic order is rarely tonight's "who's here" signal anymore --
+    // it's whatever lineup (or mock data) the music tab last held, which
+    // made Start Game open pre-populated with stale names. Tap-to-draft
+    // from scratch is the reliable default; the walk-up order persists
+    // separately for the music surfaces and is untouched by this.
+    const seed = [];
     // isHome defaults false ("we kick first" — matches game 1 and the
     // engine's historical assumption); the toggle on this screen and the
     // adjust sheet's correction row are the two places it can change.
@@ -4223,6 +4586,7 @@ function commitStartGame() {
   // would silently suppress the same-keyed banner in this one.
   mercyDismissedForHalf = null;
   musicPausedForMercyHalf = null;
+  leadoffPromptOpen = false; // same no-leak family
   state.activeTab = 'lineup';
   render();
 }
@@ -4242,6 +4606,7 @@ function commitEndGame() {
   scoringLineupEditor = null;
   cancelPendingAutoplay();
   scoringClipFiredForBatter = null;
+  leadoffPromptOpen = false;
   // Post-game landing is the portal, every device ("portal as neutral
   // ground", 2026-07-12): the game just ended is right there in the
   // schedule with its scorecard, and the team phone keeps postgame hype
@@ -4333,6 +4698,7 @@ function commitAdjust() {
   scoringState = deriveState(scoringEvents);
   scoringCorrection = null;
   scoringClipFiredForBatter = null;
+  maybeOpenLeadoffPrompt(orig.half); // an adjust-sheet outs/half edit can turn the half over too
   render();
 }
 
@@ -4559,6 +4925,17 @@ function renderScoringLineupEditor() {
     list.appendChild(row);
   });
   wrap.appendChild(list);
+
+  // Clear button (2026-07-13, Jason's game-2 list): one tap wipes a
+  // partially built draft to start fresh. Start mode only -- the mid-game
+  // editor's guarantees revolve around the current batter staying present,
+  // and "remove everyone but the kicker at the plate" isn't a real move.
+  if (isStart && ed.draft.length > 0) {
+    wrap.appendChild(h('button', {
+      class: 'draft-clear', text: '✕ clear lineup',
+      onclick: () => { ed.draft = []; render(); },
+    }));
+  }
 
   // CTA sits between the active order and the "tap to add" pool (2026-07-12,
   // Jason: on-device, this read as the natural commit point -- you finish
@@ -4804,6 +5181,7 @@ function debugClearGameData() {
   cancelPendingAutoplay();
   mercyDismissedForHalf = null;
   musicPausedForMercyHalf = null;
+  leadoffPromptOpen = false;
   lastAudioEvent = 'debug: game data cleared @ ' + new Date().toTimeString().slice(0, 8);
   updateDebugPanel();
   render();
@@ -4847,6 +5225,26 @@ function decidePortalBoot() {
   }
   portalActive = true; // rule 3: everyone, otherwise, boots to the portal
   if (scheduleGameInWindowNow()) gameWindowPromptOpen = true; // rule 2, layered over the portal
+  /* __SCORING_END__ */
+}
+
+// S2 sync triggers (06-Scoring-Specs.md S2 item 1: flush on `online`,
+// visibility, and a 20s interval while a game is live -- plus a boot
+// flush to drain anything a previous session left queued). Same shell
+// pattern as decidePortalBoot: callable in every build, scoring-only
+// body stripped with the rest. All listeners are additive -- none of the
+// existing visibilitychange handlers (audio stop, wake lock) change.
+function initScoringSync() {
+  /* __SCORING_START__ */
+  if (!scoringSyncEnabled()) return;
+  window.addEventListener('online', () => flushScoringSync('online'));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) flushScoringSync('visible');
+  });
+  setInterval(() => {
+    if (isScoringLive() || syncQueueDepth() > 0) flushScoringSync('interval');
+  }, 20000);
+  flushScoringSync('boot');
   /* __SCORING_END__ */
 }
 
@@ -4950,7 +5348,7 @@ function renderPortalStats() {
 
   const rec = seasonRecord();
   body.appendChild(h('div', { class: 'portal-record-chip' }, [
-    h('span', { class: 'rec', text: 'Our Record · ' + rec.w + '–' + rec.l }),
+    h('span', { class: 'rec', text: 'Our Record · ' + rec.w + '–' + rec.l + (rec.t ? '–' + rec.t : '') }),
     h('span', { class: 'rd', text: 'run diff ' + (rec.runDiff > 0 ? '+' : '') + rec.runDiff }),
   ]));
 
@@ -5033,8 +5431,8 @@ function renderPortalSchedule() {
       h('span', { class: 'portal-schedule-opp', text: g.opponent || 'TBD' }),
     ]);
     if (played) {
-      const won = played.final.us > played.final.them;
-      row.appendChild(h('span', { class: 'portal-schedule-result ' + (won ? 'win' : 'loss'), text: (won ? 'W ' : 'L ') + played.final.us + '–' + played.final.them }));
+      const verdict = resultVerdict(played.final);
+      row.appendChild(h('span', { class: 'portal-schedule-result ' + verdict.cls, text: verdict.text }));
       row.appendChild(h('span', { class: played.source === 'manifest' ? 'portal-schedule-dagger' : 'portal-schedule-chev', text: played.source === 'manifest' ? '†' : '▶' }));
     } else if (g.opponent) {
       row.appendChild(h('span', { class: 'portal-schedule-time', text: formatFixtureTimeVenue(g) }));
@@ -5065,10 +5463,10 @@ function renderPortalGameDetail() {
     return wrap;
   }
   const fixture = scheduleFixtureById(portalGameDetailId);
-  const won = rec.final.us > rec.final.them;
+  const verdict = resultVerdict(rec.final);
   body.appendChild(h('div', { class: 'portal-gd-header' }, [
     h('span', { class: 'portal-gd-title', text: formatFixtureDateShort(fixture || {}) + ' · vs ' + (rec.opponent || 'TBD') }),
-    h('span', { class: 'portal-gd-result ' + (won ? 'win' : 'loss'), text: (won ? 'W ' : 'L ') + rec.final.us + '–' + rec.final.them }),
+    h('span', { class: 'portal-gd-result ' + verdict.cls, text: verdict.text }),
   ]));
   if (rec.source === 'manifest') {
     body.appendChild(h('div', { class: 'portal-schedule-footnote', text: 'Final score only -- no play-by-play data for this game.' }));
@@ -5135,14 +5533,16 @@ function renderPortalGameScorecard() {
     const L = scorecardLayout();
     const canvas = h('canvas', { class: 'scorecard-canvas', width: L.w * 2, height: L.h * 2, style: 'width:' + L.w + 'px;height:' + L.h + 'px' });
     drawScorecard(canvas);
-    const totalsCanvas = h('canvas', { class: 'scorecard-totals-canvas', width: L.totalsW * 2, height: L.h * 2, style: 'width:' + L.totalsW + 'px;height:' + L.h + 'px' });
+    const totalsCanvas = h('canvas', { class: 'scorecard-totals-canvas', width: L.totalsW * 2, height: L.totalsH * 2, style: 'width:' + L.totalsW + 'px;height:' + L.totalsH + 'px' });
     drawScorecardTotals(totalsCanvas);
     wrap = h('div', {}, [
       renderPortalHeader('✕ close', () => { portalScorecardOpen = false; render(); }),
       h('div', { class: 'boxscore-panel' }, [
         h('div', { class: 'boxscore-grid-wrap' }, [
-          h('div', { class: 'boxscore-scroll' }, [canvas]),
-          h('div', { class: 'boxscore-totals-sticky' }, [totalsCanvas]),
+          h('div', { class: 'boxscore-scroll' }, [
+            h('div', { class: 'boxscore-scroll-inner', style: 'padding-right:' + L.totalsW + 'px' }, [canvas]),
+          ]),
+          h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
         ]),
       ]),
     ]);
@@ -5177,7 +5577,7 @@ function renderGameWindowPrompt() {
     }),
     h('button', {
       class: 'portal-prompt-decline', text: '✕ not now — just the stats',
-      onclick: () => { gameWindowPromptOpen = false; gameWindowPromptDismissed = true; render(); },
+      onclick: () => { gameWindowPromptOpen = false; render(); },
     }),
   ]));
   return wrap;
@@ -5745,6 +6145,7 @@ decodeAll().then(() => {
   document.getElementById('app').style.display = 'flex';
   requestWakeLock();
   decidePortalBoot();
+  initScoringSync();
   render();
 }).catch(err => {
   console.error('Fatal error decoding clips', err);

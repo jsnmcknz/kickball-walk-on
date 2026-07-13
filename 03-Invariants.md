@@ -80,7 +80,9 @@ Hashing the final HTML can't work — the id is injected into the page (`__BUILD
 GitHub Pages' CDN caches ~10 minutes after a push; then the service worker needs one full open (fetch new sw.js in background) → close → reopen cycle. Safari-tab and home-screen-app are separate SW instances — each needs its own cycle. "It didn't update" is almost always one of these, not a bug.
 
 **18. Single artifact, offline, manifest-driven (firm principles 1–3).**
-No runtime network calls, ever. Features are manifest/config changes compiled by build.py, not app-side settings UI — configuration creeping into the app creates two sources of truth. And nothing may add taps to the core walk-up flow.
+No feature may *require* the network mid-game *(amended 2026-07-13 with the S2 sync build, tracking firm principle 2's own 2026-07-07 amendment — the original text here said "no runtime network calls, ever")*. Walk-up playback stays 100% offline-embedded. The scoring sync layer is the one sanctioned network user, and it is fire-and-forget by construction: the localStorage event log IS the queue, no live path ever awaits a response, and a flush failure is silent (debug readout + sync chip, never a modal). Features are manifest/config changes compiled by build.py, not app-side settings UI — configuration creeping into the app creates two sources of truth. And nothing may add taps to the core walk-up flow.
+
+**18b. Sync is additive bookkeeping, never authority.** `scoringSync_v1` only remembers how far each game has been pushed (`syncedThroughSeq` cursors keyed by the game_start event id, plus the Supabase row id). Deleting it entirely is safe — the next flush re-upserts everything and the `(game_id, device_id, seq)` unique constraint deduplicates server-side (`Prefer: resolution=ignore-duplicates`). Local event ids are short strings, NOT uuids: inserts must keep omitting the `id` column. *(Tests: group 74.)*
 
 ## Process
 

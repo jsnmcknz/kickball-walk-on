@@ -200,6 +200,18 @@ global.__hooks = {
   getScoringState: function() { return scoringState; },
   getScoringEvents: function() { return scoringEvents; },
   getScoringCorrection: function() { return scoringCorrection; },
+  getScoringClipFiredForBatter: function() { return scoringClipFiredForBatter; },
+  // S2 sync (2026-07-13): pure planner + the flush chain (which returns
+  // its promise precisely so this harness can await it against a fake
+  // global fetch -- test group 74).
+  partitionScoringGames: function(ev) { return partitionScoringGames(ev); },
+  computeSyncPlan: function(ev, st) { return computeSyncPlan(ev, st); },
+  getSyncState: function() { return getSyncState(); },
+  resetSyncStateForTest: function() { syncState = { deviceId: 'dTEST', games: {} }; },
+  configureSyncForTest: function(url, key) { DATA.scoring.supabaseUrl = url; DATA.scoring.supabaseAnonKey = key; },
+  flushScoringSync: function(reason) { return flushScoringSync(reason); },
+  syncQueueDepth: function() { return syncQueueDepth(); },
+  scoringSyncEnabled: function() { return scoringSyncEnabled(); },
   openRunnerCorrection: function(id) { return openRunnerCorrection(id); },
   applyRunnerOut: function(id) { return applyRunnerOut(id); },
   applyRunnerSet: function(id, to) { return applyRunnerSet(id, to); },
@@ -274,7 +286,6 @@ global.__hooks = {
   setPortalScorecardOpen: function(v) { portalScorecardOpen = v; },
   getGameWindowPromptOpen: function() { return gameWindowPromptOpen; },
   setGameWindowPromptOpen: function(v) { gameWindowPromptOpen = v; },
-  getGameWindowPromptDismissed: function() { return gameWindowPromptDismissed; },
   setPortalActiveForTest: function(v) { portalActive = v; },
   // Tab-bar-on-scoring-subpages (2026-07-12)
   toggleBoxScore: function() { return toggleBoxScore(); },
@@ -801,12 +812,13 @@ async function main() {
     console.log('30. legalSetTargets / applyRunnerPush: OK');
   }
 
-  // 31. Force-chain-only 1B (Jason, live feedback): a runner on 3rd with
-  // 1st/2nd empty is NOT pushed on a single -- they hold, since nothing
-  // forces them off 3rd. A runner on 1st IS always forced (batter takes
-  // 1st); that in turn forces 2nd only if it was occupied, etc.
+  // 31. Uniform push on 1B (2026-07-13 revert of the 2026-07-07
+  // force-chain-only model, Jason: runners advancing on a base hit is the
+  // overwhelmingly common case; the rare hold is a manual correction
+  // backwards). Every runner advances exactly one base on a single --
+  // including an unblocked runner on 3rd, who scores.
   {
-    // 3rd only, 1st/2nd empty -> holds.
+    // 3rd only, 1st/2nd empty -> advances home and scores.
     let ev = [];
     ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob'] });
     ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '3B', inning: 1, half: 'us' }); // alice on 3rd, nobody else
@@ -814,40 +826,40 @@ async function main() {
     assert(st.runners.alice === 3, 'sanity: alice on 3rd, got ' + JSON.stringify(st.runners));
     ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
     st = hooks.deriveState(ev);
-    assert(st.runners.alice === 3, 'alice on 3rd must HOLD (not forced) on a 1B with 1st/2nd empty: ' + JSON.stringify(st.runners));
+    assert(st.runners.alice === undefined, 'alice on 3rd ADVANCES home on a 1B (uniform push): ' + JSON.stringify(st.runners));
     assert(st.runners.bob === 1, 'bob (batter) reaches 1st: ' + JSON.stringify(st.runners));
-    assert(st.scoreUs === 0, 'nobody scores: alice never left 3rd, got scoreUs=' + st.scoreUs);
+    assert(st.scoreUs === 1, 'alice scores: scoreUs=' + st.scoreUs);
 
-    // Full force chain: 1st+2nd+3rd occupied -> everyone forced up exactly one base.
+    // Consecutive singles walk everyone up one base each.
     let ev2 = [];
     ev2 = hooks.appendScoringEvent(ev2, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie', 'dana'] });
     ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });   // alice: 1st
-    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });     // forces alice 1st->2nd; bob: 1st
-    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'charlie', result: '1B', inning: 1, half: 'us' }); // forces alice 2nd->3rd, bob 1st->2nd; charlie: 1st
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });     // alice 1st->2nd; bob: 1st
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'charlie', result: '1B', inning: 1, half: 'us' }); // alice 2nd->3rd, bob 1st->2nd; charlie: 1st
     let st2 = hooks.deriveState(ev2);
     assert(st2.runners.alice === 3 && st2.runners.bob === 2 && st2.runners.charlie === 1,
-      'full 1B force chain: ' + JSON.stringify(st2.runners));
-    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'dana', result: '1B', inning: 1, half: 'us' }); // bases loaded -> forces everyone, alice scores
+      'three consecutive 1Bs load the bases: ' + JSON.stringify(st2.runners));
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'dana', result: '1B', inning: 1, half: 'us' }); // bases loaded -> everyone up one, alice scores
     st2 = hooks.deriveState(ev2);
-    assert(st2.runners.alice === undefined, 'bases-loaded 1B forces alice home: ' + JSON.stringify(st2.runners));
+    assert(st2.runners.alice === undefined, 'bases-loaded 1B pushes alice home: ' + JSON.stringify(st2.runners));
     assert(st2.runners.bob === 3 && st2.runners.charlie === 2 && st2.runners.dana === 1,
-      'bases-loaded 1B force chain: ' + JSON.stringify(st2.runners));
-    assert(st2.scoreUs === 1, 'exactly one run forced in: scoreUs=' + st2.scoreUs);
+      'bases-loaded 1B uniform push: ' + JSON.stringify(st2.runners));
+    assert(st2.scoreUs === 1, 'exactly one run in: scoreUs=' + st2.scoreUs);
 
-    // Gap in the middle: 1st + 3rd occupied, 2nd empty -> 1st-runner forced
-    // only to 2nd (the open base); 3rd-runner NOT forced (no one behind them).
+    // Gap in the middle: 1st + 3rd occupied, 2nd empty -> BOTH runners
+    // advance one base on a 1B; alice scores from 3rd, bob takes 2nd.
     let ev3 = [];
     ev3 = hooks.appendScoringEvent(ev3, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
     ev3 = hooks.appendScoringEvent(ev3, 'pa', { playerId: 'alice', result: '3B', inning: 1, half: 'us' }); // alice: 3rd
-    ev3 = hooks.appendScoringEvent(ev3, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });   // bob: 1st (2nd still empty)
+    ev3 = hooks.appendScoringEvent(ev3, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });   // alice scores (uniform push); bob: 1st
     let st3 = hooks.deriveState(ev3);
-    assert(st3.runners.alice === 3 && st3.runners.bob === 1, 'sanity, gap case setup: ' + JSON.stringify(st3.runners));
-    ev3 = hooks.appendScoringEvent(ev3, 'pa', { playerId: 'charlie', result: '1B', inning: 1, half: 'us' }); // forces bob 1st->2nd only; alice on 3rd untouched
+    assert(st3.runners.alice === undefined && st3.runners.bob === 1, 'gap case setup (alice scored on bob\'s 1B): ' + JSON.stringify(st3.runners));
+    ev3 = hooks.appendScoringEvent(ev3, 'pa', { playerId: 'charlie', result: '1B', inning: 1, half: 'us' }); // bob 1st->2nd; charlie: 1st
     st3 = hooks.deriveState(ev3);
-    assert(st3.runners.alice === 3, 'alice on 3rd still holds -- the gap at 2nd breaks the chain: ' + JSON.stringify(st3.runners));
-    assert(st3.runners.bob === 2, 'bob forced 1st->2nd: ' + JSON.stringify(st3.runners));
+    assert(st3.runners.bob === 2, 'bob advances 1st->2nd: ' + JSON.stringify(st3.runners));
     assert(st3.runners.charlie === 1, 'charlie (batter) at 1st: ' + JSON.stringify(st3.runners));
-    console.log('31. Force-chain-only 1B: holds/forces/gap-breaks-chain all correct: OK');
+    assert(st3.scoreUs === 1, 'one run in across the sequence: scoreUs=' + st3.scoreUs);
+    console.log('31. Uniform-push 1B: advance/score/consecutive-singles all correct: OK');
   }
 
   // 32. adjust/outs=3 carries the same half-flip consequence as reaching 3
@@ -1255,30 +1267,32 @@ async function main() {
     console.log('42. Chain-forward set: gap holds the lead runner, collision still bumps: OK');
   }
 
-  // 43. Jason's Megan/Ming scenario (2026-07-08, on-device find): 1B
-  // logged, runner manually set to 3rd, then the 1B amended to a 2B. The
-  // amended replay's push must NOT score the runner past the operator's
-  // absolute observation -- the set wins, the run comes back off, and the
-  // PA record's own movement line reads the corrected placement.
+  // 43. Amend-after-set order of operations (rebuilt 2026-07-13 for the
+  // uniform-push 1B; the original Megan/Ming board relied on the old 1B
+  // hold). Scenario: 1B logged (runner pushed 2nd->3rd), operator sets the
+  // runner home ("he actually scored"), THEN amends the 1B to a 2B. The
+  // amended replay's own push now scores him -- the stale manual set must
+  // no-op instead of double-crediting the run.
   {
     let ev = [];
     ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['bob', 'alice', 'charlie'] });
-    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '2B', inning: 1, half: 'us' });   // bob (the "Ming") on 2nd
-    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' }); // alice (the "Megan") 1st; bob unforced, holds
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '2B', inning: 1, half: 'us' });   // bob on 2nd
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' }); // uniform push: bob 2nd->3rd; alice 1st
     let st = hooks.deriveState(ev);
-    assert(st.runners.bob === 2 && st.runners.alice === 1, 'sanity: bob held at 2nd on the single: ' + JSON.stringify(st.runners));
-    ev = hooks.appendScoringEvent(ev, 'runner', { playerId: 'bob', action: 'set', to: 3 });              // operator: bob actually took 3rd
+    assert(st.runners.bob === 3 && st.runners.alice === 1, 'sanity: bob pushed to 3rd on the single: ' + JSON.stringify(st.runners));
+    ev = hooks.appendScoringEvent(ev, 'runner', { playerId: 'bob', action: 'set', to: 4 });              // operator: bob actually scored
+    st = hooks.deriveState(ev);
+    assert(st.runners.bob === undefined && st.scoreUs === 1, 'sanity: manual set scores bob: ' + JSON.stringify({ runners: st.runners, score: st.scoreUs }));
     const alicePa = ev.find(e => e.type === 'pa' && e.payload.playerId === 'alice');
     ev = hooks.appendScoringEvent(ev, 'amend', { target_event_id: alicePa.id, result: '2B' });           // operator: it was really a double
     st = hooks.deriveState(ev);
     assert(st.runners.alice === 2, 'alice re-derived onto 2nd: ' + JSON.stringify(st.runners));
-    assert(st.runners.bob === 3, 'bob lands where the operator SAID he was (3rd), not pushed home by the amended double: ' + JSON.stringify(st.runners));
-    assert(st.scoreUs === 0, 'the amend-then-set interplay credits no phantom run: ' + st.scoreUs);
+    assert(st.runners.bob === undefined, 'bob scored, once: ' + JSON.stringify(st.runners));
+    assert(st.scoreUs === 1, 'the amended push + stale set credit exactly ONE run, not two: ' + st.scoreUs);
     const rec = st.paLog.filter(r => r.playerId === 'alice')[0];
-    assert(rec.rbi === 0 && rec.inferredRbi === 0, 'no stale RBI left on the amended PA: ' + JSON.stringify({ rbi: rec.rbi, inf: rec.inferredRbi }));
-    assert(rec.movements.some(m => m.playerId === 'bob' && m.to === 3 && !m.scored),
-      'the PA record\'s movement line was rewritten to the corrected placement: ' + JSON.stringify(rec.movements));
-    console.log('43. Amend-after-set: absolute observation beats the assumption engine, run reversed: OK');
+    assert(rec.rbi === 1, 'the RBI lives on the amended PA (from its own push, not the stale set): ' + JSON.stringify({ rbi: rec.rbi, inf: rec.inferredRbi }));
+    assert(st.runsLog.filter(en => en.playerId === 'bob').length === 1, 'exactly one runsLog entry for bob');
+    console.log('43. Amend-after-set: stale manual score no-ops against the amended push, run counted once: OK');
   }
 
   // 44. Scored-runner correction through the REAL renderer (2026-07-08:
@@ -2172,8 +2186,7 @@ async function main() {
 
     // Decline: dismiss for this session, portal stays underneath.
     findByClassContaining('portal-prompt-decline', 'not now').click();
-    assert(hooks.getGameWindowPromptOpen() === false, 'declining closes the prompt');
-    assert(hooks.getGameWindowPromptDismissed() === true, 'declining marks it dismissed for this session (07: simple default, not final)');
+    assert(hooks.getGameWindowPromptOpen() === false, 'declining closes the prompt (only decidePortalBoot re-opens it, so this holds for the session)');
     assert(hooks.isPortalActive() === true, 'declining leaves the portal itself untouched');
 
     // Accept, already PIN-unlocked: opens Start Game directly, exits portal.
@@ -2556,6 +2569,303 @@ async function main() {
     global.location.hash = '';
     resetPortalVars();
     console.log('69. Portal as neutral ground: PIN-sheet stats link, cancel/post-game land in the portal, ✎ score entry gated to team phone + unlocked devices: OK');
+  }
+
+  // 70. Scored-runner correction window (2026-07-13, Jason's game-2 prep
+  // list): home plate stays tappable only until the NEXT at-bat is logged.
+  // Runner-correction events (e.g. "OUT at home" on one of two scorers)
+  // keep the window open mid-correction; a new PA closes it.
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+
+    // Part A: run scores, window open; next PA (no scoring) closes it.
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie', 'dana'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '3B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' }); // uniform push: alice scores
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    let home = findByClasses(['diamond-base', 'pos-home', 'has-scored']);
+    assert(home && home.tagName === 'BUTTON', 'window open right after the scoring play: home is a tappable button');
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'FLY', inning: 1, half: 'us' }); // next at-bat logged, nobody scores
+    hooks.setScoringEvents(ev);
+    render();
+    home = findByClasses(['diamond-base', 'pos-home', 'has-scored']);
+    assert(!home, 'window CLOSED once the next at-bat logged: home no longer offers the old scorer');
+    assert(hooks.getScoringState().scoreUs === 1, 'the run itself still stands: ' + hooks.getScoringState().scoreUs);
+
+    // Part B: two runs on one PA; correcting the first (OUT at home)
+    // keeps the window open for the second; the next PA then closes it.
+    let ev2 = [];
+    ev2 = hooks.appendScoringEvent(ev2, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie', 'dana'] });
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });     // alice 2nd, bob 1st
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'charlie', result: '3B', inning: 1, half: 'us' }); // alice + bob both score
+    hooks.setScoringEvents(ev2);
+    render();
+    let st = hooks.getScoringState();
+    assert(st.scoreUs === 2, 'sanity: two runs in on the triple: ' + st.scoreUs);
+    home = findByClasses(['diamond-base', 'pos-home', 'has-scored']);
+    assert(home && home.tagName === 'BUTTON', 'window open with two fresh scorers');
+    home.dispatch('click');
+    let c = hooks.getScoringCorrection();
+    assert(c && c.mode === 'scoredRunner', 'home opens the scored-runner sheet: ' + JSON.stringify(c));
+    const outBtn = findByClasses(['correction-out']);
+    assert(outBtn, 'OUT at home offered');
+    outBtn.dispatch('click'); // newest scorer actually out at home
+    st = hooks.getScoringState();
+    assert(st.scoreUs === 1 && st.outs === 1, 'one run reversed into an out: ' + JSON.stringify({ score: st.scoreUs, outs: st.outs }));
+    home = findByClasses(['diamond-base', 'pos-home', 'has-scored']);
+    assert(home && home.tagName === 'BUTTON', 'window STILL open for the second scorer (runner corrections are not at-bats)');
+    hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'pa', { playerId: 'dana', result: 'GND', inning: 1, half: 'us' }));
+    render();
+    home = findByClasses(['diamond-base', 'pos-home', 'has-scored']);
+    assert(!home, 'window closed for the remaining scorer too once the next at-bat logged');
+    console.log('70. Scored-runner window: closes on next PA, survives mid-correction runner events: OK');
+  }
+
+  // 71. Tap-again-to-cancel (2026-07-13, Jason's game-2 list): the base
+  // (or home plate) that opened a correction sheet acts as its own cancel.
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+
+    // Runner sheet: tap the runner's own (selected) base to close. The
+    // runner must NOT be the last PA's kicker (that base redirects to
+    // fix-last -- test 33), so: alice doubles, bob singles, tap ALICE.
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '2B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' }); // alice pushed to 3rd
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    findByClasses(['diamond-base', 'pos-3rd', 'occupied']).dispatch('click'); // open alice's sheet
+    assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode !== 'scoredRunner', 'runner sheet open');
+    const selBase = findByClasses(['diamond-base', 'pos-3rd', 'selected']);
+    assert(selBase && selBase.tagName === 'BUTTON', 'selected base is tappable while its sheet is open');
+    selBase.dispatch('click');
+    assert(hooks.getScoringCorrection() === null, 'tapping the selected base again cancels the sheet');
+
+    // Scored-runner sheet: tap home (the selected "base") to close.
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: '3B', inning: 1, half: 'us' }); // alice + bob score
+    hooks.setScoringEvents(ev);
+    render();
+    findByClasses(['diamond-base', 'pos-home', 'has-scored']).dispatch('click');
+    assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode === 'scoredRunner', 'scored-runner sheet open');
+    const selHome = findByClasses(['diamond-base', 'pos-home', 'selected']);
+    assert(selHome && selHome.tagName === 'BUTTON', 'home is tappable while the scored-runner sheet is open');
+    selHome.dispatch('click');
+    assert(hooks.getScoringCorrection() === null, 'tapping home again cancels the scored-runner sheet');
+    console.log('71. Tap-again-to-cancel: selected base and home both mirror the ✕ cancel: OK');
+  }
+
+  // 72. Leadoff walk-on prompt (2026-07-13, Jason's game-2 list): when
+  // their half turns over to ours, a play/not-now card replaces the
+  // offense body. ▶ fires the leadoff clip (in-gesture); ✕ just drops it.
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+    function flipToThem() { // burn OUR half with three quick outs
+      ['FLY', 'FLY', 'FLY'].forEach(() => {
+        const st = hooks.getScoringState();
+        hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'pa',
+          { playerId: st.lineup[st.lineupPointer], result: 'FLY', inning: st.inning, half: st.half }));
+      });
+      render();
+    }
+
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    assert(!findByClasses(['leadoff-card']), 'no prompt at an away game start (our half, no turnover)');
+    flipToThem();
+    assert(hooks.getScoringState().half === 'them', 'sanity: their half now');
+    assert(!findByClasses(['leadoff-card']), 'no prompt on us->them');
+    // Their three outs via the REAL defense out button (the prompt is
+    // handler state -- appending raw opp_out events must not be enough).
+    for (let i = 0; i < 3; i++) findByClasses(['out-button']).dispatch('click');
+    assert(hooks.getScoringState().half === 'us' && hooks.getScoringState().inning === 2, 'sanity: our half, 2nd inning');
+    let card = findByClasses(['leadoff-card']);
+    assert(card, 'prompt shows on them->us turnover');
+    assert(findByClasses(['leadoff-name']).textContent === 'ALICE', 'prompt names the leadoff kicker (pointer wrapped to alice)');
+    findByClasses(['leadoff-play']).dispatch('click');
+    assert(!findByClasses(['leadoff-card']), 'play dismisses the card');
+    assert(hooks.getScoringClipFiredForBatter() === 'alice', 'the leadoff clip fired for alice');
+    hooks.backdatePlayStart(1000); // past the stop-tap grace window
+    hooks.stopCurrent(false);      // don't leave a live clip's timers holding the event loop open
+
+    // Not-now path: burn our half again, flip theirs again -> skip.
+    flipToThem();
+    for (let i = 0; i < 3; i++) findByClasses(['out-button']).dispatch('click');
+    card = findByClasses(['leadoff-card']);
+    assert(card, 'prompt shows on the next turnover too');
+    findByClasses(['leadoff-skip']).dispatch('click');
+    assert(!findByClasses(['leadoff-card']), 'not-now dismisses the card');
+    assert(findByClasses(['diamond-wrap']), 'offense body is back after dismissal');
+    console.log('72. Leadoff prompt: fires on them->us, plays in-gesture, not-now falls through to offense: OK');
+  }
+
+  // 73. Start Game draft opens EMPTY (2026-07-13, Jason -- reverses the
+  // seed-from-walk-up-order default: post-portal, that order is stale
+  // mock/last-game data more often than tonight's roster), and the new
+  // ✕ clear button wipes a partial draft in one tap (start mode only).
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+    hooks.setScoringEvents([]);
+    hooks.setPinUnlockedForTest(true);
+    const order = hooks.getOrder();
+    order.length = 0; order.push('alice', 'bob'); // a stale classic walk-up order exists...
+    hooks.openStartGameFlow();
+    const ed = hooks.getScoringLineupEditor();
+    assert(ed && ed.mode === 'start', 'editor open in start mode');
+    assert(ed.draft.length === 0, '...and the draft still opens EMPTY: ' + JSON.stringify(ed.draft));
+    render();
+    assert(!findByClasses(['draft-clear']), 'no clear button while the draft is empty');
+    hooks.draftAppend('alice'); hooks.draftAppend('bob'); hooks.draftAppend('charlie');
+    render();
+    const clearBtn = findByClasses(['draft-clear']);
+    assert(clearBtn, 'clear button appears once the draft has players');
+    clearBtn.dispatch('click');
+    assert(hooks.getScoringLineupEditor().draft.length === 0, 'clear wipes the whole draft');
+    assert(!findByClasses(['draft-clear']), 'clear button gone again on the emptied draft');
+    hooks.cancelScoringLineupEditor();
+    order.length = 0; // don't leak the fake walk-up order into later tests
+    render();
+    console.log('73. Start Game draft: opens empty despite a stale walk-up order; ✕ clear wipes a partial draft: OK');
+  }
+
+  // 74. S2 sync: queue + flush (2026-07-13). Plan is pure and per-game;
+  // flush creates the games row (no local id sent), batches events with
+  // the on_conflict ignore-duplicates upsert (idempotent by construction),
+  // PATCHes finals on game_end, and fails SILENTLY (queue intact).
+  {
+    const realFetch = global.fetch;
+    // Build the log with sync disabled so appendScoringEvent's debounced
+    // flush kick stays inert during setup.
+    hooks.configureSyncForTest('', '');
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Sync FC', innings: 7, lineup: ['alice', 'bob'] });
+    const gameKey = ev[0].id;
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'game_end', { final_us: 1, final_them: 0 });
+    hooks.setScoringEvents(ev);
+    hooks.resetSyncStateForTest();
+    hooks.configureSyncForTest('https://sync.test', 'test-key');
+    assert(hooks.scoringSyncEnabled(), 'sync enabled with url+key present');
+    assert(hooks.syncQueueDepth() === 4, 'all four events queued: ' + hooks.syncQueueDepth());
+
+    const plan = hooks.computeSyncPlan(hooks.getScoringEvents(), hooks.getSyncState());
+    assert(plan.length === 1 && plan[0].key === gameKey, 'one game in the plan, keyed by its game_start id');
+    assert(plan[0].remoteId === null && plan[0].unsynced.length === 4 && plan[0].needsFinalPatch,
+      'fresh game: needs row, 4 events, needs final patch');
+    assert(plan[0].opponent === 'Sync FC', 'opponent from game_start payload');
+
+    const calls = [];
+    global.fetch = (url, opts) => {
+      calls.push({ url: url, opts: opts });
+      if (opts.method === 'POST' && url.indexOf('/rest/v1/games') !== -1) {
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve([{ id: 'uuid-g1' }]) });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve([]) });
+    };
+
+    await hooks.flushScoringSync('test');
+    assert(calls.length === 3, 'exactly three requests: games insert, events upsert, finals patch -- got ' + calls.length);
+    assert(calls[0].url.indexOf('/rest/v1/games') !== -1 && calls[0].opts.method === 'POST', 'games row first');
+    assert(calls[0].opts.headers['Prefer'] === 'return=representation', 'games insert asks for the generated id back');
+    assert(calls[1].url.indexOf('/rest/v1/events?on_conflict=game_id,device_id,seq') !== -1, 'events upsert targets the dedup tuple');
+    assert(calls[1].opts.headers['Prefer'] === 'resolution=ignore-duplicates', 'events upsert ignores duplicates (retry-safe)');
+    const rows = JSON.parse(calls[1].opts.body);
+    assert(rows.length === 4, 'all four events in one batch');
+    assert(rows.every(r => !('id' in r)), 'local short-string ids are OMITTED (uuid column default generates them)');
+    assert(rows.every(r => r.game_id === 'uuid-g1' && r.device_id === 'dTEST'), 'flush layer stamps game_id + device_id');
+    assert(rows.map(r => r.seq).join(',') === '1,2,3,4', 'seqs preserved: ' + rows.map(r => r.seq).join(','));
+    assert(calls[2].opts.method === 'PATCH' && calls[2].url.indexOf('/rest/v1/games?id=eq.uuid-g1') !== -1, 'finals patch targets the row');
+    assert(JSON.parse(calls[2].opts.body).status === 'final' && JSON.parse(calls[2].opts.body).final_us === 1, 'finals payload');
+    assert(hooks.syncQueueDepth() === 0, 'queue drained');
+    const rec = hooks.getSyncState().games[gameKey];
+    assert(rec.remoteId === 'uuid-g1' && rec.syncedThroughSeq === 4 && rec.finalSynced === true, 'sync bookkeeping: ' + JSON.stringify(rec));
+
+    // Idempotency: nothing left -> no requests at all.
+    await hooks.flushScoringSync('test2');
+    assert(calls.length === 3, 'a second flush with an empty queue sends nothing');
+
+    // Late correction after game_end: only the NEW event goes up.
+    hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'adjust', { field: 'score_us', value: 2 }));
+    assert(hooks.syncQueueDepth() === 1, 'one late event queued');
+    await hooks.flushScoringSync('test3');
+    const evCall = calls[calls.length - 1];
+    assert(calls.length === 4 && evCall.url.indexOf('/rest/v1/events') !== -1, 'exactly one more request, an events upsert (no new games row, no re-patch)');
+    const lateRows = JSON.parse(evCall.opts.body);
+    assert(lateRows.length === 1 && lateRows[0].seq === 5, 'only the late event, seq preserved');
+    assert(hooks.getSyncState().games[gameKey].syncedThroughSeq === 5, 'cursor advanced');
+
+    // Failure is silent: queue intact, error captured, nothing thrown.
+    global.fetch = () => Promise.reject(new Error('network down'));
+    hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'adjust', { field: 'score_us', value: 3 }));
+    await hooks.flushScoringSync('test4'); // must resolve, not reject
+    assert(hooks.syncQueueDepth() === 1, 'failed flush leaves the event queued');
+    assert(hooks.getSyncState().games[gameKey].syncedThroughSeq === 5, 'cursor NOT advanced past the failure');
+
+    // Two games in one log partition cleanly.
+    let ev2 = [];
+    ev2 = hooks.appendScoringEvent(ev2, 'game_start', { opponent: 'A', innings: 7, lineup: ['alice'] });
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    ev2 = hooks.appendScoringEvent(ev2, 'game_end', { final_us: 0, final_them: 0 });
+    ev2 = hooks.appendScoringEvent(ev2, 'game_start', { opponent: 'B', innings: 7, lineup: ['bob'] });
+    ev2 = hooks.appendScoringEvent(ev2, 'pa', { playerId: 'bob', result: 'HR', inning: 1, half: 'us' });
+    const parts = hooks.partitionScoringGames(ev2);
+    assert(parts.length === 2 && parts[0].events.length === 3 && parts[1].events.length === 2,
+      'two games partition on game_start boundaries: ' + parts.map(p => p.events.length).join('/'));
+    const plan2 = hooks.computeSyncPlan(ev2, { deviceId: 'dTEST', games: {} });
+    assert(plan2.length === 2 && plan2[0].opponent === 'A' && plan2[1].opponent === 'B'
+      && plan2[0].needsFinalPatch && !plan2[1].needsFinalPatch,
+      'per-game plans: finished game needs the finals patch, live one does not');
+
+    // Cleanup: restore reality for anything after this group.
+    global.fetch = realFetch;
+    hooks.configureSyncForTest('', '');
+    hooks.setScoringEvents([]);
+    console.log('74. S2 sync: plan/flush/idempotency/late-events/silent-failure/two-game partition: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
