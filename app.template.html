@@ -122,7 +122,13 @@
     position: absolute;
     top: clamp(12px, env(safe-area-inset-top), 40px);
     left: 12px; right: 12px;
-    bottom: clamp(12px, env(safe-area-inset-bottom), 40px);
+    /* bottom was clamp(12px, env(safe-area-inset-bottom), 40px) ≈ 34px on
+       notch devices -- 2026-07-13, Jason: that reserve (plus tab bar
+       margin) was the "dead strip" 10c chased all day. The card frame now
+       runs to 8px above the physical bottom; the HOME-INDICATOR clearance
+       moved onto .tabbar's bottom margin, so chrome fills the screen but
+       the tap targets still sit above the indicator. */
+    bottom: 8px;
     display: flex; flex-direction: column;
     background: var(--bg);
     border: 1px solid var(--tile-border);
@@ -292,7 +298,11 @@
      pill -- not two separate bordered buttons. */
   .tabbar {
     display: flex; gap: 4px; flex-shrink: 0;
-    margin: 6px 16px 10px; padding: 4px; /* 8/12 -> 6/10, 2026-07-13 tightening */
+    /* Bottom margin carries the home-indicator clearance now that #app
+       bleeds to the screen edge (see #app's bottom comment): 34px inset
+       minus the card's own 8px offset, floored at 10px for older
+       no-notch devices where env() is 0. */
+    margin: 6px 16px max(10px, calc(env(safe-area-inset-bottom, 0px) - 12px)); padding: 4px;
     background: var(--tile); border-radius: 999px;
   }
   .tabbar.hidden { display: none; } /* portal shell replaces the classic tab UI entirely */
@@ -1225,8 +1235,10 @@
     /* bottom 68 -> 16 (2026-07-13, Jason's screenshot: at 68 it floated
        over the FLY/GND/K row). It now overlaps the TAB BAR instead --
        navigation labels are the cheapest thing on screen to briefly
-       cover, and pointer-events:none means tab taps land regardless. */
-    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+       cover, and pointer-events:none means tab taps land regardless.
+       Indicator-aware since the card bleeds to the screen edge. */
+    position: absolute; bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) - 6px));
+    left: 50%; transform: translateX(-50%);
     background: var(--tile); border: 1px solid var(--tile-border); border-radius: 999px;
     color: var(--muted); font-size: 11px; font-weight: 500; padding: 4px 12px;
     z-index: 40; pointer-events: none; white-space: nowrap;
@@ -6297,10 +6309,15 @@ function syncRealViewportHeight() {
   // screenshot settles which source lies.
   const standalone = navigator.standalone === true
     || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-  const portrait = window.innerHeight >= window.innerWidth;
+  // screen.height was briefly a candidate (attempt #5) and OVERSHOOTS:
+  // Jason's readout showed sh812 vs vv/ih/ce all 772 -- the standalone
+  // install draws a native status bar and the web view starts BELOW it,
+  // so the full-screen number clipped the card off the bottom. vv/ih are
+  // the truth; screen.height stays in the readout for diagnosis only.
+  // (10c resolution, 2026-07-13: the perceived "dead strip" was mostly
+  // the designed-in bottom reserve, reclaimed in #app/.tabbar CSS.)
   const vv = (window.visualViewport && window.visualViewport.height) || 0;
   const candidates = [vv, window.innerHeight];
-  if (standalone && portrait) candidates.push(window.screen && screen.height);
   const usable = candidates.filter(n => typeof n === 'number' && n > 0);
   if (!usable.length) return;
   const h = Math.round(Math.max.apply(null, usable));

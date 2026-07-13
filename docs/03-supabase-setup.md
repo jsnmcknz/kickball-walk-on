@@ -66,6 +66,18 @@ alter publication supabase_realtime add table public.events;
 
 Note what's deliberately missing: no `delete` policy on `events`, and no `update` on `events` at all — even a bug (or a prankster with the URL) can't rewrite or erase logged plays. Corrections happen by adding new events, never editing old ones.
 
+### 2b. Table grants (required if you turned OFF "Automatically expose new tables")
+
+*(Added 2026-07-13, field-found at game-2 prep: every app flush failed HTTP 401 despite correct keys and policies.)* PostgREST needs **both** RLS policies **and** SQL-level grants for the `anon` role. Projects created with "Automatically expose new tables" de-selected don't get the grants, and the error message's suggested `GRANT SELECT` alone only fixes reads. Run this once:
+
+```sql
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT SELECT, INSERT, UPDATE ON public.games TO anon;
+GRANT SELECT, INSERT ON public.events TO anon;
+```
+
+Still no DELETE anywhere, and no UPDATE on `events` — the grants are the outer gate, the RLS policies from step 2 remain the fine-grained one. (Belt and suspenders: a grant without a matching policy still denies.)
+
 ## 3. Get the two values the app needs
 
 *(Updated 2026-07-12: Supabase replaced its old key system during 2025 — dashboards now show new-style keys, with the old ones under a "Legacy" tab. Either kind works for us.)*
