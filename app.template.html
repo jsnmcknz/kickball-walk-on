@@ -5382,6 +5382,15 @@ function debugClearGameData() {
   updateSyncChip();
   lastAudioEvent = 'debug: game data cleared @ ' + new Date().toTimeString().slice(0, 8);
   updateDebugPanel();
+  // Land where a fresh boot would (2026-07-13, Jason: post-clear the team
+  // phone fell onto the classic audio-player screens instead of Start
+  // Game). Re-running the boot-posture decision from a reset portal state
+  // gives every device its correct surface: team phone -> Start Game
+  // (PIN unlock persists), everyone else -> portal (+ game-window prompt
+  // when in a window).
+  portalActive = false;
+  gameWindowPromptOpen = false;
+  decidePortalBoot();
   render();
   /* __SCORING_END__ */
 }
