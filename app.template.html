@@ -1112,27 +1112,31 @@
   .portal-nextgame-card {
     background: var(--pickle); border-radius: 12px; padding: 14px 12px 12px; text-align: center; margin-bottom: 10px;
   }
-  .portal-nextgame-label { font-size: 11px; letter-spacing: 0.1em; color: var(--badge-text); font-weight: 500; text-transform: uppercase; }
-  .portal-nextgame-name { font-size: 22px; color: #fff; font-weight: 500; margin: 2px 0; }
-  .portal-nextgame-cap { font-size: 12px; color: var(--olive-label); }
+  /* 2026-07-13 (Jason): season-stats page fonts one step up across the
+     board -- next-game card, record chip, section labels, leaders, table.
+     The leaders grid also gained real margin before the sort header
+     ("additional padding between the leaders and the stat headers"). */
+  .portal-nextgame-label { font-size: 12px; letter-spacing: 0.1em; color: var(--badge-text); font-weight: 500; text-transform: uppercase; }
+  .portal-nextgame-name { font-size: 25px; color: #fff; font-weight: 500; margin: 3px 0; }
+  .portal-nextgame-cap { font-size: 13px; color: var(--olive-label); }
   .portal-record-chip {
     display: flex; justify-content: space-between; background: var(--tile); border: 1px solid var(--tile-border);
-    border-radius: 8px; padding: 8px 10px; margin-bottom: 4px; font-size: 12px;
+    border-radius: 8px; padding: 9px 10px; margin-bottom: 4px; font-size: 13px;
   }
   .portal-record-chip .rec { color: var(--text); font-weight: 500; }
   .portal-record-chip .rd { color: var(--muted); }
   .portal-section-label {
-    font-size: 11px; letter-spacing: 0.1em; color: var(--muted); font-weight: 500;
+    font-size: 12px; letter-spacing: 0.1em; color: var(--muted); font-weight: 500;
     text-transform: uppercase; margin: 12px 4px 6px;
   }
-  .portal-leaders-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 4px; }
+  .portal-leaders-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 14px; }
   .portal-leader-chip { background: var(--tile); border: 1px solid var(--tile-border); border-radius: 8px; text-align: center; padding: 8px 4px; }
-  .portal-leader-stat { font-size: 11px; color: var(--muted); }
-  .portal-leader-value { font-size: 16px; font-weight: 500; color: var(--text); }
-  .portal-leader-name { font-size: 11px; color: var(--pickle); }
+  .portal-leader-stat { font-size: 12px; color: var(--muted); }
+  .portal-leader-value { font-size: 19px; font-weight: 500; color: var(--text); }
+  .portal-leader-name { font-size: 12px; color: var(--pickle); }
   .portal-sort-header { display: flex; align-items: center; padding: 0 11px; }
   .portal-sort-header .fill { flex: 1; }
-  .portal-sort-col { width: 30px; text-align: center; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .portal-sort-col { width: 32px; text-align: center; font-size: 12px; color: var(--muted); font-weight: 500; }
   .portal-sort-col.active { color: var(--pickle); }
   .portal-play-spacer { width: 32px; flex: none; }
   .portal-player-row {
@@ -1144,9 +1148,9 @@
     display: flex; align-items: center; background: var(--tile); border: 1px solid var(--tile-border);
     border-radius: 8px; padding: 5px 10px; margin-bottom: 4px;
   }
-  .portal-player-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
-  .portal-player-sub { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 4px; }
-  .portal-player-stat { width: 30px; text-align: center; font-size: 12px; color: var(--text); }
+  .portal-player-name { flex: 1; font-size: 15px; font-weight: 500; color: var(--text); }
+  .portal-player-sub { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .portal-player-stat { width: 32px; text-align: center; font-size: 13px; color: var(--text); }
   .portal-player-stat.zero { color: var(--muted); }
   .portal-play-btn {
     width: 26px; height: 26px; flex: none; margin-left: 6px; border: 1px solid var(--olive); border-radius: 6px;
@@ -2415,7 +2419,18 @@ async function playClip(playerId, opts) {
   const source = ctx.createBufferSource();
   source.buffer = buffer;
   const gain = ctx.createGain();
-  gain.gain.value = 1;
+  // Fade-in over settings.fadeInMs (2026-07-13, Jason: clips were blasting
+  // on at full volume). Scheduled synchronously in-gesture, so invariant 1
+  // is untouched; stopCurrent's fade-out path already cancelScheduledValues
+  // before ramping down, so a stop DURING the fade-in composes correctly
+  // (ramps down from wherever the fade-in had reached).
+  const fadeInSec = (DATA.fadeInMs || 0) / 1000;
+  if (fadeInSec > 0 && gain.gain.setValueAtTime) {
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(1, ctx.currentTime + fadeInSec);
+  } else {
+    gain.gain.value = 1;
+  }
   source.connect(gain).connect(ctx.destination);
   source.onended = () => {
     if (currentSource === source) {
@@ -2893,9 +2908,11 @@ function applyUndoLast() {
   const c = scoringCorrection;
   if (!c || c.mode !== 'undoLast') return;
   cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
   scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: c.targetId });
   scoringState = deriveState(scoringEvents);
   scoringCorrection = null;
+  stopMusicIfBackOnDefense(prevHalf); // undoing THEIR 3rd out mid-walk-up (2026-07-13)
   render();
 }
 
@@ -3726,6 +3743,19 @@ function maybeOpenLeadoffPrompt(prevHalf) {
   if (!isScoringLive()) return;
   if (!scoringState.lineup[scoringState.lineupPointer]) return;
   leadoffPromptOpen = true;
+}
+// The mirror of maybeOpenLeadoffPrompt (2026-07-13, Jason's field find):
+// undoing the opponent's 3rd out mid-walk-up flipped the screen back to
+// defense while the leadoff clip kept playing -- and the defense screen
+// has no stop control. Any commit path that can flip us->them calls this
+// with the pre-commit half: pending auto-play is cancelled, a live clip
+// fades out, and a stale leadoff prompt drops.
+function stopMusicIfBackOnDefense(prevHalf) {
+  if (prevHalf !== 'us' || scoringState.half !== 'them') return;
+  cancelPendingAutoplay();
+  leadoffPromptOpen = false;
+  scoringClipFiredForBatter = null;
+  if (playingId) stopCurrent(true, { advanceIfPending: false });
 }
 // Validity re-checked at render time; any state change that invalidates
 // the moment (half flipped back by a correction, game ended, lineup
@@ -4847,6 +4877,7 @@ function commitAdjust() {
   scoringCorrection = null;
   scoringClipFiredForBatter = null;
   maybeOpenLeadoffPrompt(orig.half); // an adjust-sheet outs/half edit can turn the half over too
+  stopMusicIfBackOnDefense(orig.half); // ...and the reverse direction silences the walk-up (2026-07-13)
   render();
 }
 
@@ -5330,6 +5361,14 @@ function debugClearGameData() {
   mercyDismissedForHalf = null;
   musicPausedForMercyHalf = null;
   leadoffPromptOpen = false;
+  // Sync bookkeeping goes with the data it describes (2026-07-13, test-day
+  // wipes): cursors for deleted games are meaningless, and a fresh slate
+  // must not inherit remote row mappings. The server side is wiped
+  // separately (dashboard SQL -- see docs/03-supabase-setup.md "Wiping
+  // test data").
+  syncState = null;
+  try { localStorage.removeItem(STORAGE_PREFIX + SYNC_STATE_KEY); } catch (e) {}
+  updateSyncChip();
   lastAudioEvent = 'debug: game data cleared @ ' + new Date().toTimeString().slice(0, 8);
   updateDebugPanel();
   render();
@@ -5515,8 +5554,9 @@ function renderPortalStats() {
   });
   body.appendChild(leadersRow);
 
-  const header = h('div', { class: 'portal-sort-header' }, [h('span', { class: 'fill', text: 'Full team' })]);
-  ['h', 'r', 'rbi'].forEach((key) => {
+  // "Roster" (was "Full team") + AB column left of H -- 2026-07-13, Jason.
+  const header = h('div', { class: 'portal-sort-header' }, [h('span', { class: 'fill', text: 'Roster' })]);
+  ['ab', 'h', 'r', 'rbi'].forEach((key) => {
     header.appendChild(h('span', {
       class: 'portal-sort-col' + (portalStatsSortKey === key ? ' active' : ''),
       text: key.toUpperCase() + (portalStatsSortKey === key ? (portalStatsSortDir < 0 ? ' ▾' : ' ▴') : ''),
@@ -5534,6 +5574,7 @@ function renderPortalStats() {
     const isPlaying = playingId === pid;
     body.appendChild(h('div', { class: 'portal-player-row' }, [
       h('span', { class: 'portal-player-name', text: playerNameOf(pid) }),
+      h('span', { class: 'portal-player-stat' + (s.ab ? '' : ' zero'), text: String(s.ab) }),
       h('span', { class: 'portal-player-stat' + (s.h ? '' : ' zero'), text: String(s.h) }),
       h('span', { class: 'portal-player-stat' + (s.r ? '' : ' zero'), text: String(s.r) }),
       h('span', { class: 'portal-player-stat' + (s.rbi ? '' : ' zero'), text: String(s.rbi) }),

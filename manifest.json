@@ -27,6 +27,14 @@
       "status": "member"
     },
     {
+      "id": "esther",
+      "name": "Esther",
+      "clips": [
+        "Esther-01.m4a"
+      ],
+      "status": "member"
+    },
+    {
       "id": "franny",
       "name": "Franny",
       "clips": [
@@ -94,7 +102,7 @@
       "id": "penny",
       "name": "Penny",
       "clips": [
-        "placeholder-hype-1.mp3"
+        "Penny-01.mp3"
       ],
       "status": "member"
     },
@@ -125,7 +133,7 @@
   ],
   "teamSounds": [],
   "defaultClips": [
-    "placeholder-hype-1.mp3",
+    "homerun_horn.mp3",
     "placeholder-hype-2.mp3"
   ],
   "schedule": [
@@ -185,7 +193,8 @@
     "clipsDir": "source/clips",
     "fadeOutMs": 1500,
     "theme": "dark",
-    "autoPlayDelayMs": 5000
+    "autoPlayDelayMs": 5000,
+    "fadeInMs": 500
   },
   "scoring": {
     "enabled": true,

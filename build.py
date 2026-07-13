@@ -279,6 +279,9 @@ def build(manifest_path: Path, out_path: Path):
         "teamShort": manifest.get("teamShort", ""),
         "theme": theme,
         "fadeOutMs": fade_out_ms,
+        # 2026-07-13 (Jason): clips fade IN too, so they don't blast on at
+        # full volume. 0 disables.
+        "fadeInMs": manifest["settings"].get("fadeInMs", 500),
         "autoPlayDelayMs": manifest["settings"].get("autoPlayDelayMs", 2000),
         "players": players_out,
         "teamSounds": team_sounds_out,

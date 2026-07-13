@@ -116,6 +116,19 @@ Seeing `[]` means everything works — the database is live, reachable, and empt
 
 All the code, none of the clicking: the local sync queue, opportunistic flush (batched idempotent upserts on `(game_id, device_id, seq)`), the "N plays waiting to sync" chip, sync fields in the debug readout, and the realtime bench-scoreboard subscription. One implementation note for that session: local event ids are short strings, not UUIDs — inserts must **omit** the `id` column and let the table default generate it; identity for dedup is the `(game_id, device_id, seq)` tuple, which is exactly why the unique constraint exists. Local events also don't carry `game_id`/`device_id` yet — the flush layer stamps them.
 
+## Wiping test data (both sides)
+
+Practice/mock games before a real one leave rows in Supabase and events on the phone. Wipe in this order:
+
+1. **On-device:** 5 wordmark taps → **clear game data**. This clears the local event log *and* the sync bookkeeping, so nothing re-uploads.
+2. **Server:** dashboard → SQL Editor → run:
+
+```sql
+truncate table events, games;
+```
+
+The app's own key deliberately has no DELETE permission (a bug or prankster can't erase plays), so the dashboard is the only place this can be done — which is exactly the point. Order matters only in that clearing the device first guarantees a stray flush can't re-insert between the two steps.
+
 ## Ongoing
 
 - Nothing to maintain besides the pause mitigation. Free tier limits (500 MB database, 2 GB bandwidth/month) are ludicrously beyond a kickball season (~a few hundred KB of events).
