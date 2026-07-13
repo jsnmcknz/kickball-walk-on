@@ -1247,6 +1247,12 @@
     color: var(--muted); font-size: 11px; font-weight: 500; padding: 4px 12px;
     z-index: 40; pointer-events: none; white-space: nowrap;
   }
+  /* Share scorecard (2026-07-13): button under the grid; the fallback
+     takeover shows the composed PNG at fit-width for the long-press
+     save/share gesture. */
+  .scorecard-share-btn { margin-top: 8px; }
+  .scorecard-share-img { display: block; width: 100%; height: auto; border: 1px solid var(--tile-border); border-radius: 10px; }
+  .scorecard-share-hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
   /* Start Game draft: one-tap wipe (2026-07-13). Dashed + muted -- an
      escape hatch, not a primary action; sits directly under the list it
      clears. */
@@ -3779,7 +3785,7 @@ function leadoffPromptBatter() {
   return batter;
 }
 function renderLeadoffPrompt(batter) {
-  return h('div', { class: 'leadoff-card' }, [
+  const kids = [
     h('div', { class: 'leadoff-label', text: 'our half — now up' }),
     h('div', { class: 'leadoff-name', text: playerNameOf(batter).toUpperCase() }),
     h('button', { class: 'leadoff-play', text: '▶ play walk-up', onclick: () => {
@@ -3789,7 +3795,23 @@ function renderLeadoffPrompt(batter) {
       render();
     } }),
     h('button', { class: 'leadoff-skip', text: '✕ not now', onclick: () => { leadoffPromptOpen = false; render(); } }),
-  ]);
+  ];
+  // Undo-the-3rd-out escape hatch (2026-07-13, Jason: a mislogged final
+  // defensive out should be reversible right here, not two taps away via
+  // the chip). Offered ONLY when the newest event is an opp_out -- the
+  // one-event undo is unambiguous there. A mercy end-half or adjust-sheet
+  // flip keeps the chip route (undoing "the last event" of a multi-event
+  // adjust commit wouldn't un-flip the half; better absent than wrong).
+  const lastEvt = scoringEvents[scoringEvents.length - 1];
+  if (lastEvt && lastEvt.type === 'opp_out') {
+    kids.push(h('button', { class: 'leadoff-skip', text: '↩ undo — that wasn’t the 3rd out', onclick: () => {
+      leadoffPromptOpen = false;
+      scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: lastEvt.id });
+      scoringState = deriveState(scoringEvents);
+      render(); // back on defense, 2 outs showing
+    } }));
+  }
+  return h('div', { class: 'leadoff-card' }, kids);
 }
 
 function renderMercyBanner() {
@@ -5731,6 +5753,86 @@ function renderPortalGameDetail() {
   return wrap;
 }
 
+// ---- Share scorecard (2026-07-13, Jason -- S3 item 3 pulled forward:
+// "the post-game group-chat artifact"). The on-screen view is two
+// canvases (scrolling grid + sticky totals); the EXPORT composites them
+// side by side onto one offscreen canvas -- a PNG doesn't scroll, so the
+// totals column simply sits to the right of the full grid -- plus a
+// footer line naming the matchup, date, and final. Share path:
+// canvas.toBlob -> navigator.share({files}) = the native iOS share sheet
+// (iOS 15+). Fallback (older Safari, or share unavailable): the composed
+// PNG renders into an <img> takeover captioned "press and hold" -- iOS's
+// long-press save/share works on any img. State below is the fallback's.
+let scorecardShareImage = null; // dataURL while the fallback takeover is up
+function composeScorecardImage(rec) {
+  if (typeof document.createElement !== 'function') return null;
+  const grid = document.createElement('canvas');
+  const totals = document.createElement('canvas');
+  if (!grid.getContext) return null; // DOM-stub harness: no drawing surface
+  const L = scorecardLayout();
+  grid.width = L.w * 2; grid.height = L.h * 2;
+  totals.width = L.totalsW * 2; totals.height = L.totalsH * 2;
+  drawScorecard(grid);
+  drawScorecardTotals(totals);
+  const footerH = 26;
+  const out = document.createElement('canvas');
+  out.width = (L.w + L.totalsW) * 2;
+  out.height = (L.h + footerH) * 2;
+  const g = out.getContext('2d');
+  g.fillStyle = SCORECARD_C.tile;
+  g.fillRect(0, 0, out.width, out.height);
+  g.drawImage(grid, 0, 0);
+  g.drawImage(totals, L.w * 2, L.totalsTop * 2);
+  g.setTransform(2, 0, 0, 2, 0, 0);
+  g.strokeStyle = SCORECARD_C.rule; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(L.pad, L.h + 2); g.lineTo(L.w + L.totalsW - L.pad, L.h + 2); g.stroke();
+  g.font = "500 10px -apple-system, 'Segoe UI', system-ui, sans-serif";
+  g.fillStyle = SCORECARD_C.muted;
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  const fixture = scheduleFixtureById(rec.scheduleGameId);
+  const when = fixture ? formatFixtureDateShort(fixture) : '';
+  g.fillText((DATA.team || '').toUpperCase() + ' · vs ' + (rec.opponent || 'TBD').toUpperCase() + (when ? ' · ' + when : ''), L.pad, L.h + footerH / 2 + 2);
+  g.textAlign = 'right';
+  g.fillStyle = SCORECARD_C.pickle;
+  const verdict = resultVerdict(rec.final);
+  g.fillText('FINAL ' + verdict.text, L.w + L.totalsW - L.pad, L.h + footerH / 2 + 2);
+  return out;
+}
+function shareScorecard(rec) {
+  // The tap arrives AFTER render() restored the live game's state, so the
+  // historic game gets re-swapped in for the compose -- same save/restore
+  // discipline as renderPortalGameScorecard itself.
+  const savedState = scoringState, savedEvents = scoringEvents;
+  scoringState = deriveState(rec.events);
+  scoringEvents = rec.events;
+  let composed;
+  try {
+    composed = composeScorecardImage(rec);
+  } finally {
+    scoringState = savedState;
+    scoringEvents = savedEvents;
+  }
+  if (!composed) return;
+  const fallback = () => {
+    scorecardShareImage = composed.toDataURL('image/png');
+    render();
+  };
+  if (!(composed.toBlob && typeof File === 'function' && navigator.share && navigator.canShare)) { fallback(); return; }
+  composed.toBlob((blob) => {
+    if (!blob) { fallback(); return; }
+    const file = new File([blob], 'scorecard.png', { type: 'image/png' });
+    if (navigator.canShare({ files: [file] })) {
+      // A user-cancelled sheet rejects -- that's a valid outcome, not an
+      // error; any OTHER failure falls back to the press-and-hold image.
+      navigator.share({ files: [file] }).catch((err) => {
+        if (!(err && err.name === 'AbortError')) fallback();
+      });
+    } else {
+      fallback();
+    }
+  }, 'image/png');
+}
+
 function renderPortalGameScorecard() {
   const rec = seasonGameRecords().find(r => r.scheduleGameId === portalGameDetailId);
   if (!rec || rec.source !== 'log') { portalScorecardOpen = false; return renderPortalGameDetail(); }
@@ -5739,6 +5841,17 @@ function renderPortalGameScorecard() {
   scoringEvents = rec.events;
   let wrap;
   try {
+    // Press-and-hold fallback takeover (see shareScorecard).
+    if (scorecardShareImage) {
+      wrap = h('div', {}, [
+        renderPortalHeader('✕ close', () => { scorecardShareImage = null; render(); }),
+        h('div', { class: 'boxscore-panel' }, [
+          h('img', { class: 'scorecard-share-img', src: scorecardShareImage }),
+          h('div', { class: 'scorecard-share-hint', text: 'press and hold the image, then Save Image or Share' }),
+        ]),
+      ]);
+      return wrap;
+    }
     const L = scorecardLayout();
     const canvas = h('canvas', { class: 'scorecard-canvas', width: L.w * 2, height: L.h * 2, style: 'width:' + L.w + 'px;height:' + L.h + 'px' });
     drawScorecard(canvas);
@@ -5753,6 +5866,7 @@ function renderPortalGameScorecard() {
           ]),
           h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
         ]),
+        h('button', { class: 'portal-view-scorecard-btn scorecard-share-btn', text: '↑ share scorecard', onclick: () => shareScorecard(rec) }),
       ]),
     ]);
   } finally {
@@ -5846,6 +5960,9 @@ function render() {
   // portal is showing (e.g. accepting the game-window prompt), portal
   // state clears itself rather than needing every entry point to remember to.
   if (isScoringLive() && portalActive) { portalActive = false; gameWindowPromptOpen = false; }
+  // Share-fallback image only lives while its scorecard takeover does --
+  // same stale-surface choke-point pattern as everything above.
+  if (!portalScorecardOpen && scorecardShareImage) scorecardShareImage = null;
   // The CLASSIC editor loses to a live game the same way (2026-07-13,
   // Jason, post-wipe: a wiped phone boots with state.editing armed by
   // first-launch routing -- no saved walk-up order -- so committing Start

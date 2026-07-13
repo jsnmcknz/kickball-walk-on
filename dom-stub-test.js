@@ -2731,7 +2731,29 @@ async function main() {
     findByClasses(['leadoff-skip']).dispatch('click');
     assert(!findByClasses(['leadoff-card']), 'not-now dismisses the card');
     assert(findByClasses(['diamond-wrap']), 'offense body is back after dismissal');
-    console.log('72. Leadoff prompt: fires on them->us, plays in-gesture, not-now falls through to offense: OK');
+
+    // Undo-the-3rd-out path (2026-07-13): the popover carries its own undo
+    // when the newest event is an opp_out; tapping it returns to defense
+    // with 2 outs, the mislogged out tombstoned.
+    flipToThem();
+    for (let i = 0; i < 3; i++) findByClasses(['out-button']).dispatch('click');
+    assert(hooks.getScoringState().half === 'us', 'sanity: turned over again');
+    const undoBtn = (function () {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && node.classList.contains('leadoff-skip') && String(node.textContent).indexOf('undo') !== -1) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    })();
+    assert(undoBtn, 'popover offers the undo when the flip came from an opp_out');
+    undoBtn.dispatch('click');
+    assert(!findByClasses(['leadoff-card']), 'undo dismisses the card');
+    const stU = hooks.getScoringState();
+    assert(stU.half === 'them' && stU.outs === 2, 'back on defense with 2 outs: ' + JSON.stringify({ half: stU.half, outs: stU.outs }));
+    console.log('72. Leadoff prompt: fires on them->us, plays in-gesture, not-now dismisses, popover-undo reverses a mislogged 3rd out: OK');
   }
 
   // 73. Start Game draft opens EMPTY (2026-07-13, Jason -- reverses the
@@ -3107,6 +3129,42 @@ async function main() {
     hooks.getState().editing = false;
     render();
     console.log('79. Classic editor never renders over a live game (post-wipe first-launch routing): OK');
+  }
+
+  // 80. Share scorecard (2026-07-13, S3 item 3 pulled forward): the
+  // button renders on the portal scorecard takeover, and tapping it in
+  // the stub (no real canvas) is a safe no-op -- the compose guard
+  // returns null rather than throwing.
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+    hooks.getDATA().schedule = [{ id: 'gS', date: '2020-01-01', time: '19:00', opponent: 'Share FC' }];
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Share FC', innings: 7, lineup: ['alice', 'bob'], scheduleGameId: 'gS' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'HR', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'game_end', { final_us: 1, final_them: 0 });
+    hooks.setScoringEvents(ev); // game is FINISHED -- portal isn't suppressed by a live game
+    hooks.setPortalActiveForTest(true);
+    hooks.setPortalScreen('gameDetail');
+    hooks.setPortalGameDetailId('gS');
+    hooks.setPortalScorecardOpen(true);
+    render();
+    const shareBtn = findByClasses(['scorecard-share-btn']);
+    assert(shareBtn, 'share button renders on the scorecard takeover');
+    shareBtn.dispatch('click'); // stub canvas has no getContext -- must no-op, not throw
+    assert(hooks.getPortalScorecardOpen() === true, 'takeover survives a no-op share tap');
+    hooks.setPortalScorecardOpen(false);
+    hooks.setScoringEvents([]);
+    render();
+    console.log('80. Share scorecard: button present, stub-safe no-op without a real canvas: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
