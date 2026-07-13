@@ -5846,6 +5846,14 @@ function render() {
   // portal is showing (e.g. accepting the game-window prompt), portal
   // state clears itself rather than needing every entry point to remember to.
   if (isScoringLive() && portalActive) { portalActive = false; gameWindowPromptOpen = false; }
+  // The CLASSIC editor loses to a live game the same way (2026-07-13,
+  // Jason, post-wipe: a wiped phone boots with state.editing armed by
+  // first-launch routing -- no saved walk-up order -- so committing Start
+  // Game dropped him onto the old empty tile editor before the game
+  // screen). The boot-time guard at state init only covers games already
+  // live at launch; this covers games that start mid-session, from every
+  // entry point, forever.
+  if (isScoringLive() && state.editing) state.editing = false;
   /* __SCORING_END__ */
   screenEl.innerHTML = '';
   /* __SCORING_START__ */

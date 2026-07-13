@@ -3084,6 +3084,31 @@ async function main() {
     console.log('78. joinedInning: originals=1, late arrival stamped, re-add keeps first stamp: OK');
   }
 
+  // 79. Classic editor loses to a live game (2026-07-13, Jason post-wipe:
+  // first-launch routing arms state.editing on a phone with no saved
+  // walk-up order; committing Start Game then dropped onto the OLD empty
+  // tile editor before reaching the game screen). render()'s choke point
+  // must clear state.editing whenever a game is live.
+  {
+    hooks.setPinUnlockedForTest(true);
+    hooks.setScoringEvents([]);
+    hooks.getState().activeTab = 'lineup';
+    hooks.getState().editing = true; // what a wiped phone boots with
+    hooks.openStartGameFlow();
+    hooks.draftAppend('alice'); hooks.draftAppend('bob');
+    hooks.commitStartGame(); // renders internally
+    assert(hooks.getState().editing === false, 'live game clears the armed classic editor');
+    assert(hooks.getScoringState().gameStarted === true, 'sanity: game live');
+    // And it holds from ANY entry: re-arm and render again.
+    hooks.getState().editing = true;
+    render();
+    assert(hooks.getState().editing === false, 'choke point re-clears it on every render while live');
+    hooks.setScoringEvents([]);
+    hooks.getState().editing = false;
+    render();
+    console.log('79. Classic editor never renders over a live game (post-wipe first-launch routing): OK');
+  }
+
   // Leave scoring's live-game UI state clean for anything appended after
   // this file in the future.
   hooks.getState().editing = true;
