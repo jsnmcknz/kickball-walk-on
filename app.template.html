@@ -82,6 +82,19 @@
        + hidden overflow) forces literally all scroll through #screen, which
        is the only element that should ever move. */
     position: fixed; top: 0; left: 0; width: 100%; overflow: hidden;
+    /* 10c attempt #4 (2026-07-13, Jason re-opened the parked bottom-gap
+       issue): CSS-only viewport units kept lying on the XS Max / 15 Pro
+       Max standalone installs (100%, then dvh -- attempts #1-#3, none
+       closed the gap), so the app now measures the REAL viewport in JS
+       (syncRealViewportHeight(): visualViewport.height, innerHeight
+       fallback) into --real-vh and sizes body off that. The var's own
+       fallback is 100% (NOT dvh: an invalid-at-computed-value fallback
+       would nuke the earlier declarations instead of yielding to them),
+       covering the instant before the first JS measure. #app switched
+       from position:fixed to absolute for the same reason -- fixed
+       anchors to the (stale) viewport, absolute anchors to body's
+       JS-corrected box. */
+    height: var(--real-vh, 100%);
   }
   button { font-family: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; }
 
@@ -102,7 +115,11 @@
      over-reporting and needs a different theory -- flag it back rather
      than stacking more guesses on top. */
   #app {
-    position: fixed;
+    /* absolute, not fixed (10c attempt #4): body is the nearest positioned
+       ancestor and its height is the JS-measured --real-vh above, so the
+       bottom inset resolves against the REAL screen edge instead of
+       whatever stale viewport iOS standalone mode is reporting. */
+    position: absolute;
     top: clamp(12px, env(safe-area-inset-top), 40px);
     left: 12px; right: 12px;
     bottom: clamp(12px, env(safe-area-inset-bottom), 40px);
@@ -117,7 +134,10 @@
   #screen { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
 
   /* ---- shared header ---- */
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 8px; gap: 10px; }
+  /* Top padding 16 -> 10, bottom 8 -> 6 (2026-07-13, Jason: vertical
+     tightening pass -- every px above the fold matters on the scoring
+     screen; the 15 Pro Max was scrolling for the result pad). */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 6px; gap: 10px; }
   .wordmark { letter-spacing: 0.1em; text-transform: uppercase; color: var(--pickle); font-size: 12px; font-weight: 500; line-height: 1.3; }
   .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .order-btn, .done-btn, .recall-btn {
@@ -272,7 +292,7 @@
      pill -- not two separate bordered buttons. */
   .tabbar {
     display: flex; gap: 4px; flex-shrink: 0;
-    margin: 8px 16px 12px; padding: 4px;
+    margin: 6px 16px 10px; padding: 4px; /* 8/12 -> 6/10, 2026-07-13 tightening */
     background: var(--tile); border-radius: 999px;
   }
   .tabbar.hidden { display: none; } /* portal shell replaces the classic tab UI entirely */
@@ -336,7 +356,7 @@
      at-a-glance numbers, the original single 12px row under-served that. */
   .score-bug {
     background: var(--tile); border: 1px solid var(--tile-border); border-radius: 10px;
-    padding: 8px 14px 10px; margin: 0 16px 10px;
+    padding: 8px 14px 10px; margin: 0 16px 8px; /* bottom 10 -> 8, 2026-07-13 tightening */
     position: relative; /* anchors the box-score chip in the top-right corner */
   }
   /* Box-score entry point (2026-07-08 round 4): PLACEHOLDER, not yet
@@ -418,7 +438,11 @@
      enlarge transform removed in round 1). flex-start makes the diamond's
      position a function of ONLY what's above this row (the score bug --
      identical everywhere), never of whatever happens to be beside it. */
-  .diamond-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 16px 10px; padding: 5px 0; }
+  /* padding 5px 0 -> 0, margin-bottom 10 -> 6 (2026-07-13 tightening:
+     Jason flagged excess px above and below this row specifically). The
+     row's internal proportions still come from --scoring-ref-h; only the
+     outside air is trimmed. */
+  .diamond-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 16px 6px; }
   /* Hard-set 40/60 split (Jason, live feedback, round 4): the diamond
      column's width used to be implicit (diamond-wrap's fixed 104px plus
      whatever the on-base hint text needed), so a longer hint string like
@@ -678,7 +702,7 @@
      margins, so 100% + 32px of margin overflowed the container by 32px
      (visible as a right-edge overflow + horizontal scroll). Same pattern
      .out-button already gets right below with calc(100% - 32px). */
-  .game-nowup-card.compact { padding: 14px 12px 12px; min-height: 0; margin: 0 16px 10px; width: calc(100% - 32px); }
+  .game-nowup-card.compact { padding: 14px 12px 12px; min-height: 0; margin: 0 16px 8px; width: calc(100% - 32px); } /* bottom 10 -> 8, 2026-07-13 tightening */
   /* All compact-card text one step up, 2026-07-11 (Jason) -- final sizes
      get a real-phone pass before they're considered settled. */
   .game-nowup-card.compact .nowup-name { font-size: 33px; margin: 2px 0; }
@@ -1191,7 +1215,11 @@
      indicator), floating above the tab bar; pointer-events none so it can
      never eat a game tap. Only exists while the queue is non-empty. */
   .sync-chip {
-    position: absolute; bottom: 68px; left: 50%; transform: translateX(-50%);
+    /* bottom 68 -> 16 (2026-07-13, Jason's screenshot: at 68 it floated
+       over the FLY/GND/K row). It now overlaps the TAB BAR instead --
+       navigation labels are the cheapest thing on screen to briefly
+       cover, and pointer-events:none means tab taps land regardless. */
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
     background: var(--tile); border: 1px solid var(--tile-border); border-radius: 999px;
     color: var(--muted); font-size: 11px; font-weight: 500; padding: 4px 12px;
     z-index: 40; pointer-events: none; white-space: nowrap;
@@ -3288,7 +3316,23 @@ function renderFixLastSheet() {
   const name = playerNameOf(c.forPlayerId);
   const plain = (RESULT_PLAIN_TEXT[c.currentResult] || c.currentResult).toLowerCase();
   const wrap = h('div', {});
-  const diamondCol = h('div', { class: 'diamond-col scoring-dimmed' }, [renderDiamond({ tappable: false })]);
+  // Live diamond while the fixed kicker is on base (2026-07-13, Jason's
+  // on-device round: "the base interface should remain interactive like
+  // any other baserunner assignment"). Their base white-rings as selected
+  // (tap-again = cancel, same as every correction sheet), legal targets
+  // stay tappable as a plain runner set, and the result re-log pad below
+  // is unchanged -- so the previous kicker's tap now offers BOTH kinds of
+  // correction at once instead of greying the diamond out. When they're
+  // NOT on a base (FLY/K out, or already scored -- the HR home-tap route),
+  // there's nothing legal to move, and the old dimmed treatment stands.
+  const kickerOnBase = scoringState.runners[c.forPlayerId] !== undefined;
+  const diamondCol = kickerOnBase
+    ? h('div', { class: 'diamond-col' }, [renderDiamond({
+        selectedId: c.forPlayerId, tappable: false,
+        legalTargets: legalSetTargets(scoringState.runners, c.forPlayerId),
+        onTapTarget: (base) => applyRunnerSet(c.forPlayerId, base),
+      })])
+    : h('div', { class: 'diamond-col scoring-dimmed' }, [renderDiamond({ tappable: false })]);
   // The FIXING chip fills the same slot .last-action-chip occupies on the
   // normal screen -- reads as "the chip is now in edit mode" (Jason, live
   // feedback) rather than a separate note-plus-banner pair.
@@ -4229,11 +4273,18 @@ function syncQueueDepth() {
 }
 
 function supabaseRequest(method, path, body, extraHeaders) {
+  const key = DATA.scoring.supabaseAnonKey;
   const headers = {
-    'apikey': DATA.scoring.supabaseAnonKey,
-    'Authorization': 'Bearer ' + DATA.scoring.supabaseAnonKey,
+    'apikey': key,
     'Content-Type': 'application/json',
   };
+  // Authorization ONLY for legacy JWT anon keys (eyJ...). New publishable
+  // keys (sb_publishable_...) are NOT JWTs -- PostgREST tries to decode
+  // any Bearer value as a JWT and 401s the whole request (field-found by
+  // Jason 2026-07-13, game-2 morning test: every flush died HTTP 401).
+  // For those, the apikey header alone is the documented, sufficient
+  // auth: supabase.com/docs/guides/getting-started/api-keys.
+  if (key.indexOf('eyJ') === 0) headers['Authorization'] = 'Bearer ' + key;
   Object.keys(extraHeaders || {}).forEach(k => { headers[k] = extraHeaders[k]; });
   return fetch(DATA.scoring.supabaseUrl + '/rest/v1/' + path, {
     method: method, headers: headers,
@@ -4586,7 +4637,12 @@ function commitStartGame() {
   // would silently suppress the same-keyed banner in this one.
   mercyDismissedForHalf = null;
   musicPausedForMercyHalf = null;
-  leadoffPromptOpen = false; // same no-leak family
+  // Away game (we kick 1st) opens in OUR half -- the game's very first
+  // kicker deserves the same play/not-now prompt as every later turnover
+  // (Jason, 2026-07-13 on-device: "a fresh game when we're visiting also
+  // needs the prompt"). A home game opens in THEIR half; the ordinary
+  // them->us turnover path prompts when our first half arrives.
+  leadoffPromptOpen = scoringState.half === 'us' && !!scoringState.lineup[scoringState.lineupPointer];
   state.activeTab = 'lineup';
   render();
 }
@@ -6136,6 +6192,29 @@ document.getElementById('tabGrid').addEventListener('click', () => {
   state.activeTab = 'grid';
   render();
 });
+
+/* ============================================================
+   Real-viewport measurement (invariant 10c, attempt #4, 2026-07-13).
+   iOS standalone mode kept reporting a stale layout viewport to CSS
+   (100%, dvh -- attempts #1-#3 all failed on-device), leaving a dead
+   strip between the tab bar and the home indicator. So: measure the
+   live viewport in JS and publish it as --real-vh; body sizes off it,
+   #app (absolute) anchors to body. visualViewport.height is the most
+   truthful source (iOS 13+); innerHeight is the fallback. Re-measured
+   on every resize/orientation/pageshow, plus settle timers at boot --
+   iOS is known to report stale numbers for a beat after launch.
+   ============================================================ */
+function syncRealViewportHeight() {
+  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  if (h) document.documentElement.style.setProperty('--real-vh', Math.round(h) + 'px');
+}
+syncRealViewportHeight();
+if (window.visualViewport) window.visualViewport.addEventListener('resize', syncRealViewportHeight);
+window.addEventListener('resize', syncRealViewportHeight);
+window.addEventListener('orientationchange', syncRealViewportHeight);
+window.addEventListener('pageshow', syncRealViewportHeight);
+setTimeout(syncRealViewportHeight, 300);
+setTimeout(syncRealViewportHeight, 1000);
 
 /* ============================================================
    Boot

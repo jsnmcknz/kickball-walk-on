@@ -2812,6 +2812,9 @@ async function main() {
     assert(calls.length === 3, 'exactly three requests: games insert, events upsert, finals patch -- got ' + calls.length);
     assert(calls[0].url.indexOf('/rest/v1/games') !== -1 && calls[0].opts.method === 'POST', 'games row first');
     assert(calls[0].opts.headers['Prefer'] === 'return=representation', 'games insert asks for the generated id back');
+    assert(calls[0].opts.headers['apikey'] === 'test-key', 'apikey header carries the client key');
+    assert(!('Authorization' in calls[0].opts.headers),
+      'NO Bearer header for non-JWT keys (publishable sb_ keys in Authorization = HTTP 401, field-found 2026-07-13)');
     assert(calls[1].url.indexOf('/rest/v1/events?on_conflict=game_id,device_id,seq') !== -1, 'events upsert targets the dedup tuple');
     assert(calls[1].opts.headers['Prefer'] === 'resolution=ignore-duplicates', 'events upsert ignores duplicates (retry-safe)');
     const rows = JSON.parse(calls[1].opts.body);
@@ -2861,11 +2864,124 @@ async function main() {
       && plan2[0].needsFinalPatch && !plan2[1].needsFinalPatch,
       'per-game plans: finished game needs the finals patch, live one does not');
 
+    // Legacy JWT anon keys (eyJ...) DO get the Bearer header -- they're
+    // real JWTs and some PostgREST setups want it.
+    const jwtCalls = [];
+    global.fetch = (url, opts) => {
+      jwtCalls.push({ url: url, opts: opts });
+      if (opts.method === 'POST' && url.indexOf('/rest/v1/games') !== -1) {
+        return Promise.resolve({ ok: true, status: 201, json: () => Promise.resolve([{ id: 'uuid-g2' }]) });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve([]) });
+    };
+    hooks.resetSyncStateForTest();
+    hooks.configureSyncForTest('https://sync.test', 'eyJfakelegacyjwt');
+    let ev3 = [];
+    ev3 = hooks.appendScoringEvent(ev3, 'game_start', { opponent: 'JWT FC', innings: 7, lineup: ['alice'] });
+    hooks.setScoringEvents(ev3);
+    await hooks.flushScoringSync('test5');
+    assert(jwtCalls.length >= 1 && jwtCalls[0].opts.headers['Authorization'] === 'Bearer eyJfakelegacyjwt',
+      'legacy JWT keys keep the Bearer header: ' + JSON.stringify(jwtCalls[0] && jwtCalls[0].opts.headers['Authorization']));
+
     // Cleanup: restore reality for anything after this group.
     global.fetch = realFetch;
     hooks.configureSyncForTest('', '');
     hooks.setScoringEvents([]);
-    console.log('74. S2 sync: plan/flush/idempotency/late-events/silent-failure/two-game partition: OK');
+    console.log('74. S2 sync: plan/flush/idempotency/late-events/silent-failure/two-game partition/key-aware auth: OK');
+  }
+
+  // 75. Leadoff prompt at GAME START (2026-07-13, Jason on-device): an
+  // away game (we kick 1st) opens with the play/not-now prompt for the
+  // game's first kicker; a home game opens on defense, no prompt, and
+  // gets it at the first them->us turnover instead (group 72's path).
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+    hooks.setPinUnlockedForTest(true);
+    hooks.setScoringEvents([]);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+
+    // Away: prompt for the first kicker, immediately.
+    hooks.openStartGameFlow();
+    hooks.draftAppend('alice'); hooks.draftAppend('bob');
+    hooks.commitStartGame();
+    assert(hooks.getScoringState().half === 'us', 'sanity: away game opens in our half');
+    let card = findByClasses(['leadoff-card']);
+    assert(card, 'away game start shows the leadoff prompt');
+    assert(findByClasses(['leadoff-name']).textContent === 'ALICE', 'prompt names the first kicker');
+    findByClasses(['leadoff-skip']).dispatch('click');
+    assert(!findByClasses(['leadoff-card']), 'not-now falls through to the offense screen');
+    hooks.setScoringEvents([]);
+
+    // Home: opens on defense, no prompt yet.
+    hooks.openStartGameFlow();
+    hooks.draftAppend('alice'); hooks.draftAppend('bob');
+    hooks.getScoringLineupEditor().isHome = true;
+    hooks.commitStartGame();
+    assert(hooks.getScoringState().half === 'them', 'sanity: home game opens in their half');
+    assert(!findByClasses(['leadoff-card']), 'no prompt on a home-game start (defense first)');
+    hooks.setScoringEvents([]);
+    render();
+    console.log('75. Game-start leadoff prompt: away prompts the first kicker, home waits for the turnover: OK');
+  }
+
+  // 76. Fix-last live diamond (2026-07-13, Jason on-device): the previous
+  // kicker's base tap opens fix-last with the diamond STILL interactive --
+  // move them via a legal-target tap (plain runner set), or tap their own
+  // base to cancel. Result pad below unchanged.
+  {
+    function findByClasses(classes) {
+      let found = null;
+      const walk = (node) => {
+        if (found) return;
+        if (node.classList && classes.every(c => node.classList.contains(c))) found = node;
+        (node._children || []).forEach(walk);
+      };
+      walk(screen);
+      return found;
+    }
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Test FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '2B', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup'; hooks.getState().editing = false;
+    render();
+    findByClasses(['diamond-base', 'pos-2nd', 'occupied']).dispatch('click'); // previous kicker -> fix-last redirect
+    let c = hooks.getScoringCorrection();
+    assert(c && c.mode === 'fixLast' && c.viaRedirect, 'previous-kicker tap redirects to fix-last');
+    assert(!findByClasses(['diamond-col', 'scoring-dimmed']), 'diamond NOT dimmed while the fixed kicker is on base');
+    const sel = findByClasses(['diamond-base', 'pos-2nd', 'selected']);
+    assert(sel && sel.tagName === 'BUTTON', 'the kicker\'s own base white-rings and stays tappable');
+    const target = findByClasses(['diamond-base', 'pos-3rd', 'legal-target']);
+    assert(target && target.tagName === 'BUTTON', '3rd offered as a live legal target inside fix-last');
+    target.dispatch('click');
+    assert(hooks.getScoringCorrection() === null, 'legal-target tap commits the runner set and closes fix-last');
+    assert(hooks.getScoringState().runners.alice === 3, 'alice moved to 3rd: ' + JSON.stringify(hooks.getScoringState().runners));
+
+    findByClasses(['diamond-base', 'pos-3rd', 'occupied']).dispatch('click'); // reopen fix-last from her new base
+    assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode === 'fixLast', 'reopens fix-last');
+    findByClasses(['diamond-base', 'pos-3rd', 'selected']).dispatch('click'); // tap own base = cancel
+    assert(hooks.getScoringCorrection() === null, 'tap-again on the kicker\'s base cancels fix-last');
+
+    // Kicker NOT on base (FLY out): dimmed treatment stands.
+    hooks.setScoringEvents(hooks.appendScoringEvent(hooks.getScoringEvents(), 'pa', { playerId: 'bob', result: 'FLY', inning: 1, half: 'us' }));
+    render();
+    hooks.openLastActionCorrection(); // chip route into fix-last for bob's FLY
+    assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode === 'fixLast', 'chip opens fix-last for the FLY');
+    render();
+    assert(findByClasses(['diamond-col', 'scoring-dimmed']), 'diamond dimmed when the fixed kicker is not on a base');
+    hooks.closeScoringCorrection();
+    hooks.setScoringEvents([]);
+    render();
+    console.log('76. Fix-last live diamond: move-or-relog for the previous kicker, tap-own-base cancels, dimmed when off base: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
