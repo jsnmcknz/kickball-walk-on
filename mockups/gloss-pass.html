@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gloss pass — treatment comparison</title>
+<!--
+  Gloss-pass mockup (2026-07-14). PURPOSE: let Jason flip between surface
+  treatments on the real palette/geometry and pick by feel. Layout and
+  spacing are deliberately IDENTICAL across treatments — every difference
+  is paint only (gradients, borders, shadows, one animation), which is
+  exactly the constraint the port to app.template.html must keep.
+
+  Treatments:
+    A — Current:   flat tiles + 1px borders, as shipped.
+    B — Machined:  light-top gradients + 1px inner top highlight on every
+                   surface. Depth without hierarchy.
+    C — Action-lit: B, plus the ACTIONABLE elements only (NOW UP, hit row,
+                   +OUT, active tab) get a moss-lit ring/tint. Passive
+                   chrome stays quiet. The "what do I tap" answer.
+    Motion — orthogonal checkbox: press states (scale+dim) and a slow
+                   breathing glow on the playing card. Composable with any
+                   treatment.
+
+  Perf guardrails already respected here (old-iOS Safari): no
+  backdrop-filter, no large blur radii on scrolling regions, animations
+  limited to transform/opacity/box-shadow on single elements.
+
+  This file is comparison material, NOT normative — the built template
+  remains normative for appearance; the winning treatment ports into it
+  as a contained CSS diff.
+
+  DECIDED 2026-07-14 (Jason, same day): B (machined) everywhere +
+  C's action-lit on ONLY the tab bar and score bug. Ported into
+  app.template.html as the "GLOSS PASS" block at the end of its
+  stylesheet (build 8f5873fb3d). Motion not adopted (revisit if wanted —
+  it's a self-contained addition). This mockup is now historical.
+-->
+<style>
+  :root {
+    --bg: #101215; --tile: #1d2126; --tile-border: #33383e; --row-rule: #2c3036;
+    --text: #e8eae6; --muted: #8f948f; --olive: #536840; --pickle: #82A167;
+    --badge-text: #2C2E20; --olive-label: #D8DBBE;
+    --plum-border: #7A5C82; --plum-text: #CBA9DD; --plum-fill: #4A3C52;
+    --card-pop: #FFFFFF;
+  }
+  * { box-sizing: border-box; margin: 0; font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); padding-bottom: 40px; }
+
+  /* ---- toggle bar ---- */
+  .switcher {
+    position: sticky; top: 0; z-index: 10; background: rgba(16,18,21,0.96);
+    padding: 10px 16px; border-bottom: 1px solid var(--row-rule);
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .sw-chip {
+    border: 1px solid var(--tile-border); background: var(--tile); color: var(--muted);
+    border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 500;
+  }
+  .sw-chip.on { background: var(--olive); color: var(--text); border-color: var(--olive); }
+  .sw-motion { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .note { padding: 10px 16px 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .sect { padding: 14px 16px 4px; font-size: 11px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; font-weight: 600; }
+
+  /* ---- faithful component skeletons (geometry = the built app) ---- */
+  .phone { max-width: 400px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 8px; }
+  .wordmark { font-weight: 700; letter-spacing: 0.06em; font-size: 15px; }
+  .order-btn { background: var(--tile); border: 1px solid var(--tile-border); color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: 13px; }
+
+  .score-bug { background: var(--tile); border: 1px solid var(--tile-border); border-radius: 10px; padding: 8px 14px 10px; margin: 0 16px 8px; position: relative; }
+  .score-bug-top { font-size: 12px; margin-bottom: 4px; }
+  .dim-label { color: var(--muted); }
+  .boxscore-chip { position: absolute; top: 8px; right: 10px; background: var(--bg); border: 1px solid var(--tile-border); color: var(--muted); border-radius: 6px; font-size: 11px; padding: 4px 8px; }
+  .score-verb { font-size: 12px; color: var(--olive-label); opacity: 0.85; }
+  .score-total-big { font-size: 30px; font-weight: 600; }
+  .outs-dot { color: var(--text); letter-spacing: 2px; }
+  .outs-dot.empty { color: var(--tile-border); }
+  .outs-label { font-size: 11px; color: var(--muted); }
+  .score-bug-main { text-align: center; padding: 2px 0 2px; }
+
+  .nowup-card {
+    width: calc(100% - 32px); margin: 6px 16px 10px; text-align: center; border: none; border-radius: 18px;
+    background: var(--pickle); color: var(--badge-text);
+    padding: 26px 22px; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .nowup-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 13px; font-weight: 500; opacity: 0.75; }
+  .nowup-name { color: var(--card-pop); text-transform: uppercase; font-weight: 500; font-size: clamp(36px, 11vw, 56px); line-height: 1.05; margin: 4px 0 8px; }
+  .nowup-play-icon { width: 0; height: 0; margin-bottom: 12px; border-top: 15px solid transparent; border-bottom: 15px solid transparent; border-left: 24px solid var(--card-pop); }
+  .nowup-stop-icon { width: 22px; height: 22px; background: var(--card-pop); border-radius: 4px; margin: 4px 0 16px; }
+  .nowup-caption { font-size: 13px; opacity: 0.8; }
+  .nowup-card.playing { background: var(--plum-fill); color: var(--plum-text); }
+  .nowup-card.playing .nowup-name { color: var(--card-pop); }
+
+  .result-pad { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; margin: 0 16px 10px; }
+  .result-tile { background: var(--tile); border: 1px solid var(--tile-border); border-radius: 8px; text-align: center; color: var(--text); font-weight: 500; font-size: 15px; position: relative; overflow: hidden; }
+  .span3 { grid-column: span 3; padding: 15px 0; }
+  .span4 { grid-column: span 4; padding: 8px 0; }
+  .span6 { grid-column: span 6; padding: 8px 0; }
+  .result-tile .sub { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .result-tile.dashed { background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted); font-size: 13px; }
+  .tile-lb { position: relative; z-index: 1; }
+  .tile-dia { display: block; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; transform: rotate(45deg); border-radius: 3px; border: 1px solid var(--row-rule); }
+  .dia-1 { border-right-color: var(--pickle); }
+  .dia-2 { border-right-color: var(--pickle); border-top-color: var(--pickle); }
+  .dia-3 { border-right-color: var(--pickle); border-top-color: var(--pickle); border-left-color: var(--pickle); }
+  .dia-4 { border-color: var(--pickle); background: rgba(130,161,103,0.12); }
+
+  .mercy-banner { background: var(--plum-fill); border: 1px solid var(--plum-border); border-radius: 12px; padding: 10px 12px; margin: 0 16px 10px; text-align: center; }
+  .mercy-text { font-size: 13px; font-weight: 500; color: var(--plum-text); margin-bottom: 8px; }
+  .mercy-actions { display: flex; gap: 8px; }
+  .mercy-btn { flex: 1; background: var(--tile); border: 1px solid var(--tile-border); border-radius: 8px; padding: 8px 0; font-size: 13px; font-weight: 500; color: var(--text); }
+  .mercy-btn.dashed { background: var(--bg); border-style: dashed; color: var(--muted); }
+
+  .out-button { display: block; background: var(--tile); border: 1px solid var(--olive); border-radius: 12px; text-align: center; padding: 26px 0; margin: 0 16px 10px; width: calc(100% - 32px); }
+  .out-label { font-size: 26px; font-weight: 500; color: var(--text); }
+  .out-dots { font-size: 20px; letter-spacing: 2px; margin-top: 6px; }
+  .out-sub { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 4px; }
+
+  .tabbar { display: flex; gap: 4px; margin: 6px 16px 10px; padding: 4px; background: var(--tile); border-radius: 999px; }
+  .tabbtn { flex: 1; background: transparent; border: none; color: var(--muted); border-radius: 999px; padding: 10px 8px; font-size: 14px; font-weight: 500; text-align: center; }
+  .tabbtn.active { background: var(--olive); color: var(--text); }
+
+  /* ============================================================
+     TREATMENT B — "Machined": light-top gradients + inner top highlight.
+     Depth, no hierarchy. Everything gets the same material upgrade.
+     ============================================================ */
+  .t-b .score-bug, .t-b .result-tile:not(.dashed), .t-b .mercy-banner,
+  .t-b .out-button, .t-b .tabbar, .t-b .order-btn, .t-b .mercy-btn:not(.dashed) {
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.14));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 3px rgba(0,0,0,0.35);
+  }
+  .t-b .nowup-card {
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.16));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(0,0,0,0.4);
+  }
+  .t-b .nowup-card.playing { background-image: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.18)); }
+  .t-b .tabbtn.active {
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(0,0,0,0.12));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+
+  /* ============================================================
+     TREATMENT C — "Action-lit": B + moss light on ACTIONABLE elements
+     only. Passive chrome (score bug, mercy copy, dashed utilities,
+     steppers) stays machined-quiet.
+     ============================================================ */
+  .t-c .nowup-card {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18),
+                0 0 0 1px rgba(130,161,103,0.55),
+                0 4px 26px rgba(130,161,103,0.20);
+  }
+  .t-c .nowup-card.playing {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12),
+                0 0 0 1px rgba(203,169,221,0.5),
+                0 4px 26px rgba(203,169,221,0.18);
+  }
+  .t-c .result-tile.hit {
+    border-color: rgba(130,161,103,0.5);
+    background-image: linear-gradient(180deg, rgba(130,161,103,0.16), rgba(130,161,103,0.04)),
+                      linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.14));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 1px 3px rgba(0,0,0,0.35);
+    color: #E5EBDD;
+  }
+  .t-c .out-button {
+    border-color: rgba(130,161,103,0.65);
+    background-image: linear-gradient(180deg, rgba(130,161,103,0.14), rgba(130,161,103,0.03)),
+                      linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.14));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(130,161,103,0.18), 0 2px 14px rgba(130,161,103,0.12);
+  }
+  .t-c .tabbtn.active {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 10px rgba(130,161,103,0.25);
+  }
+  .t-c .mercy-btn:not(.dashed) { border-color: var(--plum-border); } /* the choice moment reads plum, matching its banner */
+
+  /* ============================================================
+     MOTION — orthogonal: press states + breathing glow while playing.
+     transform/opacity/box-shadow only; no layout properties animate.
+     ============================================================ */
+  .motion .result-tile, .motion .out-button, .motion .nowup-card,
+  .motion .mercy-btn, .motion .tabbtn, .motion .order-btn {
+    transition: transform 120ms ease, filter 120ms ease, box-shadow 200ms ease;
+  }
+  .motion .result-tile:active, .motion .out-button:active,
+  .motion .nowup-card:active, .motion .mercy-btn:active { transform: scale(0.985); filter: brightness(0.92); }
+  @keyframes breathe {
+    0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px rgba(203,169,221,0.45), 0 4px 18px rgba(203,169,221,0.12); }
+    50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px rgba(203,169,221,0.75), 0 4px 34px rgba(203,169,221,0.30); }
+  }
+  .motion .nowup-card.playing { animation: breathe 2.6s ease-in-out infinite; }
+</style>
+</head>
+<body class="t-a">
+  <div class="switcher">
+    <button class="sw-chip on" data-t="a" onclick="setT('a')">A · Current</button>
+    <button class="sw-chip" data-t="b" onclick="setT('b')">B · Machined</button>
+    <button class="sw-chip" data-t="c" onclick="setT('c')">C · Action-lit</button>
+    <label class="sw-motion"><input type="checkbox" onchange="document.body.classList.toggle('motion', this.checked)"> motion</label>
+  </div>
+  <div class="note">
+    Paint only — geometry and spacing are identical in all three. C includes B's depth.
+    Tap things with <b>motion</b> on to feel the press states; the plum card breathes while "playing".
+  </div>
+
+  <div class="phone">
+    <div class="sect">Offense</div>
+    <div class="topbar"><span class="wordmark">PICKLES</span><button class="order-btn">✎ lineup</button></div>
+    <div class="score-bug">
+      <div class="score-bug-top">▼ 5th – <span class="dim-label">kicking</span></div>
+      <button class="boxscore-chip">▦ box score</button>
+      <div class="score-bug-main">
+        <div class="score-verb">PICKLES leads</div>
+        <div class="score-total-big">14 – 12</div>
+        <div><span class="outs-dot">●●</span><span class="outs-dot empty">●</span> <div class="outs-label">outs</div></div>
+      </div>
+    </div>
+    <button class="nowup-card">
+      <div class="nowup-label">Now up</div>
+      <div class="nowup-name">MARCEL</div>
+      <div class="nowup-play-icon"></div>
+      <div class="nowup-caption">tap anywhere to play</div>
+    </button>
+    <button class="nowup-card playing">
+      <div class="nowup-label">Now up</div>
+      <div class="nowup-name">MARCEL</div>
+      <div class="nowup-stop-icon"></div>
+      <div class="nowup-caption">0:14 — tap to fade out</div>
+    </button>
+    <div class="mercy-banner">
+      <div class="mercy-text">6-run mercy limit reached this inning</div>
+      <div class="mercy-actions"><button class="mercy-btn">End half-inning</button><button class="mercy-btn dashed">Keep playing</button></div>
+    </div>
+    <div class="result-pad">
+      <button class="result-tile hit span3"><span class="tile-dia dia-1"></span><span class="tile-lb">1B</span></button>
+      <button class="result-tile hit span3"><span class="tile-dia dia-2"></span><span class="tile-lb">2B</span></button>
+      <button class="result-tile hit span3"><span class="tile-dia dia-3"></span><span class="tile-lb">3B</span></button>
+      <button class="result-tile hit span3"><span class="tile-dia dia-4"></span><span class="tile-lb">HR</span></button>
+      <button class="result-tile span4"><span class="tile-lb">FLY</span><div class="sub">out</div></button>
+      <button class="result-tile span4"><span class="tile-lb">GROUND</span><div class="sub">out</div></button>
+      <button class="result-tile span4"><span class="tile-lb">K</span><div class="sub">strikeout</div></button>
+      <button class="result-tile dashed span6"><span class="tile-lb">MISSED</span><div class="sub">kicked, unknown result</div></button>
+      <button class="result-tile dashed span6"><span class="tile-lb">SKIP ⏭</span><div class="sub">didn't kick</div></button>
+    </div>
+
+    <div class="sect">Defense</div>
+    <button class="out-button">
+      <div class="out-label">+ OUT</div>
+      <div class="out-dots"><span class="outs-dot">●</span><span class="outs-dot empty">●●</span></div>
+      <div class="out-sub">third out flips the half</div>
+    </button>
+
+    <div class="sect">Tab bar</div>
+    <div class="tabbar"><div class="tabbtn active">Scoring</div><div class="tabbtn">Soundboard</div></div>
+  </div>
+
+<script>
+  function setT(t) {
+    document.body.classList.remove('t-a', 't-b', 't-c');
+    document.body.classList.add('t-' + t);
+    document.querySelectorAll('.sw-chip').forEach(c => c.classList.toggle('on', c.dataset.t === t));
+  }
+</script>
+</body>
+</html>

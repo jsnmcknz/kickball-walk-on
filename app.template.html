@@ -1305,6 +1305,58 @@
     padding: 8px 0; font-size: 12px; font-weight: 500; color: var(--muted);
   }
   /* __SCORING_END__ */
+  /* ============================================================
+     GLOSS PASS (2026-07-14, Jason's pick from mockups/gloss-pass.html):
+     "machined" everywhere + "action-lit" on ONLY the tab bar and score
+     bug. PAINT ONLY, by rule -- background-image / box-shadow / border-
+     color, never geometry, spacing, or layout properties, so no invariant
+     is in play. This block sits LAST in the stylesheet on purpose:
+     equal-specificity ties resolve to it over the flat base styles above.
+     Perf guardrails: no backdrop-filter, no large blurs (old-iOS Safari).
+
+     Machined = light-top gradient + 1px inner top highlight + soft drop.
+     Dark UIs read depth from lit tops, not dark bottoms. Deliberately
+     EXCLUDED and left flat: dashed utilities (recessive by design),
+     diamond bases (clip-path home plate clips shadows; occupied fills are
+     signal colors), the scorecard frame (the canvas paints itself), the
+     sync chip and badges (too small to machine), .empty-state CTAs.
+     ============================================================ */
+  .score-bug, .result-tile:not(.dashed), .mercy-banner, .mercy-btn:not(.dashed),
+  .out-button, .runs-stepper, .defense-chip, .leadoff-preview-big, .leadoff-card,
+  .leadoff-play, .last-action-chip, .fixlast-chip, .undolast-banner,
+  .correction-out, .fixture-card, .sheet-card, .endgame-confirm, .draft-livechip,
+  .draft-row, .ondeck-chip, .tile, .tabbar, .order-btn, .done-btn, .recall-btn,
+  .navbtn, .boxscore-endgame-btn, .cardedit-action, .cardedit-remove,
+  .adjust-endhalf, .adjust-done, .done-full, .pin-key, .addplayer-submit,
+  .portal-nextgame-card, .portal-record-chip, .portal-leader-chip,
+  .portal-player-row, .portal-schedule-row, .portal-gd-header,
+  .portal-prompt-card, .portal-prompt-accept, .portal-view-scorecard-btn {
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.14));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 3px rgba(0,0,0,0.35);
+  }
+  /* The NOW UP card is the one solid-color hero surface -- it takes a
+     stronger highlight so the moss (and plum, playing) reads curved. */
+  .nowup-card {
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.16));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(0,0,0,0.4);
+  }
+  .nowup-card.playing { background-image: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.18)); }
+
+  /* Action-lit, exactly two surfaces (Jason's pick): the persistent
+     orientation strips. Score bug -- now a tappable control on both
+     screens -- gets a quiet moss ring; the .editing state's white ring
+     (higher specificity) still wins while its sheet is open. Active tab
+     gets the machined pill plus a soft moss glow. */
+  .score-bug {
+    border-color: rgba(130, 161, 103, 0.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07),
+                0 0 0 1px rgba(130, 161, 103, 0.30),
+                0 2px 14px rgba(130, 161, 103, 0.10);
+  }
+  .tabbtn.active {
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(0,0,0,0.12));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 10px rgba(130, 161, 103, 0.25);
+  }
 </style>
 </head>
 <body>

@@ -15,7 +15,7 @@
 // (matches the documented update flow: "re-open the app on Wi-Fi once to
 // pick up the new version").
 
-const CACHE_NAME = 'kickball-e8db4ddd55';
+const CACHE_NAME = 'kickball-8f5873fb3d';
 const PRECACHE_URLS = ['./', './index.html'];
 
 self.addEventListener('install', (event) => {
