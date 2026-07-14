@@ -1,0 +1,1003 @@
+[
+ {
+  "id": "g2seq1",
+  "seq": 1,
+  "type": "game_start",
+  "payload": {
+   "isHome": true,
+   "lineup": [
+    "eli",
+    "mike",
+    "alex",
+    "marcel",
+    "mark",
+    "franny",
+    "pouriya",
+    "will",
+    "esther",
+    "winson",
+    "clayton",
+    "natalie",
+    "jason"
+   ],
+   "innings": 7,
+   "opponent": "Otter Nonsense",
+   "scheduleGameId": "2026-g2"
+  }
+ },
+ {
+  "id": "g2seq2",
+  "seq": 2,
+  "type": "opp_out",
+  "payload": {
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq3",
+  "seq": 3,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq4",
+  "seq": 4,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq5",
+  "seq": 5,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq6",
+  "seq": 6,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq7",
+  "seq": 7,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq8",
+  "seq": 8,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq9",
+  "seq": 9,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq10",
+  "seq": 10,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 1
+  }
+ },
+ {
+  "id": "g2seq11",
+  "seq": 11,
+  "type": "adjust",
+  "payload": {
+   "field": "outs",
+   "value": 3
+  }
+ },
+ {
+  "id": "g2seq12",
+  "seq": 12,
+  "type": "pa",
+  "payload": {
+   "playerId": "eli",
+   "result": "1B",
+   "inning": 1,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq13",
+  "seq": 13,
+  "type": "pa",
+  "payload": {
+   "playerId": "mike",
+   "result": "FLY",
+   "inning": 1,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq14",
+  "seq": 14,
+  "type": "pa",
+  "payload": {
+   "playerId": "alex",
+   "result": "FLY",
+   "inning": 1,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq15",
+  "seq": 15,
+  "type": "pa",
+  "payload": {
+   "playerId": "marcel",
+   "result": "FLY",
+   "inning": 1,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq16",
+  "seq": 16,
+  "type": "opp_out",
+  "payload": {
+   "inning": 2
+  }
+ },
+ {
+  "id": "g2seq17",
+  "seq": 17,
+  "type": "opp_out",
+  "payload": {
+   "inning": 2
+  }
+ },
+ {
+  "id": "g2seq18",
+  "seq": 18,
+  "type": "opp_out",
+  "payload": {
+   "inning": 2
+  }
+ },
+ {
+  "id": "g2seq19",
+  "seq": 19,
+  "type": "adjust",
+  "payload": {
+   "field": "score_them",
+   "value": 6
+  }
+ },
+ {
+  "id": "g2seq20",
+  "seq": 20,
+  "type": "pa",
+  "payload": {
+   "playerId": "mark",
+   "result": "1B",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq21",
+  "seq": 21,
+  "type": "pa",
+  "payload": {
+   "playerId": "franny",
+   "result": "FLY",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq22",
+  "seq": 22,
+  "type": "pa",
+  "payload": {
+   "playerId": "pouriya",
+   "result": "1B",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq23",
+  "seq": 23,
+  "type": "pa",
+  "payload": {
+   "playerId": "will",
+   "result": "HR",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq24",
+  "seq": 24,
+  "type": "pa",
+  "payload": {
+   "playerId": "esther",
+   "result": "GND",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq25",
+  "seq": 25,
+  "type": "pa",
+  "payload": {
+   "playerId": "winson",
+   "result": "1B",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq26",
+  "seq": 26,
+  "type": "pa",
+  "payload": {
+   "playerId": "clayton",
+   "result": "1B",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq27",
+  "seq": 27,
+  "type": "pa",
+  "payload": {
+   "playerId": "natalie",
+   "result": "FLY",
+   "inning": 2,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq28",
+  "seq": 28,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq29",
+  "seq": 29,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq30",
+  "seq": 30,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq31",
+  "seq": 31,
+  "type": "opp_out",
+  "payload": {
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq32",
+  "seq": 32,
+  "type": "opp_out",
+  "payload": {
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq33",
+  "seq": 33,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq34",
+  "seq": 34,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq35",
+  "seq": 35,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq36",
+  "seq": 36,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq37",
+  "seq": 37,
+  "type": "opp_run",
+  "payload": {
+   "delta": 1,
+   "inning": 3
+  }
+ },
+ {
+  "id": "g2seq38",
+  "seq": 38,
+  "type": "adjust",
+  "payload": {
+   "field": "outs",
+   "value": 3
+  }
+ },
+ {
+  "id": "g2seq39",
+  "seq": 39,
+  "type": "adjust",
+  "payload": {
+   "field": "score_them",
+   "value": 12
+  }
+ },
+ {
+  "id": "g2seq40",
+  "seq": 40,
+  "type": "pa",
+  "payload": {
+   "playerId": "jason",
+   "result": "HR",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "emrjxyjd6_41_b8g5gz",
+  "seq": 41,
+  "type": "pa",
+  "payload": {
+   "playerId": "eli",
+   "result": "2B",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq42",
+  "seq": 42,
+  "type": "amend",
+  "payload": {
+   "result": "3B",
+   "target_event_id": "emrjxyjd6_41_b8g5gz"
+  }
+ },
+ {
+  "id": "g2seq43",
+  "seq": 43,
+  "type": "pa",
+  "payload": {
+   "playerId": "mike",
+   "result": "1B",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq44",
+  "seq": 44,
+  "type": "pa",
+  "payload": {
+   "playerId": "alex",
+   "result": "GND",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq45",
+  "seq": 45,
+  "type": "runner",
+  "payload": {
+   "action": "out",
+   "playerId": "mike"
+  }
+ },
+ {
+  "id": "g2seq46",
+  "seq": 46,
+  "type": "pa",
+  "payload": {
+   "playerId": "marcel",
+   "result": "3B",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq47",
+  "seq": 47,
+  "type": "pa",
+  "payload": {
+   "playerId": "mark",
+   "result": "1B",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq48",
+  "seq": 48,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 3,
+   "playerId": "marcel"
+  }
+ },
+ {
+  "id": "g2seq49",
+  "seq": 49,
+  "type": "pa",
+  "payload": {
+   "playerId": "franny",
+   "result": "1B",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq50",
+  "seq": 50,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 3,
+   "playerId": "marcel"
+  }
+ },
+ {
+  "id": "g2seq51",
+  "seq": 51,
+  "type": "pa",
+  "payload": {
+   "playerId": "pouriya",
+   "result": "FLY",
+   "inning": 3,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq52",
+  "seq": 52,
+  "type": "opp_out",
+  "payload": {
+   "inning": 4
+  }
+ },
+ {
+  "id": "g2seq53",
+  "seq": 53,
+  "type": "opp_out",
+  "payload": {
+   "inning": 4
+  }
+ },
+ {
+  "id": "g2seq54",
+  "seq": 54,
+  "type": "opp_out",
+  "payload": {
+   "inning": 4
+  }
+ },
+ {
+  "id": "g2seq55",
+  "seq": 55,
+  "type": "pa",
+  "payload": {
+   "playerId": "will",
+   "result": "1B",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq56",
+  "seq": 56,
+  "type": "pa",
+  "payload": {
+   "playerId": "esther",
+   "result": "1B",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq57",
+  "seq": 57,
+  "type": "pa",
+  "payload": {
+   "playerId": "winson",
+   "result": "1B",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq58",
+  "seq": 58,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 4,
+   "playerId": "will"
+  }
+ },
+ {
+  "id": "g2seq59",
+  "seq": 59,
+  "type": "pa",
+  "payload": {
+   "playerId": "clayton",
+   "result": "1B",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq60",
+  "seq": 60,
+  "type": "runner",
+  "payload": {
+   "action": "out",
+   "playerId": "esther"
+  }
+ },
+ {
+  "id": "g2seq61",
+  "seq": 61,
+  "type": "pa",
+  "payload": {
+   "playerId": "natalie",
+   "result": "FLY",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq62",
+  "seq": 62,
+  "type": "pa",
+  "payload": {
+   "playerId": "jason",
+   "result": "1B",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "emrjyclj9_63_2ro227",
+  "seq": 63,
+  "type": "pa",
+  "payload": {
+   "playerId": "eli",
+   "result": "HR",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq64",
+  "seq": 64,
+  "type": "amend",
+  "payload": {
+   "result": "2B",
+   "target_event_id": "emrjyclj9_63_2ro227"
+  }
+ },
+ {
+  "id": "g2seq65",
+  "seq": 65,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 4,
+   "playerId": "jason"
+  }
+ },
+ {
+  "id": "g2seq66",
+  "seq": 66,
+  "type": "pa",
+  "payload": {
+   "playerId": "mike",
+   "result": "2B",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq67",
+  "seq": 67,
+  "type": "pa",
+  "payload": {
+   "playerId": "alex",
+   "result": "GND",
+   "inning": 4,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq68",
+  "seq": 68,
+  "type": "opp_out",
+  "payload": {
+   "inning": 5
+  }
+ },
+ {
+  "id": "g2seq69",
+  "seq": 69,
+  "type": "opp_out",
+  "payload": {
+   "inning": 5
+  }
+ },
+ {
+  "id": "g2seq70",
+  "seq": 70,
+  "type": "opp_out",
+  "payload": {
+   "inning": 5
+  }
+ },
+ {
+  "id": "g2seq71",
+  "seq": 71,
+  "type": "pa",
+  "payload": {
+   "playerId": "marcel",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq72",
+  "seq": 72,
+  "type": "pa",
+  "payload": {
+   "playerId": "mark",
+   "result": "3B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq73",
+  "seq": 73,
+  "type": "pa",
+  "payload": {
+   "playerId": "franny",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq74",
+  "seq": 74,
+  "type": "pa",
+  "payload": {
+   "playerId": "pouriya",
+   "result": "2B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq75",
+  "seq": 75,
+  "type": "pa",
+  "payload": {
+   "playerId": "will",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq76",
+  "seq": 76,
+  "type": "pa",
+  "payload": {
+   "playerId": "esther",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq77",
+  "seq": 77,
+  "type": "runner",
+  "payload": {
+   "action": "out",
+   "playerId": "will"
+  }
+ },
+ {
+  "id": "g2seq78",
+  "seq": 78,
+  "type": "pa",
+  "payload": {
+   "playerId": "winson",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq79",
+  "seq": 79,
+  "type": "runner",
+  "payload": {
+   "action": "out",
+   "playerId": "esther"
+  }
+ },
+ {
+  "id": "g2seq80",
+  "seq": 80,
+  "type": "pa",
+  "payload": {
+   "playerId": "clayton",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq81",
+  "seq": 81,
+  "type": "pa",
+  "payload": {
+   "playerId": "natalie",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq82",
+  "seq": 82,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 4,
+   "playerId": "winson"
+  }
+ },
+ {
+  "id": "g2seq83",
+  "seq": 83,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 3,
+   "playerId": "clayton"
+  }
+ },
+ {
+  "id": "emrjyuwkm_84_70llwg",
+  "seq": 84,
+  "type": "pa",
+  "payload": {
+   "playerId": "jason",
+   "result": "1B",
+   "inning": 5,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq85",
+  "seq": 85,
+  "type": "amend",
+  "payload": {
+   "result": "HR",
+   "target_event_id": "emrjyuwkm_84_70llwg"
+  }
+ },
+ {
+  "id": "g2seq86",
+  "seq": 86,
+  "type": "undo",
+  "payload": {
+   "target_event_id": "emrjyuwkm_84_70llwg"
+  }
+ },
+ {
+  "id": "g2seq87",
+  "seq": 87,
+  "type": "runner",
+  "payload": {
+   "action": "out",
+   "playerId": "clayton"
+  }
+ },
+ {
+  "id": "g2seq88",
+  "seq": 88,
+  "type": "opp_out",
+  "payload": {
+   "inning": 6
+  }
+ },
+ {
+  "id": "g2seq89",
+  "seq": 89,
+  "type": "opp_out",
+  "payload": {
+   "inning": 6
+  }
+ },
+ {
+  "id": "g2seq90",
+  "seq": 90,
+  "type": "opp_out",
+  "payload": {
+   "inning": 6
+  }
+ },
+ {
+  "id": "g2seq91",
+  "seq": 91,
+  "type": "pa",
+  "payload": {
+   "playerId": "jason",
+   "result": "GND",
+   "inning": 6,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq92",
+  "seq": 92,
+  "type": "pa",
+  "payload": {
+   "playerId": "eli",
+   "result": "1B",
+   "inning": 6,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq93",
+  "seq": 93,
+  "type": "pa",
+  "payload": {
+   "playerId": "mike",
+   "result": "1B",
+   "inning": 6,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq94",
+  "seq": 94,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 3,
+   "playerId": "eli"
+  }
+ },
+ {
+  "id": "g2seq95",
+  "seq": 95,
+  "type": "runner",
+  "payload": {
+   "action": "set",
+   "to": 2,
+   "playerId": "eli"
+  }
+ },
+ {
+  "id": "g2seq96",
+  "seq": 96,
+  "type": "pa",
+  "payload": {
+   "playerId": "alex",
+   "result": "FLY",
+   "inning": 6,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq97",
+  "seq": 97,
+  "type": "pa",
+  "payload": {
+   "playerId": "marcel",
+   "result": "HR",
+   "inning": 6,
+   "half": "us"
+  }
+ },
+ {
+  "id": "emrjyyr3b_98_9v4had",
+  "seq": 98,
+  "type": "pa",
+  "payload": {
+   "playerId": "mark",
+   "result": "2B",
+   "inning": 6,
+   "half": "us"
+  }
+ },
+ {
+  "id": "g2seq99",
+  "seq": 99,
+  "type": "amend",
+  "payload": {
+   "result": "3B",
+   "target_event_id": "emrjyyr3b_98_9v4had"
+  }
+ },
+ {
+  "id": "g2seq100",
+  "seq": 100,
+  "type": "pa",
+  "payload": {
+   "playerId": "franny",
+   "result": "FLY",
+   "inning": 6,
+   "half": "us"
+  }
+ }
+]

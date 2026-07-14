@@ -218,6 +218,7 @@
     "supabaseUrl": "https://whbrvpisvirxcrvqctmo.supabase.co",
     "supabaseAnonKey": "sb_publishable_nGO_Wt4cnRXLCoM1xCKMow_uihCaW9b",
     "teamPin": "0726",
-    "inningsPerGame": 7
+    "inningsPerGame": 7,
+    "mercyRunLimit": 6
   }
 }

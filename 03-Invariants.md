@@ -89,4 +89,7 @@ No feature may *require* the network mid-game *(amended 2026-07-13 with the S2 s
 
 **19. `node dom-stub-test.js` before any ship.** 24 groups as of 2026-07-07. The stub harness evals the template's `<script>` with fake DOM/AudioContext — it catches state-machine and wiring regressions, not visual or gesture ones. On-device checks remain mandatory for anything touching CSS, drag, or audio.
 
+**19b. `eventIdx` indexes the EFFECTIVE event list, never the raw array.**
+Since the retro `insert` meta-event (2026-07-14, scorecard editor), replay order ≠ raw array order: `deriveState` expands inserts into an effective list (pass 0) and every `eventIdx` it stamps (paLog records, lastAction) indexes THAT list, exposed as `st.effectiveEvents`. Any consumer that reaches for `scoringEvents[someEventIdx]` is wrong the moment a game contains one insert — read through `effectiveEventAt()`/`st.effectiveEvents`. Corollary of 18b: retro corrections are ALWAYS appended meta-events (amend/undo/insert) with fresh seqs; nothing may ever splice or renumber the raw log — sync rows are keyed by seq. *(Tests: groups 84–86.)*
+
 **20. Jason pushes; AI sessions never run git against this repo.** A sandboxed `git status` once left a stale `index.lock` the sandbox couldn't remove. Builds and file edits are done by the session; add/commit/push is Jason's, with an explicit "ready to push" + build id handoff at the end of each round.

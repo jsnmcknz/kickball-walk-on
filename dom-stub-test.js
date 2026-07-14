@@ -259,6 +259,29 @@ global.__hooks = {
   openAdjustSheet: function() { return openAdjustSheet(); },
   adjustStep: function(field, delta) { return adjustStep(field, delta); },
   commitAdjust: function() { return commitAdjust(); },
+  // 2026-07-14: FC/mercy/half-swap/scorecard-editor session.
+  applyAdjustEndHalf: function() { return applyAdjustEndHalf(); },
+  effectiveScoringEvents: function(ev) { return effectiveScoringEvents(ev); },
+  appendInsertEvent: function(anchorId, type, payload) { return appendInsertEvent(anchorId, type, payload); },
+  findHalfEndAnchor: function(eff, fromIdx) { return findHalfEndAnchor(eff, fromIdx); },
+  scorecardHitTest: function(x, y) { return scorecardHitTest(x, y); },
+  onScorecardTap: function(x, y) { return onScorecardTap(x, y); },
+  getCardEditor: function() { return cardEditor; },
+  setCardEditor: function(v) { cardEditor = v; },
+  cardEditorRecord: function() { return cardEditorRecord(); },
+  cardRunnerOutCandidates: function(rec) { return cardRunnerOutCandidates(rec); },
+  applyCardAmend: function(r) { return applyCardAmend(r); },
+  applyCardRunnerOut: function(pid) { return applyCardRunnerOut(pid); },
+  applyCardInsertPa: function(r) { return applyCardInsertPa(r); },
+  applyCardEndHalf: function() { return applyCardEndHalf(); },
+  applyCardRemove: function() { return applyCardRemove(); },
+  applyCardRestoreRunner: function() { return applyCardRestoreRunner(); },
+  cardFindRunnerOutEvent: function(rec) { return cardFindRunnerOutEvent(rec); },
+  applyOppInningRuns: function() { return applyOppInningRuns(); },
+  closeCardEditor: function() { return closeCardEditor(); },
+  toggleBoxScore: function() { return toggleBoxScore(); },
+  getBoxScoreOpen: function() { return scoringBoxScoreOpen; },
+  setBoxScoreOpen: function(v) { scoringBoxScoreOpen = v; },
   pickDefaultScheduleGameId: function() { return pickDefaultScheduleGameId(); },
   scheduleFixtureById: function(id) { return scheduleFixtureById(id); },
   overlayBufferFor: function(id) { return overlayBufferFor(id); },
@@ -3165,6 +3188,295 @@ async function main() {
     hooks.setScoringEvents([]);
     render();
     console.log('80. Share scorecard: button present, stub-safe no-op without a real canvas: OK');
+  }
+
+  // 81. FC deprecation guard (added and deprecated 2026-07-14, Jason: a
+  // true fielder's choice barely exists in kickball -- the throw to 1st
+  // never beats the kicker, so the single is genuine. Convention of
+  // record: logged 1B + runner-out). Guards against the button quietly
+  // returning; the 1B + runner-out convention itself must keep working.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'No FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'runner', { playerId: 'alice', action: 'out' }); // the "FC" play, as logged in this league
+    hooks.setScoringEvents(ev);
+    const st = hooks.getScoringState();
+    const stats = hooks.computeStats(st);
+    assert(stats['bob'].h === 1 && st.outs === 1, '1B + runner-out convention: hit stands, out counts');
+    hooks.getState().activeTab = 'lineup';
+    hooks.getState().editing = false;
+    render();
+    const skip = screen.querySelectorAll('.leadoff-skip')[0];
+    if (skip) { skip.dispatch('click'); }
+    let fcTile = null;
+    const walk = (node) => {
+      if (node.classList && node.classList.contains('result-tile') && node.textContent.indexOf('FC') !== -1) fcTile = node;
+      (node._children || []).forEach(walk);
+    };
+    walk(screen);
+    assert(fcTile === null, 'no FC button on the result pad (deprecated 2026-07-14)');
+    hooks.setScoringEvents([]);
+    render();
+    console.log('81. FC deprecated: pad carries no FC; 1B + runner-out convention holds (hit stands, out counts): OK');
+  }
+
+  // 82. Configurable mercy limit (2026-07-14): manifest default > legacy 8,
+  // game_start payload wins, adjust {field:'mercyLimit'} moves it mid-game,
+  // and the banner keys off the derived value.
+  {
+    function findClass(cls) {
+      let found = null;
+      const walk = (node) => { if (found) return; if (node.classList && node.classList.contains(cls)) found = node; (node._children || []).forEach(walk); };
+      walk(screen);
+      return found;
+    }
+    const D = hooks.getDATA();
+    const savedDefault = D.scoring.mercyRunLimit;
+    D.scoring.mercyRunLimit = 6;
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Mercy Six', innings: 7, lineup: ['alice', 'bob'] });
+    hooks.setScoringEvents(ev);
+    assert(hooks.getScoringState().mercyLimit === 6, 'manifest default applies when game_start carries none');
+    ev = hooks.appendScoringEvent([], 'game_start', { opponent: 'Mercy Five', innings: 7, lineup: ['alice', 'bob'], mercyLimit: 5 });
+    hooks.setScoringEvents(ev);
+    assert(hooks.getScoringState().mercyLimit === 5, 'game_start payload wins');
+    ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'adjust', { field: 'mercyLimit', value: 7 });
+    hooks.setScoringEvents(ev);
+    assert(hooks.getScoringState().mercyLimit === 7, 'adjust moves it mid-game');
+    // Banner fires at the derived limit, not the old hardcoded 8: 5-run
+    // game, limit 5 -> banner shows on our half of inning 1 of 7.
+    ev = hooks.appendScoringEvent([], 'game_start', { opponent: 'Banner', innings: 7, lineup: ['alice', 'bob'], mercyLimit: 5 });
+    for (let k = 0; k < 5; k++) ev = hooks.appendScoringEvent(ev, 'pa', { playerId: k % 2 ? 'bob' : 'alice', result: 'HR', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup';
+    render();
+    assert(findClass('mercy-banner'), 'banner fires at the configured limit');
+    assert(findClass('mercy-text').textContent.indexOf('5-run') === 0, 'banner names the configured limit: ' + findClass('mercy-text').textContent);
+    // Legacy fallback: no manifest value, no payload -> 8 (replays as shipped).
+    delete D.scoring.mercyRunLimit;
+    ev = hooks.appendScoringEvent([], 'game_start', { opponent: 'Legacy', innings: 7, lineup: ['alice'] });
+    hooks.setScoringEvents(ev);
+    assert(hooks.getScoringState().mercyLimit === 8, 'legacy fallback stays 8');
+    D.scoring.mercyRunLimit = savedDefault;
+    hooks.setScoringEvents([]);
+    render();
+    console.log('82. Mercy limit: manifest default, game_start payload, mid-game adjust, banner threshold, legacy 8: OK');
+  }
+
+  // 83. Score bug on defense + tap-again-to-cancel + immediate half swap
+  // (2026-07-14): the adjust sheet opens from the opponent's half, survives
+  // the render choke-point there, the bug becomes the cancel control, and
+  // "end half-inning now" commits adjust {outs:3} with the same turnover
+  // side-effects as the mercy end.
+  {
+    function findClasses(classes) {
+      let found = null;
+      const walk = (node) => { if (found) return; if (node.classList && classes.every(c => node.classList.contains(c))) found = node; (node._children || []).forEach(walk); };
+      walk(screen);
+      return found;
+    }
+    let ev = [];
+    // Home game: opens in THEIR half (defense screen first).
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Defense FC', innings: 7, lineup: ['alice', 'bob'], isHome: true });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup';
+    hooks.getState().editing = false;
+    render();
+    assert(hooks.getScoringState().half === 'them', 'sanity: defense screen');
+    hooks.openAdjustSheet();
+    assert(hooks.getScoringCorrection() && hooks.getScoringCorrection().mode === 'adjust', 'adjust sheet opens on defense now');
+    render();
+    assert(hooks.getScoringCorrection() !== null, 'choke point lets the adjust sheet live on defense');
+    const editingBug = findClasses(['score-bug', 'editing']);
+    assert(editingBug, 'score bug flips into editing mode');
+    editingBug.dispatch('click');
+    assert(hooks.getScoringCorrection() === null, 'tap-again on the bug cancels the sheet');
+    // Draft mercy stepper commits one adjust event.
+    hooks.openAdjustSheet();
+    assert(hooks.getScoringCorrection().draft.mercyLimit === hooks.getScoringState().mercyLimit, 'draft seeds from derived mercy limit');
+    hooks.adjustStep('mercyLimit', -1);
+    hooks.adjustStep('mercyLimit', -1);
+    hooks.commitAdjust();
+    assert(hooks.getScoringState().mercyLimit === 6, 'stepper commit lands: ' + hooks.getScoringState().mercyLimit);
+    // Immediate half swap: them -> us (home game, same inning), leadoff prompt offered.
+    hooks.openAdjustSheet();
+    hooks.applyAdjustEndHalf();
+    const st = hooks.getScoringState();
+    assert(st.half === 'us' && st.inning === 1 && st.outs === 0, 'end-half-now flips the half in place: ' + st.half + ' ' + st.inning);
+    assert(hooks.getScoringCorrection() === null, 'sheet closed by the swap');
+    render();
+    assert(findClasses(['leadoff-card']), 'them->us swap offers the leadoff walk-up prompt');
+    hooks.setScoringEvents([]);
+    render();
+    console.log('83. Defense score bug: opens/cancels the adjust sheet, mercy stepper commits, end-half-now swaps with turnover side-effects: OK');
+  }
+
+  // 84. Retro insert engine (2026-07-14): effectiveScoringEvents splices
+  // wrapped events after their anchors, chains, tolerates orphans, and
+  // undo suppresses either the wrapped event or the whole insert.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Insert FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    const alicePaId = ev[ev.length - 1].id;
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: 'FLY', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    // Retro basepath out for alice, replayed right after her single.
+    const wrapped = hooks.appendInsertEvent(alicePaId, 'runner', { playerId: 'alice', action: 'out' });
+    hooks.setScoringEvents(hooks.getScoringEvents());
+    let st = hooks.getScoringState();
+    assert(st.outs === 2, 'inserted out counts at its historical position: ' + st.outs);
+    assert(st.runners['alice'] === undefined, 'alice erased from the bases');
+    const aliceRec = st.paLog.find(r => r.playerId === 'alice');
+    assert(aliceRec.kickerOut === true && aliceRec.outNumberInHalf === 1, 'her cell shows out #1 (before the FLY)');
+    const bobRec = st.paLog.find(r => r.playerId === 'bob');
+    assert(bobRec.outNumberInHalf === 2, 'the FLY re-derives as out #2');
+    assert(st.effectiveEvents.length === hooks.getScoringEvents().length, 'effective list swaps the insert wrapper for the wrapped event');
+    assert(st.effectiveEvents[2].id === wrapped.id, 'wrapped event sits right after its anchor');
+    // Undo the WRAPPED event: the correction reverses.
+    let ev2 = hooks.appendScoringEvent(hooks.getScoringEvents(), 'undo', { target_event_id: wrapped.id });
+    hooks.setScoringEvents(ev2);
+    assert(hooks.getScoringState().outs === 1, 'undoing the wrapped event reverses the retro out');
+    // findHalfEndAnchor: trailing same-half events ride along, the next
+    // half's first event stops the scan.
+    ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Anchor FC', innings: 7, lineup: ['alice', 'bob'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    const aId = ev[ev.length - 1].id;
+    ev = hooks.appendScoringEvent(ev, 'runner', { playerId: 'alice', to: 2, action: 'set' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' });
+    const bId = ev[ev.length - 1].id;
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 2 });
+    hooks.setScoringEvents(ev);
+    const eff = hooks.getScoringState().effectiveEvents;
+    const fromIdx = eff.findIndex(e => e.id === aId);
+    assert(hooks.findHalfEndAnchor(eff, fromIdx) === bId, 'anchor lands on the last same-half event');
+    hooks.setScoringEvents([]);
+    render();
+    console.log('84. Retro insert: historical position, out renumbering, wrapped-event undo, half-end anchor scan: OK');
+  }
+
+  // 85. Scorecard editor (2026-07-14): hit-test geometry, amend from a
+  // cell, retro runner-out candidates, insert-before at-bat, end-half-
+  // after, two-tap remove, and opponent line-score cell steppers.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Editor FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '2B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'FLY', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup';
+    hooks.getState().editing = false;
+    hooks.setBoxScoreOpen(true);
+    render();
+    // Hit-test: row 0 (alice), col 0 -> her record; the opponent line-score
+    // row maps to {kind:'line', team:'them'}; our row is returned but only
+    // 'them' opens the editor.
+    const L = hooks.scorecardLayout();
+    const cellX = L.pad + L.nameW + 0.5 * L.cellW;
+    const cellY = L.pad + L.lineH + L.headH + 0.5 * L.rowH;
+    const hit = hooks.scorecardHitTest(cellX, cellY);
+    const aliceRec = hooks.getScoringState().paLog.find(r => r.playerId === 'alice');
+    assert(hit && hit.kind === 'cell' && hit.recId === aliceRec.id, 'cell hit-test finds alice inning 1');
+    // Away game, our half still open: the opponent's inning 1 hasn't begun,
+    // so their line-score cell is deliberately NOT tappable yet.
+    const lineHitEarly = hooks.scorecardHitTest(cellX, L.pad + 38); // bottom line-score row = them
+    assert(lineHitEarly === null, 'unplayed opponent half-inning is not tappable');
+    // Tap -> editor opens; amend the result from the cell.
+    hooks.onScorecardTap(cellX, cellY);
+    assert(hooks.getCardEditor() && hooks.getCardEditor().kind === 'cell', 'cell tap opens the editor');
+    hooks.applyCardAmend('2B');
+    assert(hooks.getCardEditor() === null, 'amend closes the editor');
+    assert(hooks.getScoringState().paLog.find(r => r.playerId === 'alice').result === '2B', 'past at-bat amended from the scorecard');
+    // Retro runner-out: candidates reflect the board AFTER bob's 2B under
+    // CURRENT history (alice's amend included).
+    let bobRec = hooks.getScoringState().paLog.find(r => r.playerId === 'bob');
+    hooks.setCardEditor({ kind: 'cell', recId: bobRec.id, step: null, insertWhere: null, insertPlayerId: null, confirmRemove: false });
+    const cands = hooks.cardRunnerOutCandidates(bobRec).map(c => c.playerId).sort();
+    assert(cands.indexOf('bob') !== -1, 'kicker himself is a candidate (on 2nd): ' + cands.join(','));
+    hooks.applyCardRunnerOut('bob');
+    let st = hooks.getScoringState();
+    assert(st.outs === 2 && st.runners['bob'] === undefined, 'retro runner-out lands after his own at-bat: outs=' + st.outs);
+    // Insert a missed at-bat BEFORE charlie's FLY.
+    let charlieRec = st.paLog.find(r => r.playerId === 'charlie');
+    hooks.setCardEditor({ kind: 'cell', recId: charlieRec.id, step: 'insertResult', insertWhere: 'before', insertPlayerId: 'dana', confirmRemove: false });
+    hooks.applyCardInsertPa('1B');
+    st = hooks.getScoringState();
+    const danaRec = st.paLog.find(r => r.playerId === 'dana');
+    charlieRec = st.paLog.find(r => r.playerId === 'charlie');
+    assert(danaRec && danaRec.eventIdx < charlieRec.eventIdx, 'inserted at-bat replays before the anchor cell');
+    assert(danaRec.inning === 1 && danaRec.half === 'us', 'inserted at-bat inherits the cell inning/half');
+    // End the half after charlie's FLY (2 outs + retro out = 3 would have
+    // flipped already -- so first un-do the retro out to keep the half
+    // open, then end it explicitly).
+    // (State check only: half currently flipped? outs: bob retro out (1),
+    // charlie FLY (2) -> still 'us'.)
+    assert(st.half === 'us', 'sanity: half still open with 2 outs');
+    hooks.setCardEditor({ kind: 'cell', recId: charlieRec.id, step: null, insertWhere: null, insertPlayerId: null, confirmRemove: false });
+    hooks.applyCardEndHalf();
+    st = hooks.getScoringState();
+    assert(st.half === 'them' && st.outs === 0, 'end-half-after flips at the historical point: ' + st.half);
+    assert(st.paLog.find(r => r.playerId === 'charlie').endedHalf === true, 'the half-end marks the last at-bat cell');
+    // Their half of inning 1 is now live -> their line-score cell maps.
+    const lineHitNow = hooks.scorecardHitTest(cellX, L.pad + 38);
+    assert(lineHitNow && lineHitNow.kind === 'line' && lineHitNow.team === 'them' && lineHitNow.inning === 1, 'live opponent half-inning cell maps to the opp editor');
+    // Two-tap remove.
+    const danaId = st.paLog.find(r => r.playerId === 'dana').id;
+    hooks.setCardEditor({ kind: 'cell', recId: danaId, step: null, insertWhere: null, insertPlayerId: null, confirmRemove: false });
+    hooks.applyCardRemove();
+    assert(hooks.getCardEditor() && hooks.getCardEditor().confirmRemove === true, 'first remove tap arms the confirm');
+    hooks.applyCardRemove();
+    st = hooks.getScoringState();
+    assert(!st.paLog.find(r => r.playerId === 'dana'), 'second tap removes the at-bat');
+    assert(hooks.getCardEditor() === null, 'remove closes the editor');
+    // Opponent line-score cell: 3 logged runs -> stepped down to 1
+    // tombstones the two newest; stepped up appends inning-tagged runs
+    // that never leak into the live half's mercy tally.
+    ev = hooks.getScoringEvents();
+    ev = hooks.appendScoringEvent(ev, 'opp_run', { inning: 2, delta: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_run', { inning: 2, delta: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_run', { inning: 2, delta: 1 });
+    hooks.setScoringEvents(ev);
+    assert(hooks.getScoringState().runsByInning.them[2] === 3, 'sanity: 3 opp runs in the 2nd');
+    hooks.setCardEditor({ kind: 'opp', inning: 2, runs: 1 });
+    hooks.applyOppInningRuns();
+    st = hooks.getScoringState();
+    assert(st.runsByInning.them[2] === 1 && st.scoreThem === 1, 'step-down tombstones the newest runs: cell=' + st.runsByInning.them[2] + ' total=' + st.scoreThem);
+    hooks.setCardEditor({ kind: 'opp', inning: 2, runs: 4 });
+    hooks.applyOppInningRuns();
+    st = hooks.getScoringState();
+    assert(st.runsByInning.them[2] === 4 && st.scoreThem === 4, 'step-up appends inning-tagged runs');
+    hooks.setBoxScoreOpen(false);
+    hooks.setScoringEvents([]);
+    render();
+    console.log('85. Scorecard editor: hit-test, cell amend, retro runner-out, insert-before, end-half-after, two-tap remove, opp cell steppers: OK');
+  }
+
+  // 86. "Wasn't out — back on base" (2026-07-14, the repair's Clayton
+  // case): a basepath out marked on a kicker's cell can be tombstoned from
+  // that cell; replay re-places the runner from surviving history.
+  {
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Restore FC', innings: 7, lineup: ['alice', 'bob'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: '1B', inning: 1, half: 'us' }); // alice pushed to 2nd
+    ev = hooks.appendScoringEvent(ev, 'runner', { playerId: 'alice', action: 'out' });
+    hooks.setScoringEvents(ev);
+    let st = hooks.getScoringState();
+    const aliceRec = st.paLog.find(r => r.playerId === 'alice');
+    assert(aliceRec.kickerOut === true && st.outs === 1, 'sanity: alice erased on the bases');
+    hooks.setCardEditor({ kind: 'cell', recId: aliceRec.id, step: null, insertWhere: null, insertPlayerId: null, confirmRemove: false });
+    assert(hooks.cardFindRunnerOutEvent(aliceRec), 'the out event is findable from her cell');
+    hooks.applyCardRestoreRunner();
+    st = hooks.getScoringState();
+    assert(st.outs === 0 && st.runners['alice'] === 2, 'restored to 2nd (push survives), out reversed: outs=' + st.outs + ' base=' + st.runners['alice']);
+    assert(st.paLog.find(r => r.playerId === 'alice').kickerOut === false, 'her cell no longer shows the ✕');
+    hooks.setScoringEvents([]);
+    render();
+    console.log('86. Restore runner from a cell: basepath out tombstoned, replay re-places the runner: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after

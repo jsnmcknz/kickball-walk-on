@@ -798,6 +798,44 @@
   .mercy-btn.dashed { background: var(--bg); border-style: dashed; color: var(--muted); }
   .mercy-btn:active { opacity: 0.8; }
 
+  /* Score bug in editing mode (2026-07-14): the bug that opened the
+     adjust sheet is also its cancel -- white ring, same selected idiom as
+     the bases and the FIXING chip. */
+  .score-bug.editing { border-color: #fff; box-shadow: 0 0 0 1px #fff inset; }
+
+  /* Adjust sheet's immediate half swap (2026-07-14) -- full-width action
+     between the steppers and the draft rows; plum family since it's a
+     boundary event like the mercy end. */
+  .adjust-endhalf {
+    display: block; width: 100%; background: var(--plum-fill); border: 1px solid var(--plum-border);
+    border-radius: 10px; padding: 10px 0; margin: 0 0 10px; font-size: 14px; font-weight: 500; color: var(--plum-text);
+  }
+  .adjust-endhalf:active { opacity: 0.8; }
+
+  /* Mercy-limit stepper row on the Start Game fixture card (2026-07-14) --
+     same row skeleton as the kick-order toggle above it. */
+  .mercy-limit-row .adjust-stepper { flex: 1; justify-content: center; }
+
+  /* Scorecard editor (2026-07-14): takeover panel inside the box-score
+     subpage. Reuses the pad + correction-cancel idioms; only the list
+     actions and headings are its own. */
+  .cardedit-panel { padding: 0 16px; }
+  .cardedit-heading { font-size: 14px; font-weight: 600; letter-spacing: 0.04em; color: var(--text); margin: 2px 0 2px; text-align: center; }
+  .cardedit-sub { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 10px; }
+  .cardedit-steplabel { font-size: 13px; font-weight: 500; color: var(--text); text-align: center; margin: 6px 0 8px; }
+  .cardedit-action {
+    display: block; width: 100%; background: var(--tile); border: 1px solid var(--tile-border);
+    border-radius: 10px; padding: 11px 12px; margin-bottom: 8px; font-size: 14px; color: var(--text); text-align: center;
+  }
+  .cardedit-action:active { opacity: 0.8; }
+  .cardedit-remove {
+    display: block; width: 100%; background: var(--plum-fill); border: 1px dashed var(--plum-border);
+    border-radius: 10px; padding: 11px 12px; margin-bottom: 8px; font-size: 14px; color: var(--plum-text); text-align: center;
+  }
+  .cardedit-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 6px; }
+  .cardedit-oppstepper { justify-content: center; margin: 10px 0 14px; }
+  .cardedit-done { display: block; width: 100%; margin-bottom: 8px; } /* .adjust-done is flex-sized for its sheet row; standalone here */
+
   /* Bigger, chip-styled "next up" at the bottom of the defense screen
      (Jason, live feedback) instead of a single muted line. */
   .leadoff-preview-big {
@@ -1398,6 +1436,90 @@ function eventIdentity(e, idx) {
   return (e.id !== undefined && e.id !== null) ? e.id : ('_idx' + idx);
 }
 
+/* ---- Retro-insert meta-event (2026-07-14, game-2 repair session) ----
+   The scorecard editor needs to add events at a HISTORICAL position (a
+   basepath out that belongs three innings ago; a missed leadoff at-bat) --
+   but the log is append-only and S2 sync rows are keyed (game_id,
+   device_id, seq), so events must never be renumbered or spliced in the
+   raw array (invariant 18b). `insert` is therefore a meta-event like
+   amend/undo: appended at the end with a normal seq, carrying the wrapped
+   event plus the id of the event it replays AFTER. Replay expands inserts
+   into an EFFECTIVE order first; every downstream pass (tombstones,
+   amendments, state transitions) runs over that. The wrapped event has its
+   own id, so it can itself be amended, undone, or used as a later insert's
+   anchor. Undoing the INSERT's own id suppresses the splice entirely.
+   Legacy logs (no inserts) take the fast path and replay byte-identically. */
+function effectiveScoringEvents(events) {
+  const undone = new Set();
+  events.forEach(e => {
+    if (e.type === 'undo' && e.payload && e.payload.target_event_id !== undefined && e.payload.target_event_id !== null) {
+      undone.add(e.payload.target_event_id);
+    }
+  });
+  const insertsByAnchor = {};
+  let hasInserts = false;
+  events.forEach((e, i) => {
+    if (e.type !== 'insert') return;
+    if (undone.has(eventIdentity(e, i))) return; // undone insert: never splices
+    const p = e.payload || {};
+    if (!p.event) return;
+    hasInserts = true;
+    (insertsByAnchor[p.after_event_id] = insertsByAnchor[p.after_event_id] || []).push(p.event);
+  });
+  if (!hasInserts) return events; // fast path: legacy logs replay untouched
+  const out = [];
+  const emitted = new Set();
+  function emit(evt, idx) {
+    out.push(evt);
+    const chain = insertsByAnchor[eventIdentity(evt, idx)];
+    if (chain) chain.forEach(w => { emitted.add(w.id); emit(w, -1); });
+  }
+  events.forEach((e, i) => { if (e.type !== 'insert') emit(e, i); });
+  // Orphaned anchors (target event missing -- shouldn't happen, but a
+  // multi-device merge could produce one): append at the end rather than
+  // silently dropping a recorded correction.
+  Object.keys(insertsByAnchor).forEach(anchor => {
+    insertsByAnchor[anchor].forEach(w => { if (!emitted.has(w.id)) out.push(w); });
+  });
+  return out;
+}
+
+// Appends an `insert` meta-event wrapping a brand-new event that replays
+// right after `anchorId`. Returns the wrapped event (its id is a valid
+// amend/undo/anchor target from here on).
+function appendInsertEvent(anchorId, type, payload) {
+  const wrapped = { id: scoringEventId(), ts: new Date().toISOString(), type: type, payload: payload || {} };
+  scoringEvents = appendScoringEvent(scoringEvents, 'insert', { after_event_id: anchorId, event: wrapped });
+  return wrapped;
+}
+
+// Where an "end half after this play" insert should anchor: the LAST event
+// still belonging to the tapped record's half -- trailing runner
+// corrections and meta-events ride along; the scan stops at the first
+// event that clearly opens a different context (a PA of another
+// inning/half, any opp event, adjust, game boundary). Returns the anchor
+// event's id.
+function findHalfEndAnchor(eff, fromIdx) {
+  const ref = eff[fromIdx];
+  const refP = (ref && ref.payload) || {};
+  let anchor = ref;
+  for (let j = fromIdx + 1; j < eff.length; j++) {
+    const e = eff[j], p = e.payload || {};
+    if (e.type === 'runner' || e.type === 'runner_out_hit_stands' || e.type === 'amend' || e.type === 'undo') { anchor = e; continue; }
+    if (e.type === 'pa' && p.inning === refP.inning && p.half === refP.half) { anchor = e; continue; }
+    break;
+  }
+  return anchor ? anchor.id : null;
+}
+
+// Manifest-configurable mercy default (2026-07-14, Jason's game-2 field
+// report: the hardcoded 8 never fired against a real 6-run league rule).
+// Per-game value lives on game_start.payload.mercyLimit; mid-game changes
+// are adjust {field:'mercyLimit'} events. This is only the fallback chain.
+function mercyDefault() {
+  return (DATA.scoring && DATA.scoring.mercyRunLimit) || 8;
+}
+
 // Pure, no mutation: pushes every runner at base >= fromBase forward by
 // `delta`, highest base first so a pushed runner is never overwritten by
 // another mid-push. Runners pushed to base 4+ score. Shared by the replay
@@ -1539,6 +1661,12 @@ function legalReturnTargets(runners) {
 // at most) -- that's what makes undo/amend/sync-merge structural rather
 // than special-cased (architecture doc "Event sourcing").
 function deriveState(events) {
+  // Pass 0 (2026-07-14): expand retro `insert` meta-events into the
+  // effective replay order -- see effectiveScoringEvents. Every pass below
+  // (including eventIdx stamps on records/lastAction) indexes into THIS
+  // list, which st.effectiveEvents exposes for consumers that used to
+  // index the raw array.
+  events = effectiveScoringEvents(events);
   // Pass 1: collect tombstones and amendments, keyed by target identity,
   // before touching any real state -- undo/amend are meta-events that
   // change how OTHER events replay, not state transitions of their own.
@@ -1593,6 +1721,10 @@ function deriveState(events) {
     lastAction: null,
     gameStarted: false, gameEnded: false,
     opponent: '', innings: 7,
+    // Configurable mercy limit (2026-07-14): game_start payload wins,
+    // manifest scoring.mercyRunLimit next, historical 8 last -- so legacy
+    // logs replay with the same banner behavior they shipped with.
+    mercyLimit: mercyDefault(),
     finalUs: null, finalThem: null,
     rosterOverlay: [],
     scheduleGameId: null,
@@ -1779,6 +1911,7 @@ function deriveState(events) {
       st.lastAction = null;
       st.gameStarted = true; st.gameEnded = false;
       st.opponent = p.opponent || ''; st.innings = p.innings || 7;
+      st.mercyLimit = p.mercyLimit || mercyDefault(); // per-game, set on the Start Game draft (2026-07-14)
       st.finalUs = null; st.finalThem = null;
       // S1.6 / 07-Portal-Architecture.md: links this game to its manifest
       // schedule fixture; absent for the "unscheduled game" fallback.
@@ -1858,7 +1991,14 @@ function deriveState(events) {
       } else if (OUT_RESULTS.has(result)) {
         st.outs += 1; // FLY/GND/K: runners hold, deliberately (see architecture doc)
         record.outNumberInHalf = st.outs;
-      } // MISSED: runners hold, no out -- counts as PA, never AB (honest denominators)
+      }
+      // (An `FC` result branch lived here for a few hours on 2026-07-14 --
+      // added off the game-2 field report, then deprecated the same day at
+      // Jason's call before ever shipping: in kickball the throw to 1st
+      // almost never beats the kicker, so a fielder choosing another out
+      // doesn't negate the single. The convention of record is back to
+      // logged 1B + runner-out -- see 05-Scoring-Architecture.md.)
+      // MISSED: runners hold, no out -- counts as PA, never AB (honest denominators)
       st.lastAction = { kind: 'pa', playerId: batter, result: result, eventIdx: idx, movements: record.movements, rbi: record.rbi };
       advanceLineupPointer();
       flipHalfIfThreeOuts();
@@ -1954,8 +2094,14 @@ function deriveState(events) {
       flipHalfIfThreeOuts();
     } else if (e.type === 'opp_run') {
       st.scoreThem += (p.delta || 0);
-      st.thisHalfRunsThem += (p.delta || 0);
       const oppInning = p.inning || st.inning;
+      // Current-half tally only counts runs tagged to the CURRENT inning
+      // (2026-07-14): the scorecard editor can append an opp_run targeting
+      // a PAST inning, which must fix that inning's line-score cell and
+      // the total without ever tripping the live half's mercy banner. All
+      // live-logged opp runs carry the current inning, so this is a no-op
+      // for the historical replay path.
+      if (oppInning === st.inning) st.thisHalfRunsThem += (p.delta || 0);
       st.runsByInning.them[oppInning] = (st.runsByInning.them[oppInning] || 0) + (p.delta || 0);
       st.lastAction = { kind: 'opp_run', eventIdx: idx };
     } else if (e.type === 'adjust') {
@@ -1980,6 +2126,9 @@ function deriveState(events) {
       // The current half is deliberately NOT swapped here; the same sheet's
       // inning stepper is the tool for that if it's also wrong.
       else if (p.field === 'isHome') st.isHome = !!p.value;
+      // 'mercyLimit' (2026-07-14): mid-game correction for a rule learned
+      // (or renegotiated by the captains) after Start Game committed.
+      else if (p.field === 'mercyLimit') st.mercyLimit = p.value;
       st.lastAction = { kind: 'adjust', field: p.field, eventIdx: idx };
     } else if (e.type === 'player_add') {
       st.rosterOverlay.push({ id: p.playerId, name: p.name, status: p.status || 'sub', defaultClip: p.defaultClip });
@@ -2000,6 +2149,10 @@ function deriveState(events) {
   st.scoredThisHalf = st.runsLog
     .filter(en => en.inning === st.inning && en.half === st.half)
     .map(en => en.playerId);
+  // The effective (insert-expanded) replay order (2026-07-14). Every
+  // eventIdx stamped on records/lastAction above indexes THIS list, not
+  // the raw scoringEvents array -- consumers must read through here.
+  st.effectiveEvents = events;
   return st;
 }
 
@@ -2704,6 +2857,14 @@ let scoringCorrection = null;
 
 function closeScoringCorrection() { scoringCorrection = null; render(); }
 
+// lastAction.eventIdx (and every record.eventIdx) indexes the EFFECTIVE
+// replay order, which diverges from the raw scoringEvents array once any
+// retro `insert` exists (2026-07-14) -- always read through this.
+function effectiveEventAt(idx) {
+  const list = (scoringState && scoringState.effectiveEvents) ? scoringState.effectiveEvents : scoringEvents;
+  return list[idx];
+}
+
 // Any correction that appends an event is an operator stepping in mid-flow
 // -- cancel rather than risk a stale autoplay timer firing the wrong clip
 // (e.g. a runner-out correction that happens to be the 3rd out, flipping
@@ -2760,11 +2921,11 @@ function openLastActionCorrection() {
   const la = scoringState.lastAction;
   if (!la) return;
   if (RUNNER_CORRECTION_KINDS[la.kind]) {
-    const corrEvt = scoringEvents[la.eventIdx];
+    const corrEvt = effectiveEventAt(la.eventIdx);
     openFixLastForMostRecentPa(false, corrEvt ? { targetId: corrEvt.id, label: buildLastActionRecap(la) } : null);
     return;
   }
-  const evt = scoringEvents[la.eventIdx];
+  const evt = effectiveEventAt(la.eventIdx);
   if (!evt) return;
   if (la.kind === 'pa') {
     scoringCorrection = { mode: 'fixLast', targetId: evt.id, forPlayerId: la.playerId, currentResult: la.result, viaRedirect: false };
@@ -2987,16 +3148,23 @@ function renderScoreBug() {
   }
   // S1.6: ONE tap anywhere on the score bug opens the adjust sheet (mockup
   // screen 8 note -- per-figure tap targets inside the dense bug would be
-  // fiddly at the park). Offense only, and only when nothing else is
-  // already open -- see openAdjustSheet's own guards. The box-score chip
-  // is its own nested tap target, so its handler stops propagation rather
-  // than also triggering the adjust sheet underneath it.
-  const bugAttrs = { class: 'score-bug' };
-  if (isUs && !scoringCorrection && !scoringBoxScoreOpen) bugAttrs.onclick = openAdjustSheet;
+  // fiddly at the park). BOTH halves since 2026-07-14 (Jason's game-2
+  // field report: the defensive screen had no route to the score/half
+  // controls, which is exactly where the mercy-hack pain happened), and
+  // only when nothing else is already open -- see openAdjustSheet's own
+  // guards. While its own sheet is open, the bug flips into the cancel
+  // control (tap-again-to-cancel, same idiom as the bases and the FIXING
+  // chip -- Jason, 2026-07-14). The box-score chip is its own nested tap
+  // target, so its handler stops propagation rather than also triggering
+  // the adjust sheet underneath it.
+  const adjustOpen = scoringCorrection && scoringCorrection.mode === 'adjust';
+  const bugAttrs = { class: 'score-bug' + (adjustOpen ? ' editing' : '') };
+  if (adjustOpen) bugAttrs.onclick = closeScoringCorrection;
+  else if (!scoringCorrection && !scoringBoxScoreOpen) bugAttrs.onclick = openAdjustSheet;
   return h('div', bugAttrs, [
     h('div', { class: 'score-bug-top' }, [
       h('span', { text: halfGlyph(scoringState.half, scoringState.isHome) + ' ' + ordinal(scoringState.inning) + ' – ' }),
-      h('span', { class: 'dim-label', text: isUs ? 'kicking' : 'fielding' }),
+      h('span', { class: 'dim-label', text: adjustOpen ? 'editing — tap to cancel' : (isUs ? 'kicking' : 'fielding') }),
     ]),
     h('button', { class: 'boxscore-chip' + (scoringBoxScoreOpen ? ' active' : ''), text: '▦ box score', onclick: (e) => { if (e && e.stopPropagation) e.stopPropagation(); toggleBoxScore(); } }),
     h('div', { class: 'score-bug-main' }, mainKids),
@@ -3585,6 +3753,8 @@ const RESULT_BUTTONS = [
   { result: 'FLY', label: 'FLY', sub: 'out', span: 4 },
   { result: 'GND', label: 'GROUND', sub: 'out', span: 4 }, // label only (2026-07-11, Jason) -- event code stays GND everywhere
   { result: 'K', label: 'K', sub: 'strikeout', span: 4 },
+  // (No FC button: added-then-deprecated 2026-07-14 -- a fielder's choice
+  // barely exists in kickball, so it's a logged 1B + runner-out. See 05.)
   { result: 'MISSED', label: 'MISSED', sub: 'kicked, unknown result', span: 6, dashed: true },
   { result: 'SKIP', label: 'SKIP ⏭', sub: "didn't kick", span: 6, dashed: true },
 ];
@@ -3744,7 +3914,11 @@ function renderOffenseBody() {
 // needed to drive, but Jason reversed that call live. `runsThisHalf`
 // picks the side-appropriate run count; everything else (dismissal
 // tracking, the End/Keep actions) is already half-agnostic.
-const MERCY_RUN_LIMIT = 8;
+// MERCY_RUN_LIMIT (const 8, 2026-07-07 .. 2026-07-14) is gone: the limit
+// is now per-game state (scoringState.mercyLimit -- game_start payload >
+// manifest scoring.mercyRunLimit > legacy 8), set on the Start Game draft
+// and correctable mid-game from the adjust sheet. Game-2 field lesson: the
+// real league rule was 6 and a hardcoded 8 meant the banner never fired.
 let mercyDismissedForHalf = null; // `${inning}-${half}` key
 
 // ---- Leadoff walk-on prompt (2026-07-13, Jason's game-2 list) ----
@@ -3819,9 +3993,9 @@ function renderMercyBanner() {
   const isFinalInning = scoringState.inning >= scoringState.innings;
   const runsThisHalf = isUs ? scoringState.thisHalfRunsUs : scoringState.thisHalfRunsThem;
   const halfKey = scoringState.inning + '-' + scoringState.half;
-  if (isFinalInning || runsThisHalf < MERCY_RUN_LIMIT || mercyDismissedForHalf === halfKey) return null;
+  if (isFinalInning || runsThisHalf < scoringState.mercyLimit || mercyDismissedForHalf === halfKey) return null;
   return h('div', { class: 'mercy-banner' }, [
-    h('div', { class: 'mercy-text', text: MERCY_RUN_LIMIT + '-run mercy limit reached this inning' }),
+    h('div', { class: 'mercy-text', text: scoringState.mercyLimit + '-run mercy limit reached this inning' }),
     h('div', { class: 'mercy-actions' }, [
       h('button', { class: 'mercy-btn', text: 'End half-inning', onclick: () => {
         const prevHalf = scoringState.half;
@@ -3862,7 +4036,7 @@ function checkMercyMusicPause() {
   const isFinalInning = scoringState.inning >= scoringState.innings;
   const runsThisHalf = isUs ? scoringState.thisHalfRunsUs : scoringState.thisHalfRunsThem;
   const halfKey = scoringState.inning + '-' + scoringState.half;
-  const showing = isUs && !isFinalInning && runsThisHalf >= MERCY_RUN_LIMIT && mercyDismissedForHalf !== halfKey;
+  const showing = isUs && !isFinalInning && runsThisHalf >= scoringState.mercyLimit && mercyDismissedForHalf !== halfKey;
   if (showing && musicPausedForMercyHalf !== halfKey) {
     musicPausedForMercyHalf = halfKey;
     if (scoringAutoPlayPending) { clearTimeout(scoringAutoPlayPending.timeoutHandle); scoringAutoPlayPending = null; }
@@ -3941,6 +4115,7 @@ const SCORECARD_C = {
 function toggleBoxScore() {
   scoringBoxScoreOpen = !scoringBoxScoreOpen;
   if (scoringBoxScoreOpen) scoringCorrection = null; // one takeover surface at a time
+  cardEditor = null; // fresh open, and close drops any half-finished edit (2026-07-14)
   render();
 }
 
@@ -4296,10 +4471,333 @@ function drawScorecardTotals(canvas) {
   });
 }
 
+/* ---- Scorecard editor (2026-07-14, Jason's game-2 field report) ----
+   Past at-bats become correctable from the box score: tap a snake-grid
+   cell to amend its result, log a missed basepath out, insert a missed
+   at-bat, remove one, or end the half after it; tap an opponent line-score
+   cell to fix that inning's run count. Everything commits as APPENDED
+   events -- amend/undo target the past, `insert` (see
+   effectiveScoringEvents) replays at a historical position -- so the log
+   stays append-only and sync stays additive (invariant 18b). Replay
+   re-derives the whole card, exactly the property event sourcing was
+   chosen for. Scope: the CURRENT game only (paLog resets at game_start;
+   the opp-cell scan stops at the newest game_start).
+   Known, accepted caveat: retro-inserting or removing an at-bat shifts the
+   live lineup pointer by one (reality already consumed that turn) -- the
+   NOW UP card makes it visible and a manual grid tap or SKIP fixes it. */
+let cardEditor = null; // {kind:'cell', recId, step, insertWhere, insertPlayerId, confirmRemove} | {kind:'opp', inning, runs}
+
+function closeCardEditor() { cardEditor = null; render(); }
+
+// Fresh lookup every render/apply -- record objects are rebuilt by each
+// re-derive, so the editor holds only the stable event id.
+function cardEditorRecord() {
+  if (!cardEditor || cardEditor.kind !== 'cell') return null;
+  return scoringState.paLog.find(r => r.id === cardEditor.recId) || null;
+}
+
+// Pure geometry: maps a tap at CSS-pixel (x, y) on the grid canvas to the
+// thing under it, sharing scorecardLayout()/drawScorecard's own math.
+// Returns {kind:'cell', recId, playerId} | {kind:'line', team, inning} | null.
+function scorecardHitTest(x, y) {
+  const L = scorecardLayout();
+  const st = scoringState;
+  const lsY = L.pad, lsGridX = L.pad + L.nameW;
+  const firstColOfInning = {};
+  L.cols.forEach((col, ci) => { if (!(col.inning in firstColOfInning)) firstColOfInning[col.inning] = ci; });
+  const leadoff = st.isHome ? 'them' : 'us';
+  if (y <= lsY + 46) { // line-score band (rows at +22/+38, rule at +50)
+    const rowKey = (y < lsY + 30)
+      ? (st.isHome ? 'them' : 'us')   // top row = visitors
+      : (st.isHome ? 'us' : 'them');
+    for (let i = 1; i <= L.innings; i++) {
+      const ci = firstColOfInning[i] !== undefined ? firstColOfInning[i] : (i - 1);
+      const cx = lsGridX + (ci + 0.5) * L.cellW;
+      if (Math.abs(x - cx) > L.cellW / 2) continue;
+      // Only halves that have actually begun (same predicate the draw uses).
+      const played = rowKey === leadoff ? (i <= st.inning) : (i < st.inning || (i === st.inning && st.half !== leadoff));
+      return played ? { kind: 'line', team: rowKey, inning: i } : null;
+    }
+    return null;
+  }
+  const gridX = L.pad + L.nameW, gridY = L.pad + L.lineH + L.headH;
+  if (x >= gridX && y >= gridY) {
+    const row = Math.floor((y - gridY) / L.rowH), col = Math.floor((x - gridX) / L.cellW);
+    if (row >= 0 && row < L.lineup.length && col >= 0 && col < L.cols.length) {
+      const pid = L.lineup[row];
+      const rec = L.cellMap[pid + '|' + col];
+      if (rec) return { kind: 'cell', recId: rec.id, playerId: pid };
+    }
+  }
+  return null;
+}
+
+function onScorecardTap(x, y) {
+  if (cardEditor) return; // sheet already open (shouldn't co-exist with the canvas, belt and suspenders)
+  const hit = scorecardHitTest(x, y);
+  if (!hit) return;
+  if (hit.kind === 'cell') {
+    cardEditor = { kind: 'cell', recId: hit.recId, step: null, insertWhere: null, insertPlayerId: null, confirmRemove: false };
+  } else if (hit.kind === 'line' && hit.team === 'them') {
+    // Our own cells derive from at-bats -- they're fixed by fixing the
+    // at-bats, so only the opponent's counter cells edit directly.
+    cardEditor = { kind: 'opp', inning: hit.inning, runs: scoringState.runsByInning.them[hit.inning] || 0 };
+  } else {
+    return;
+  }
+  render();
+}
+
+// Who was on base once the tapped at-bat had replayed -- the candidates
+// for a retro basepath out. Prefix replay through the record's effective
+// position, PLUS all later amend/undo meta-events (they're consumed in
+// deriveState's pre-passes, so their position doesn't matter -- and
+// without them, an already-amended at-bat would show its pre-amend board).
+function cardRunnerOutCandidates(rec) {
+  const eff = scoringState.effectiveEvents || scoringEvents;
+  const prefix = eff.slice(0, rec.eventIdx + 1)
+    .concat(eff.slice(rec.eventIdx + 1).filter(e => e.type === 'amend' || e.type === 'undo'));
+  const st = deriveState(prefix);
+  return Object.keys(st.runners).map(pid => ({ playerId: pid, base: st.runners[pid] }));
+}
+
+// Shared tail for every scorecard-editor commit: re-derived state can have
+// flipped the CURRENT half in either direction (an edit three innings back
+// re-times every boundary after it), so the same music/prompt guards as
+// the live correction paths apply.
+function afterCardEdit(prevHalf) {
+  scoringClipFiredForBatter = null;
+  mercyDismissedForHalf = null; // run counts may have changed under the banner's key
+  maybeOpenLeadoffPrompt(prevHalf);
+  stopMusicIfBackOnDefense(prevHalf);
+}
+
+function applyCardAmend(newResult) {
+  const rec = cardEditorRecord();
+  if (!rec) { closeCardEditor(); return; }
+  if (newResult !== rec.result) {
+    cancelPendingAutoplay();
+    const prevHalf = scoringState.half;
+    scoringEvents = appendScoringEvent(scoringEvents, 'amend', { target_event_id: rec.id, result: newResult });
+    scoringState = deriveState(scoringEvents);
+    afterCardEdit(prevHalf);
+  }
+  cardEditor = null;
+  render();
+}
+
+function applyCardRunnerOut(playerId) {
+  const rec = cardEditorRecord();
+  if (!rec) { closeCardEditor(); return; }
+  cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
+  appendInsertEvent(rec.id, 'runner', { playerId: playerId, action: 'out' });
+  scoringState = deriveState(scoringEvents);
+  afterCardEdit(prevHalf);
+  cardEditor = null;
+  render();
+}
+
+function applyCardInsertPa(result) {
+  const rec = cardEditorRecord(), c = cardEditor;
+  if (!rec || !c || !c.insertPlayerId) { closeCardEditor(); return; }
+  cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
+  const eff = scoringState.effectiveEvents || scoringEvents;
+  // "Before" anchors on the event preceding the record in effective order
+  // (game_start guarantees eventIdx >= 1); "after" anchors on the record.
+  const anchor = c.insertWhere === 'before' ? eff[rec.eventIdx - 1] : eff[rec.eventIdx];
+  appendInsertEvent(anchor.id, 'pa', { playerId: c.insertPlayerId, result: result, inning: rec.inning, half: rec.half });
+  scoringState = deriveState(scoringEvents);
+  afterCardEdit(prevHalf);
+  cardEditor = null;
+  render();
+}
+
+function applyCardEndHalf() {
+  const rec = cardEditorRecord();
+  if (!rec) { closeCardEditor(); return; }
+  cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
+  const eff = scoringState.effectiveEvents || scoringEvents;
+  // Anchors after the LAST event still in the record's half (trailing
+  // runner corrections ride along) -- the mercy/manual outs:3 idiom.
+  const anchorId = findHalfEndAnchor(eff, rec.eventIdx);
+  appendInsertEvent(anchorId, 'adjust', { field: 'outs', value: 3 });
+  scoringState = deriveState(scoringEvents);
+  afterCardEdit(prevHalf);
+  cardEditor = null;
+  render();
+}
+
+// The newest surviving basepath-out event that erased the tapped cell's
+// kicker (runner out, rundown, or out-at-home) -- the target for the
+// "wasn't out" restore action. Scanned from the end so a re-out after an
+// earlier restore finds the live one; bounded below by the record itself.
+function cardFindRunnerOutEvent(rec) {
+  const undone = new Set();
+  scoringEvents.forEach(e => { if (e.type === 'undo' && e.payload) undone.add(e.payload.target_event_id); });
+  const eff = scoringState.effectiveEvents || scoringEvents;
+  for (let i = eff.length - 1; i > rec.eventIdx; i--) {
+    const e = eff[i], p = e.payload || {};
+    if (p.playerId !== rec.playerId || undone.has(e.id)) continue;
+    if ((e.type === 'runner' && p.action === 'out') || e.type === 'runner_out_hit_stands') return e;
+  }
+  return null;
+}
+
+// "Wasn't out -- back on base" (2026-07-14; the game-2 repair's Clayton
+// case): tombstones the basepath-out event, and the replay re-places the
+// runner from the surviving history (pushes and sets included).
+function applyCardRestoreRunner() {
+  const rec = cardEditorRecord();
+  if (!rec) { closeCardEditor(); return; }
+  const outEvt = cardFindRunnerOutEvent(rec);
+  if (!outEvt) { closeCardEditor(); return; }
+  cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
+  scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: outEvt.id });
+  scoringState = deriveState(scoringEvents);
+  afterCardEdit(prevHalf);
+  cardEditor = null;
+  render();
+}
+
+function applyCardRemove() {
+  const c = cardEditor;
+  const rec = cardEditorRecord();
+  if (!rec || !c) { closeCardEditor(); return; }
+  if (!c.confirmRemove) { c.confirmRemove = true; render(); return; } // two-tap confirm: removal has no correction-on-correction route back
+  cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
+  scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: rec.id });
+  scoringState = deriveState(scoringEvents);
+  afterCardEdit(prevHalf);
+  cardEditor = null;
+  render();
+}
+
+// Opponent line-score cell commit: decrements TOMBSTONE the newest
+// non-tombstoned +1 opp_run events of that inning (an append-only -1 would
+// replay after any later absolute score_them adjust and fight it);
+// increments append fresh opp_run events tagged to that inning, which the
+// engine's own inning-attribution guard keeps out of the live half's
+// mercy tally. Scoped to the current game (scan stops at its game_start).
+function applyOppInningRuns() {
+  const c = cardEditor;
+  if (!c || c.kind !== 'opp') { closeCardEditor(); return; }
+  const current = scoringState.runsByInning.them[c.inning] || 0;
+  const diff = c.runs - current;
+  if (diff === 0) { closeCardEditor(); return; }
+  cancelPendingAutoplay();
+  const prevHalf = scoringState.half;
+  if (diff > 0) {
+    for (let k = 0; k < diff; k++) {
+      scoringEvents = appendScoringEvent(scoringEvents, 'opp_run', { inning: c.inning, delta: 1 });
+    }
+  } else {
+    const undone = new Set();
+    scoringEvents.forEach(e => { if (e.type === 'undo' && e.payload) undone.add(e.payload.target_event_id); });
+    const eff = scoringState.effectiveEvents || scoringEvents;
+    let gameStartIdx = 0;
+    eff.forEach((e, i) => { if (e.type === 'game_start') gameStartIdx = i; });
+    const targets = [];
+    for (let i = eff.length - 1; i > gameStartIdx && targets.length < -diff; i--) {
+      const e = eff[i], p = e.payload || {};
+      if (e.type === 'opp_run' && p.inning === c.inning && (p.delta || 0) > 0 && !undone.has(e.id)) targets.push(e.id);
+    }
+    targets.forEach(id => { scoringEvents = appendScoringEvent(scoringEvents, 'undo', { target_event_id: id }); });
+  }
+  scoringState = deriveState(scoringEvents);
+  afterCardEdit(prevHalf);
+  cardEditor = null;
+  render();
+}
+
+// Insert-at-bat player pool: whole roster + mid-game subs. Anyone can be
+// inserted anywhere -- bat-arounds and improvised orders are real.
+function cardInsertPlayerPool() {
+  const overlay = (scoringState.rosterOverlay || []).map(p => ({ id: p.id, name: p.name }));
+  return DATA.players.map(p => ({ id: p.id, name: p.name })).concat(overlay)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderCardEditorSheet() {
+  if (cardEditor.kind === 'opp') return renderOppInningEditor();
+  const rec = cardEditorRecord();
+  if (!rec) { cardEditor = null; return h('div', {}); } // record vanished under us (undone elsewhere): degrade to nothing
+  const c = cardEditor;
+  const name = playerNameOf(rec.playerId);
+  const panel = h('div', { class: 'boxscore-panel cardedit-panel' });
+  panel.appendChild(h('div', { class: 'cardedit-heading', text: 'EDIT: ' + name.toUpperCase() + ' — ' + halfGlyph(rec.half, scoringState.isHome) + ' ' + ordinal(rec.inning) }));
+  panel.appendChild(h('div', { class: 'cardedit-sub', text: 'logged as ' + (RESULT_PLAIN_TEXT[rec.result] || rec.result).toLowerCase() }));
+  if (c.step === 'runnerOut') {
+    panel.appendChild(h('div', { class: 'cardedit-steplabel', text: 'who was out on this play?' }));
+    const candidates = cardRunnerOutCandidates(rec);
+    if (candidates.length === 0) {
+      panel.appendChild(h('div', { class: 'cardedit-sub', text: 'nobody was on base after this play' }));
+    }
+    candidates.forEach(cand => {
+      panel.appendChild(h('button', {
+        class: 'cardedit-action',
+        text: playerNameOf(cand.playerId) + ' — on ' + baseLabel(cand.base),
+        onclick: () => applyCardRunnerOut(cand.playerId),
+      }));
+    });
+    panel.appendChild(h('button', { class: 'correction-cancel', text: '← back', onclick: () => { c.step = null; render(); } }));
+  } else if (c.step === 'insertPick') {
+    panel.appendChild(h('div', { class: 'cardedit-steplabel', text: 'insert whose at-bat ' + c.insertWhere + ' this one?' }));
+    cardInsertPlayerPool().forEach(p => {
+      panel.appendChild(h('button', {
+        class: 'cardedit-action',
+        text: p.name,
+        onclick: () => { c.insertPlayerId = p.id; c.step = 'insertResult'; render(); },
+      }));
+    });
+    panel.appendChild(h('button', { class: 'correction-cancel', text: '← back', onclick: () => { c.step = null; c.insertWhere = null; render(); } }));
+  } else if (c.step === 'insertResult') {
+    panel.appendChild(h('div', { class: 'cardedit-steplabel', text: playerNameOf(c.insertPlayerId) + ' — what happened?' }));
+    panel.appendChild(renderFixLastResultPad(null, applyCardInsertPa));
+    panel.appendChild(h('button', { class: 'correction-cancel', text: '← back', onclick: () => { c.step = 'insertPick'; render(); } }));
+  } else {
+    panel.appendChild(renderFixLastResultPad(rec.result, applyCardAmend));
+    if (rec.kickerOut && cardFindRunnerOutEvent(rec)) {
+      panel.appendChild(h('button', { class: 'cardedit-action', text: '↩ ' + name + " wasn't out — back on base", onclick: applyCardRestoreRunner }));
+    }
+    panel.appendChild(h('button', { class: 'cardedit-action', text: '✕ runner out on this play…', onclick: () => { c.step = 'runnerOut'; render(); } }));
+    panel.appendChild(h('button', { class: 'cardedit-action', text: '+ insert at-bat before this one…', onclick: () => { c.step = 'insertPick'; c.insertWhere = 'before'; render(); } }));
+    panel.appendChild(h('button', { class: 'cardedit-action', text: '+ insert at-bat after this one…', onclick: () => { c.step = 'insertPick'; c.insertWhere = 'after'; render(); } }));
+    panel.appendChild(h('button', { class: 'cardedit-action', text: '⇄ end half-inning after this play', onclick: applyCardEndHalf }));
+    panel.appendChild(h('button', { class: 'cardedit-remove', text: c.confirmRemove ? 'tap again to remove this at-bat' : '✕ remove this at-bat', onclick: applyCardRemove }));
+    panel.appendChild(h('button', { class: 'correction-cancel', text: '✕ cancel', onclick: closeCardEditor }));
+    panel.appendChild(h('div', { class: 'cardedit-note', text: 'edits replay the whole game — glance at the line score after' }));
+  }
+  return panel;
+}
+
+function renderOppInningEditor() {
+  const c = cardEditor;
+  return h('div', { class: 'boxscore-panel cardedit-panel' }, [
+    h('div', { class: 'cardedit-heading', text: 'EDIT: ' + oppLabel() + ' — ' + ordinal(c.inning) + ' inning runs' }),
+    h('div', { class: 'adjust-stepper cardedit-oppstepper' }, [
+      h('button', { class: 'adjust-btn', text: '−', disabled: c.runs <= 0, onclick: () => { c.runs = Math.max(0, c.runs - 1); render(); } }),
+      h('span', { class: 'adjust-value', text: String(c.runs) }),
+      h('button', { class: 'adjust-btn', text: '+', onclick: () => { c.runs += 1; render(); } }),
+    ]),
+    h('button', { class: 'adjust-done cardedit-done', text: 'done', onclick: applyOppInningRuns }),
+    h('button', { class: 'correction-cancel', text: '✕ cancel', onclick: closeCardEditor }),
+    h('div', { class: 'cardedit-note', text: 'fixes that inning’s cell and the total together' }),
+  ]);
+}
+
 function renderBoxScoreBody() {
+  // Scorecard editor takeover (2026-07-14): tapping a cell swaps the
+  // canvases for the correction sheet; cancel returns to the card.
+  if (cardEditor) return renderCardEditorSheet();
   const L = scorecardLayout();
   const canvas = h('canvas', {
     class: 'scorecard-canvas',
+    onclick: (e) => onScorecardTap((e && e.offsetX) || 0, (e && e.offsetY) || 0),
     width: L.w * 2, height: L.h * 2,
     // Inline sizing is required here: the backing store is 2x the CSS
     // size for retina sharpness, and the CSS size depends on runtime
@@ -4571,6 +5069,11 @@ function renderScoringGameScreen() {
   } else {
     const leadoff = leadoffPromptBatter();
     if (leadoff) wrap.appendChild(renderLeadoffPrompt(leadoff));
+    // The adjust sheet replaces EITHER body since 2026-07-14 (the score
+    // bug that opens it is now tappable on defense too); every other
+    // correction sheet remains offense-only and renders through
+    // renderOffenseBody's own branch, unchanged.
+    else if (scoringState.half !== 'us' && scoringCorrection && scoringCorrection.mode === 'adjust') wrap.appendChild(renderCorrectionSheet());
     else wrap.appendChild(scoringState.half === 'us' ? renderOffenseBody() : renderDefenseBody());
   }
   return wrap;
@@ -4689,7 +5192,9 @@ function openStartGameFlow() {
     // isHome defaults false ("we kick first" — matches game 1 and the
     // engine's historical assumption); the toggle on this screen and the
     // adjust sheet's correction row are the two places it can change.
-    scoringLineupEditor = { mode: 'start', draft: seed, scheduleGameId: pickDefaultScheduleGameId(), unscheduledOpponent: '', isHome: false };
+    // mercyLimit defaults from the manifest (2026-07-14) -- one stepper tap
+    // pre-game beats two phantom runs mid-game.
+    scoringLineupEditor = { mode: 'start', draft: seed, scheduleGameId: pickDefaultScheduleGameId(), unscheduledOpponent: '', isHome: false, mercyLimit: mercyDefault() };
     // Leaving the portal happens HERE, once the editor actually opens
     // ("portal as neutral ground", 2026-07-12 second round) -- not at the
     // game-window prompt's accept tap. A PIN cancel between the two never
@@ -4780,6 +5285,7 @@ function commitStartGame() {
     lineup: ed.draft.slice(),
     innings: DATA.scoring.inningsPerGame || 7,
     isHome: !!ed.isHome, // 2026-07-12: home kicks second (bottom of each inning)
+    mercyLimit: ed.mercyLimit || mercyDefault(), // 2026-07-14: per-game mercy rule
   };
   if (fixture) payload.scheduleGameId = fixture.id;
   scoringEvents = appendScoringEvent(scoringEvents, 'game_start', payload);
@@ -4851,13 +5357,17 @@ function commitAddPlayer() {
 
 // ---- adjust sheet (score-bug tap) ----
 function openAdjustSheet() {
-  if (scoringCorrection || scoringBoxScoreOpen || !isScoringLive() || scoringState.half !== 'us') return;
+  // Defense included since 2026-07-14 (was offense-only) -- Jason's game-2
+  // field report: score/half corrections were unreachable exactly when the
+  // opponent's half needed them.
+  if (scoringCorrection || scoringBoxScoreOpen || !isScoringLive()) return;
   scoringCorrection = {
     mode: 'adjust',
     draft: {
       outs: scoringState.outs, inning: scoringState.inning, half: scoringState.half,
       scoreUs: scoringState.scoreUs, scoreThem: scoringState.scoreThem,
       isHome: scoringState.isHome, // 2026-07-12: post-start home/away correction path
+      mercyLimit: scoringState.mercyLimit, // 2026-07-14: mid-game mercy-rule correction
     },
   };
   render();
@@ -4887,6 +5397,8 @@ function adjustStep(field, delta) {
     }
   } else if (field === 'isHome') {
     d.isHome = !!delta; // toggle buttons pass the target value, not a step
+  } else if (field === 'mercyLimit') {
+    d.mercyLimit = Math.max(1, d.mercyLimit + delta); // 2026-07-14
   }
   render();
 }
@@ -4906,11 +5418,31 @@ function commitAdjust() {
   if (d.inning !== orig.inning) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'inning', value: d.inning });
   if (d.scoreUs !== orig.scoreUs) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'score_us', value: d.scoreUs });
   if (d.scoreThem !== orig.scoreThem) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'score_them', value: d.scoreThem });
+  if (d.mercyLimit !== orig.mercyLimit) scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'mercyLimit', value: d.mercyLimit }); // 2026-07-14
   scoringState = deriveState(scoringEvents);
   scoringCorrection = null;
   scoringClipFiredForBatter = null;
   maybeOpenLeadoffPrompt(orig.half); // an adjust-sheet outs/half edit can turn the half over too
   stopMusicIfBackOnDefense(orig.half); // ...and the reverse direction silences the walk-up (2026-07-13)
+  render();
+}
+
+// The adjust sheet's immediate half swap (2026-07-14). Deliberately NOT
+// part of the draft/commit cycle: turning the half over is a pace-of-game
+// action, not a correction to deliberate over. Same event and side-effect
+// family as the mercy banner's End half-inning.
+function applyAdjustEndHalf() {
+  if (!scoringCorrection || scoringCorrection.mode !== 'adjust') return;
+  const prevHalf = scoringState.half;
+  cancelPendingAutoplay();
+  scoringEvents = appendScoringEvent(scoringEvents, 'adjust', { field: 'outs', value: 3 });
+  scoringState = deriveState(scoringEvents);
+  scoringCorrection = null;
+  mercyDismissedForHalf = null;
+  musicPausedForMercyHalf = null;
+  scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
+  maybeOpenLeadoffPrompt(prevHalf);
+  stopMusicIfBackOnDefense(prevHalf);
   render();
 }
 
@@ -5043,6 +5575,21 @@ function wireDraftRowDrag(row, id, listEl) {
 // first/away). Lives inside the fixture card on both the scheduled and
 // unscheduled branches; if the coin toss lands after Start Game commits,
 // the adjust sheet's matching row is the correction path.
+// Mercy-limit stepper for the Start Game fixture card (2026-07-14):
+// captains settle the run cap pregame more often than the league book
+// does, so it's a per-game setting right where the game gets configured.
+// Same visual family as the adjust sheet's steppers.
+function renderMercyLimitRow(ed) {
+  return h('div', { class: 'kickorder-row mercy-limit-row' }, [
+    h('span', { class: 'kickorder-label', text: 'Mercy limit' }),
+    h('div', { class: 'adjust-stepper' }, [
+      h('button', { class: 'adjust-btn', text: '−', disabled: ed.mercyLimit <= 1, onclick: () => { ed.mercyLimit = Math.max(1, ed.mercyLimit - 1); render(); } }),
+      h('span', { class: 'adjust-value', text: ed.mercyLimit + ' runs' }),
+      h('button', { class: 'adjust-btn', text: '+', onclick: () => { ed.mercyLimit += 1; render(); } }),
+    ]),
+  ]);
+}
+
 function renderKickOrderToggle(ed) {
   return h('div', { class: 'kickorder-row' }, [
     h('span', { class: 'kickorder-label', text: 'We kick' }),
@@ -5081,6 +5628,7 @@ function renderScoringLineupEditor() {
           h('span', { class: 'fixture-change', text: 'change game', onclick: () => { fixturePicker = true; render(); } }),
         ]),
         renderKickOrderToggle(ed),
+        renderMercyLimitRow(ed), // 2026-07-14
       ]));
     } else {
       wrap.appendChild(h('div', { class: 'fixture-card' }, [
@@ -5093,6 +5641,7 @@ function renderScoringLineupEditor() {
           h('span', { class: 'fixture-change', text: 'pick from schedule instead', onclick: () => { fixturePicker = true; render(); } }),
         ]),
         renderKickOrderToggle(ed),
+        renderMercyLimitRow(ed), // 2026-07-14
       ]));
     }
   } else {
@@ -5301,7 +5850,19 @@ function renderAdjustSheet() {
         stepper('OUTS', d.outs, () => adjustStep('outs', -1), () => adjustStep('outs', 1), d.outs <= 0),
         h('div', { class: 'adjust-divider' }),
         stepper('INNING', inningDisplay, () => adjustStep('inning', -1), () => adjustStep('inning', 1), d.inning <= 1 && d.half === draftLeadoff),
+        h('div', { class: 'adjust-divider' }),
+        // Mercy limit joins the draft steppers (2026-07-14, Jason's game-2
+        // report: the rule can be learned -- or renegotiated by captains --
+        // mid-game). Commits one adjust {field:'mercyLimit'} like the rest.
+        stepper('MERCY', d.mercyLimit, () => adjustStep('mercyLimit', -1), () => adjustStep('mercyLimit', 1), d.mercyLimit <= 1),
       ]),
+      // Hard-coded half swap (2026-07-14, Jason: "in the moment the app
+      // needs to keep up with the pace of the game" -- mercy hit, a missed
+      // out, whatever the reason). IMMEDIATE, not draft: one tap commits
+      // adjust {outs:3} -- the same event the mercy banner's End
+      // half-inning uses -- with identical turnover side-effects, and the
+      // sheet closes. Fixing the score afterward is a separate, calmer tap.
+      h('button', { class: 'adjust-endhalf', text: '⇄ end half-inning now', onclick: applyAdjustEndHalf }),
       // Kick-order correction (2026-07-12, Jason: the coin toss can happen
       // after Start Game is committed) — same draft/commit semantics as the
       // steppers; commits ONE adjust {field:'isHome'} event when changed.
@@ -5948,12 +6509,17 @@ function render() {
   // navigate away or flip the half) means a stale sheet can never survive
   // a tab switch, a half-flip mid-correction, or a fresh game -- one
   // choke point instead of N places to remember.
-  const onLiveOffenseScreen = isScoringLive() && state.activeTab === 'lineup' && !state.editing && scoringState.half === 'us';
-  if (!onLiveOffenseScreen || scoringBoxScoreOpen) scoringCorrection = null;
+  const onLiveGameScreen = isScoringLive() && state.activeTab === 'lineup' && !state.editing;
+  const onLiveOffenseScreen = onLiveGameScreen && scoringState.half === 'us';
+  // The adjust sheet lives on BOTH halves since 2026-07-14 (the score bug
+  // opens it from the defense screen too) -- every other correction sheet
+  // is still offense-only and clears on a half flip as before.
+  const adjustSheetLegal = scoringCorrection && scoringCorrection.mode === 'adjust' && onLiveGameScreen;
+  if ((!onLiveOffenseScreen && !adjustSheetLegal) || scoringBoxScoreOpen) scoringCorrection = null;
   // The box score survives half flips (it shows both halves) but not
   // leaving the live game screen -- same choke-point pattern as
-  // scoringCorrection above.
-  if (!(isScoringLive() && state.activeTab === 'lineup' && !state.editing)) { scoringBoxScoreOpen = false; endGameConfirmOpen = false; }
+  // scoringCorrection above. The scorecard editor rides with it (2026-07-14).
+  if (!onLiveGameScreen) { scoringBoxScoreOpen = false; endGameConfirmOpen = false; cardEditor = null; }
   if (isScoringLive()) checkMercyMusicPause();
   // Portal: a live game always wins (rule 1 of 07's boot rule), same
   // choke-point pattern as the resets above -- if a game starts while the
