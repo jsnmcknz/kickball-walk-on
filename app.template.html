@@ -252,6 +252,12 @@
      per Jason's request after game 1). */
   .tile-countdown { width: 100%; font-size: 11px; opacity: 0.85; line-height: 1; }
   .tile:active { opacity: 0.85; }
+  /* TEAM sound tiles (2026-07-14, specs E/F): moss-bordered, ALL-CAPS --
+     the section reads as "sounds, not people". Declared BEFORE .tile.playing
+     on purpose: a playing team tile must still flip to the plum stop
+     treatment (later equal-specificity rule wins). */
+  .tile.team { border-color: var(--olive); letter-spacing: 0.04em; }
+  .grid-sect { letter-spacing: 0.12em; font-weight: 600; }
   /* Playing state: the tile itself becomes the stop control -- same plum
      accent as the NOW UP card's playing state, for one consistent
      "plum = tap to stop" signal across both tabs. */
@@ -820,6 +826,9 @@
   /* Mercy-limit stepper row on the Start Game fixture card (2026-07-14) --
      same row skeleton as the kick-order toggle above it. */
   .mercy-limit-row .adjust-stepper { flex: 1; justify-content: center; }
+  /* Mercy stepper inside the adjust sheet's static-settings box
+     (2026-07-14, Jason: it lives with kick order now -- set-once values). */
+  .kickorder-mercy-row { display: flex; justify-content: center; margin-top: 10px; }
 
   /* Scorecard editor (2026-07-14): takeover panel inside the box-score
      subpage. Reuses the pad + correction-cancel idioms; only the list
@@ -1321,11 +1330,17 @@
      signal colors), the scorecard frame (the canvas paints itself), the
      sync chip and badges (too small to machine), .empty-state CTAs.
      ============================================================ */
-  .score-bug, .result-tile:not(.dashed), .mercy-banner, .mercy-btn:not(.dashed),
+  /* NOTE (2026-07-14 round 2, Jason's on-device correction): the score
+     bug and the tab bar are deliberately ABSENT from this list -- they
+     stay flat, matching what the C mockup actually showed (flat bug with
+     its sunken box-score chip; flat pill bar with only the active tab
+     lit). The persistent orientation strips read quieter than the
+     controls; that contrast was the look he picked. */
+  .result-tile:not(.dashed), .mercy-banner, .mercy-btn:not(.dashed),
   .out-button, .runs-stepper, .defense-chip, .leadoff-preview-big, .leadoff-card,
   .leadoff-play, .last-action-chip, .fixlast-chip, .undolast-banner,
   .correction-out, .fixture-card, .sheet-card, .endgame-confirm, .draft-livechip,
-  .draft-row, .ondeck-chip, .tile, .tabbar, .order-btn, .done-btn, .recall-btn,
+  .draft-row, .ondeck-chip, .tile, .order-btn, .done-btn, .recall-btn,
   .navbtn, .boxscore-endgame-btn, .cardedit-action, .cardedit-remove,
   .adjust-endhalf, .adjust-done, .done-full, .pin-key, .addplayer-submit,
   .portal-nextgame-card, .portal-record-chip, .portal-leader-chip,
@@ -1342,19 +1357,12 @@
   }
   .nowup-card.playing { background-image: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.18)); }
 
-  /* Action-lit, exactly two surfaces (Jason's pick): the persistent
-     orientation strips. Score bug -- now a tappable control on both
-     screens -- gets a quiet moss ring; the .editing state's white ring
-     (higher specificity) still wins while its sheet is open. Active tab
-     gets the machined pill plus a soft moss glow. */
-  .score-bug {
-    border-color: rgba(130, 161, 103, 0.45);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07),
-                0 0 0 1px rgba(130, 161, 103, 0.30),
-                0 2px 14px rgba(130, 161, 103, 0.10);
-  }
+  /* Action-lit, exactly one surface after Jason's round-2 correction: the
+     ACTIVE TAB pill gets a soft moss glow on the otherwise-flat bar. (A
+     moss ring on the score bug shipped for a few hours and was pulled the
+     same day -- the bug stays flat with its plain grey border; its white
+     .editing ring is untouched.) */
   .tabbtn.active {
-    background-image: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(0,0,0,0.12));
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 0 10px rgba(130, 161, 103, 0.25);
   }
 </style>
@@ -2494,6 +2502,22 @@ async function decodeAll() {
     } catch (e) {
       console.error('Failed to decode clip for', p.id, e);
       unavailable.add(p.id);
+    }
+  }));
+  // teamSounds (2026-07-14, Jason -- specs E/F landing at last): decoded
+  // into the SAME buffers map as player clips, keyed by sound id, so
+  // playClip/stopCurrent/fades/watchdog/countdown all work unchanged --
+  // a team sound is just a "player" with no lineup existence. Ids share a
+  // namespace with player ids; build.py enforces uniqueness.
+  await Promise.all((DATA.teamSounds || []).map(async s => {
+    const clip = s.clips && s.clips[0];
+    if (!clip) { unavailable.add(s.id); return; }
+    try {
+      const arrBuf = b64ToArrayBuffer(clip.data);
+      buffers[s.id] = await ctx.decodeAudioData(arrBuf);
+    } catch (e) {
+      console.error('Failed to decode team sound', s.id, e);
+      unavailable.add(s.id);
     }
   }));
   // defaultClips (S1.6 "+new" song picker) -- decoded the same way, keyed
@@ -5996,18 +6020,25 @@ function renderAdjustSheet() {
   }
   const inningDisplay = halfGlyph(d.half, d.isHome) + d.inning;
   const draftLeadoff = d.isHome ? 'them' : 'us';
+  // Section order (2026-07-14, Jason): SCORES first -- it's the most
+  // common mid-game correction; then outs/inning + the half swap (pace
+  // controls); then the static game settings (kick order + mercy rule)
+  // that rarely change once a game is underway.
   return h('div', { class: 'sheet-wrap' }, [
     h('div', { class: 'sheet-card' }, [
       h('div', { class: 'sheet-title', text: 'Adjust' }),
+      h('div', { class: 'adjust-box scores' }, [
+        h('div', { class: 'adjust-scores-label', text: 'Scores' }),
+        h('div', { class: 'adjust-scores-row' }, [
+          stepper(teamAbbrev(), d.scoreUs, () => adjustStep('scoreUs', -1), () => adjustStep('scoreUs', 1), d.scoreUs <= 0),
+          h('div', { class: 'adjust-divider' }),
+          stepper(oppLabel(), d.scoreThem, () => adjustStep('scoreThem', -1), () => adjustStep('scoreThem', 1), d.scoreThem <= 0),
+        ]),
+      ]),
       h('div', { class: 'adjust-box' }, [
         stepper('OUTS', d.outs, () => adjustStep('outs', -1), () => adjustStep('outs', 1), d.outs <= 0),
         h('div', { class: 'adjust-divider' }),
         stepper('INNING', inningDisplay, () => adjustStep('inning', -1), () => adjustStep('inning', 1), d.inning <= 1 && d.half === draftLeadoff),
-        h('div', { class: 'adjust-divider' }),
-        // Mercy limit joins the draft steppers (2026-07-14, Jason's game-2
-        // report: the rule can be learned -- or renegotiated by captains --
-        // mid-game). Commits one adjust {field:'mercyLimit'} like the rest.
-        stepper('MERCY', d.mercyLimit, () => adjustStep('mercyLimit', -1), () => adjustStep('mercyLimit', 1), d.mercyLimit <= 1),
       ]),
       // Hard-coded half swap (2026-07-14, Jason: "in the moment the app
       // needs to keep up with the pace of the game" -- mercy hit, a missed
@@ -6016,22 +6047,17 @@ function renderAdjustSheet() {
       // half-inning uses -- with identical turnover side-effects, and the
       // sheet closes. Fixing the score afterward is a separate, calmer tap.
       h('button', { class: 'adjust-endhalf', text: '⇄ end half-inning now', onclick: applyAdjustEndHalf }),
-      // Kick-order correction (2026-07-12, Jason: the coin toss can happen
-      // after Start Game is committed) — same draft/commit semantics as the
-      // steppers; commits ONE adjust {field:'isHome'} event when changed.
+      // Static game settings, grouped (2026-07-14, Jason: kick order and
+      // the mercy rule are set-once values, not live corrections). Same
+      // draft/commit semantics as everything else on the sheet.
       h('div', { class: 'adjust-box kickorder' }, [
         h('div', { class: 'adjust-scores-label', text: 'We kick' }),
         h('div', { class: 'addplayer-toggle-row' }, [
           h('button', { class: 'addplayer-toggle' + (!d.isHome ? ' active' : ''), text: '1st · away', onclick: () => adjustStep('isHome', false) }),
           h('button', { class: 'addplayer-toggle' + (d.isHome ? ' active' : ''), text: '2nd · home', onclick: () => adjustStep('isHome', true) }),
         ]),
-      ]),
-      h('div', { class: 'adjust-box scores' }, [
-        h('div', { class: 'adjust-scores-label', text: 'Scores' }),
-        h('div', { class: 'adjust-scores-row' }, [
-          stepper(teamAbbrev(), d.scoreUs, () => adjustStep('scoreUs', -1), () => adjustStep('scoreUs', 1), d.scoreUs <= 0),
-          h('div', { class: 'adjust-divider' }),
-          stepper(oppLabel(), d.scoreThem, () => adjustStep('scoreThem', -1), () => adjustStep('scoreThem', 1), d.scoreThem <= 0),
+        h('div', { class: 'kickorder-mercy-row' }, [
+          stepper('MERCY LIMIT', d.mercyLimit, () => adjustStep('mercyLimit', -1), () => adjustStep('mercyLimit', 1), d.mercyLimit <= 1),
         ]),
       ]),
       h('div', { class: 'adjust-actions' }, [
@@ -6876,6 +6902,44 @@ function renderGridPlay() {
     renderWordmark(),
   ]);
   wrap.appendChild(top);
+
+  // TEAM sounds section, above the player grid (2026-07-14, Jason --
+  // mockup-normative per 05: "stinger/hype tiles, moss borders, ALL-CAPS
+  // names; one sound at a time; playing tile is the plum stop control").
+  // Same tile skeleton and tap-to-stop semantics as the player tiles; the
+  // shared buffers map means playClip does the rest. Renders nothing when
+  // the manifest carries no teamSounds -- adding sounds is a config
+  // change, never surgery (firm principle 3).
+  if ((DATA.teamSounds || []).length > 0) {
+    wrap.appendChild(h('div', { class: 'grid-hint grid-sect', text: 'TEAM' }));
+    const teamGrid = h('div', { class: 'grid' });
+    DATA.teamSounds.forEach(s => {
+      const isPlaying = playingId === s.id;
+      const cls = 'tile team' + (isPlaying ? ' playing' : '') + (unavailable.has(s.id) ? ' unavailable' : '');
+      let countdownEl = null;
+      if (isPlaying) {
+        const r = currentRemainingSeconds();
+        countdownEl = h('span', { class: 'tile-countdown', text: r !== null ? formatCountdown(r) : '' });
+        liveCountdownUpdate = () => {
+          const rr = currentRemainingSeconds();
+          if (rr !== null) countdownEl.textContent = formatCountdown(rr);
+        };
+      }
+      teamGrid.appendChild(h('button', { class: cls, onclick: () => {
+        if (isPlaying) {
+          if (Date.now() - playStartedAtMs < STOP_TAP_GRACE_MS) return; // double-tap guard, same as everywhere
+          stopCurrent(true);
+        }
+        else playClip(s.id);
+      }}, [
+        h('span', { text: (s.name || s.id).toUpperCase() }),
+        isPlaying ? h('span', { class: 'speaker', text: '⏹' }) : null,
+        countdownEl,
+      ]));
+    });
+    wrap.appendChild(teamGrid);
+  }
+
   wrap.appendChild(h('div', { class: 'grid-hint', text: 'A → Z by row' }));
 
   const grid = h('div', { class: 'grid' });

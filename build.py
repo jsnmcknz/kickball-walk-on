@@ -85,6 +85,19 @@ def load_manifest(path: Path) -> dict:
         if not isinstance(s["clips"], list) or not s["clips"]:
             raise BuildError(f"teamSounds[{i}] ('{s.get('id')}') has no clips listed.")
 
+    # Team-sound ids share the decoded-buffer namespace with player ids in
+    # the app (2026-07-14 -- playClip resolves both from one map), so a
+    # collision would silently shadow a player's walk-up. Fail loudly here.
+    seen_ids = set()
+    for p in data["players"]:
+        if p["id"] in seen_ids:
+            raise BuildError(f"Duplicate id '{p['id']}' in players.")
+        seen_ids.add(p["id"])
+    for s in team_sounds:
+        if s["id"] in seen_ids:
+            raise BuildError(f"teamSounds id '{s['id']}' collides with another player/sound id.")
+        seen_ids.add(s["id"])
+
     default_clips = data.get("defaultClips", [])
     if not isinstance(default_clips, list):
         raise BuildError("Manifest 'defaultClips' must be an array if present.")

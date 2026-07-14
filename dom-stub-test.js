@@ -284,6 +284,8 @@ global.__hooks = {
   setBoxScoreOpen: function(v) { scoringBoxScoreOpen = v; },
   // 2026-07-14 round 2: post-repair scorecard polish.
   scorecardShareFilename: function(rec) { return scorecardShareFilename(rec); },
+  setBufferForTest: function(id, buf) { buffers[id] = buf; }, // team-sound tests skip real decode
+  getPlayingIdNow: function() { return playingId; },
   scorecardDisplayInnings: function() { return scorecardDisplayInnings(); },
   lineCellPlayed: function(rowKey, i) { return lineCellPlayed(rowKey, i); },
   pickDefaultScheduleGameId: function() { return pickDefaultScheduleGameId(); },
@@ -3565,6 +3567,66 @@ async function main() {
     hooks.setScoringEvents([]);
     render();
     console.log('87. Scorecard polish: dated share filename, activity-capped ended games (away + home), sticky names on both surfaces: OK');
+  }
+
+  // 88. Team sounds + adjust-sheet regrouping (2026-07-14 round 2): TEAM
+  // tiles render above the player grid and play/stop through the shared
+  // clip machinery; the adjust sheet leads with Scores and files the mercy
+  // stepper under the static We-kick settings box.
+  {
+    function findAll(cls, root) {
+      const out = [];
+      const walk = (node) => { if (node.classList && node.classList.contains(cls)) out.push(node); (node._children || []).forEach(walk); };
+      walk(root || screen);
+      return out;
+    }
+    // -- TEAM section --
+    hooks.getDATA().teamSounds = [
+      { id: 'airhorn', name: 'Airhorn', kind: 'stinger', clips: [{ mime: 'audio/mp4', data: '' }] },
+      { id: 'charge', name: 'Charge!', kind: 'hype', clips: [{ mime: 'audio/mp4', data: '' }] },
+    ];
+    hooks.setBufferForTest('airhorn', { duration: 2 });
+    hooks.setBufferForTest('charge', { duration: 3 });
+    hooks.setScoringEvents([]);
+    hooks.getState().activeTab = 'grid';
+    hooks.getState().editing = false;
+    render();
+    const teamTiles = findAll('team');
+    assert(teamTiles.length === 2, 'both team-sound tiles render: ' + teamTiles.length);
+    assert(teamTiles[0].textContent.indexOf('AIRHORN') !== -1, 'names render ALL-CAPS');
+    teamTiles[0].click();
+    assert(hooks.getPlayingIdNow() === 'airhorn', 'tapping a team tile plays through the shared machinery: ' + hooks.getPlayingIdNow());
+    render();
+    const playingTile = findAll('team').find(t => t.classList.contains('playing'));
+    assert(playingTile, 'playing team tile flips to the plum stop treatment');
+    hooks.backdatePlayStart(1000); // clear the double-tap guard before the deliberate stop
+    playingTile.click();
+    assert(hooks.getPlayingIdNow() === null, 'tap-again stops the sound');
+    // Empty manifest renders no TEAM section.
+    hooks.getDATA().teamSounds = [];
+    render();
+    assert(findAll('team').length === 0, 'no TEAM section without manifest sounds');
+    // -- adjust sheet order --
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Order FC', innings: 7, lineup: ['alice', 'bob'], mercyLimit: 6 });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup';
+    render();
+    const skip = screen.querySelectorAll('.leadoff-skip')[0];
+    if (skip) skip.dispatch('click');
+    hooks.openAdjustSheet();
+    render();
+    const boxes = findAll('adjust-box');
+    assert(boxes.length >= 3, 'sheet renders its three sections: ' + boxes.length);
+    assert(boxes[0].classList.contains('scores'), 'Scores box leads the sheet');
+    const kickorderBox = boxes.find(b => b.classList.contains('kickorder'));
+    assert(kickorderBox, 'static-settings box present');
+    assert(kickorderBox.textContent.indexOf('MERCY LIMIT') !== -1, 'mercy stepper lives with the We-kick settings');
+    assert(boxes[1].textContent.indexOf('MERCY') === -1, 'and no longer with outs/inning');
+    hooks.closeScoringCorrection();
+    hooks.setScoringEvents([]);
+    render();
+    console.log('88. Team sounds render/play/stop via shared machinery; adjust sheet leads with Scores, mercy files under We-kick: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
