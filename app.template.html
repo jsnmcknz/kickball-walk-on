@@ -411,7 +411,13 @@
   /* top offset is set inline per-render from scorecardLayout().totalsTop
      (runtime geometry, same exception as the canvas sizing). */
   .boxscore-totals-sticky { position: absolute; top: 0; right: 0; z-index: 2; }
-  .scorecard-canvas, .scorecard-totals-canvas {
+  /* Sticky-left names overlay (2026-07-14): pointer-events none is
+     load-bearing -- horizontal pans that START on a name must reach the
+     scroller underneath, or the card refuses to scroll from its left
+     edge. The grid canvas's tap handler compensates for the taps this
+     lets through (see renderBoxScoreBody). */
+  .boxscore-names-sticky { position: absolute; top: 0; left: 0; z-index: 2; pointer-events: none; }
+  .scorecard-canvas, .scorecard-totals-canvas, .scorecard-names-canvas {
     display: block; background: transparent; border: none; /* frame moved to .boxscore-grid-wrap, 2026-07-13 */
   }
   .boxscore-close { margin-top: 8px; }
@@ -1712,6 +1718,13 @@ function deriveState(events) {
     thisHalfRunsThem: 0,
     thisHalfRunsUs: 0,
     runners: {},
+    // Which half-innings actually saw recorded events (pa / opp_out /
+    // opp_run), keyed side -> inning -> true (2026-07-14): the scorecard
+    // uses this on COMPLETED games to stop drawing at the last half that
+    // really happened -- the app flips to the next half on the final out
+    // before End Game can be tapped, and that never-begun half's hanging
+    // "0" shouldn't outlive the game.
+    halfActivity: { us: {}, them: {} },
     paLog: [], runsLog: [],
     // Per-inning run tallies for the scorecard's line score (2026-07-08
     // round 5). Objects keyed by inning number, not arrays -- innings can
@@ -1900,6 +1913,7 @@ function deriveState(events) {
       st.isHome = !!p.isHome;
       st.inning = 1; st.half = st.isHome ? 'them' : 'us'; st.outs = 0;
       st.scoreUs = 0; st.scoreThem = 0; st.thisHalfRunsThem = 0; st.thisHalfRunsUs = 0; st.runners = {};
+      st.halfActivity = { us: {}, them: {} };
       st.paLog = []; st.runsLog = [];
       // Full derived-state reset (bug fix, 2026-07-12 audit): these two
       // were being carried across game_start boundaries. runsByInning made
@@ -1947,6 +1961,7 @@ function deriveState(events) {
       st.lineup.forEach(pid => { if (!(pid in st.joinedInning)) st.joinedInning[pid] = st.inning; });
     } else if (e.type === 'pa') {
       const result = p.result, batter = p.playerId;
+      st.halfActivity[p.half === 'them' ? 'them' : 'us'][p.inning || st.inning] = true;
       if (result === 'SKIP') {
         // No PA happened -- pointer advances, excluded from every stat.
         st.lastAction = { kind: 'pa', playerId: batter, result: result, eventIdx: idx };
@@ -2090,6 +2105,7 @@ function deriveState(events) {
       }
     } else if (e.type === 'opp_out') {
       st.outs += 1;
+      st.halfActivity.them[p.inning || st.inning] = true;
       st.lastAction = { kind: 'opp_out', eventIdx: idx };
       flipHalfIfThreeOuts();
     } else if (e.type === 'opp_run') {
@@ -2102,6 +2118,7 @@ function deriveState(events) {
       // live-logged opp runs carry the current inning, so this is a no-op
       // for the historical replay path.
       if (oppInning === st.inning) st.thisHalfRunsThem += (p.delta || 0);
+      st.halfActivity.them[oppInning] = true;
       st.runsByInning.them[oppInning] = (st.runsByInning.them[oppInning] || 0) + (p.delta || 0);
       st.lastAction = { kind: 'opp_run', eventIdx: idx };
     } else if (e.type === 'adjust') {
@@ -4125,6 +4142,44 @@ function toggleBoxScore() {
 // column for it, exactly like a hand-kept card. Chronological paLog
 // iteration keeps columns in true game order; innings not yet played get
 // one empty column each.
+/* Completed-game display window (2026-07-14, Jason's post-repair list):
+   the engine flips to the next half on the final out, so by the time End
+   Game is tapped st.inning points one half PAST the last real play -- a
+   hanging "0" for a half-inning that never happened. On ENDED games the
+   scorecard stops at the last half with recorded activity (halfActivity);
+   live games keep the existing behavior (the in-progress half must show
+   before its first event). Half order encodes as inning*2 + bottom-flag,
+   leadoff-aware. */
+function scorecardHalfNum(inning, side, st) {
+  const leadoff = st.isHome ? 'them' : 'us';
+  return inning * 2 + (side === leadoff ? 0 : 1);
+}
+function scorecardLastActiveHalfNum(st) {
+  let best = 0;
+  ['us', 'them'].forEach(side => {
+    const m = (st.halfActivity && st.halfActivity[side]) || {};
+    Object.keys(m).forEach(i => {
+      const n = scorecardHalfNum(Number(i), side, st);
+      if (n > best) best = n;
+    });
+  });
+  return best;
+}
+function scorecardDisplayInnings() {
+  const st = scoringState;
+  if (!st.gameEnded) return st.inning;
+  const best = scorecardLastActiveHalfNum(st);
+  return best ? (best >> 1) : st.inning;
+}
+function lineCellPlayed(rowKey, i) {
+  const st = scoringState;
+  const leadoff = st.isHome ? 'them' : 'us';
+  if (st.gameEnded) return scorecardHalfNum(i, rowKey, st) <= scorecardLastActiveHalfNum(st);
+  // Live predicates, unchanged: the top (leadoff) half of inning i has
+  // begun once the game reaches it; the bottom only once the top is done.
+  return rowKey === leadoff ? (i <= st.inning) : (i < st.inning || (i === st.inning && st.half !== leadoff));
+}
+
 function scorecardColumns() {
   const cols = [];
   const colIdxByKey = {};
@@ -4144,7 +4199,8 @@ function scorecardColumns() {
   // innings was never meaningful -- it just varies game to game and isn't
   // knowable in advance. The current in-progress inning still gets a
   // (possibly empty) column so it's visible before its first at-bat.
-  const maxInning = scoringState.inning;
+  // Ended games stop at the last half with real activity (2026-07-14).
+  const maxInning = scorecardDisplayInnings();
   for (let i = 1; i <= maxInning; i++) {
     if (!cols.some(c => c.inning === i)) cols.push({ inning: i, pass: 0 });
   }
@@ -4192,7 +4248,7 @@ function scorecardLayout() {
   const cellW = CELL_W;
   return {
     cols: colInfo.cols, cellMap: colInfo.cellMap,
-    innings: scoringState.inning, // only innings actually played -- see scorecardColumns
+    innings: scorecardDisplayInnings(), // only innings actually played -- see scorecardColumns; activity-capped on ended games (2026-07-14)
     lineup: lineup, pad: pad, nameW: nameW, totW: totW, rColW: rColW,
     cellW: cellW, rowH: rowH, headH: headH, lineH: lineH,
     w: pad * 2 + nameW + cellW * nCols + rColW, // grid canvas: name + inning cells + the line score's R overhang
@@ -4305,10 +4361,10 @@ function drawScorecard(canvas) {
     g.fillStyle = SCORECARD_C.muted;
     g.font = '600 10px ' + font;
     g.fillText(String(i), x, lsY + 6);
-    // Top (leadoff) half of inning i has begun once the game reaches it;
-    // the bottom half only once the top half is done (or the game moved on).
-    const topPlayed = i <= st.inning;
-    const botPlayed = i < st.inning || (i === st.inning && st.half !== leadoff);
+    // Shared predicate with the hit-test; activity-capped on ended games
+    // (2026-07-14) so a never-begun half shows '·', not a hanging 0.
+    const topPlayed = lineCellPlayed(topRow.key, i);
+    const botPlayed = lineCellPlayed(botRow.key, i);
     // Number emphasis travels with OUR team (white) vs theirs (muted),
     // whichever row each ends up on.
     g.font = '600 14px ' + font;
@@ -4405,9 +4461,15 @@ function drawScorecard(canvas) {
         // FLY/GND/K result AND a basepath/home out on a hit (markKickerOut
         // stamps the same field either way), so every out reads the same.
         g.textAlign = 'left';
+        // Baseline 'top' with a matched px(2)ish inset (2026-07-14, Jason:
+        // the old middle-baseline y+px(8) left visibly more margin above
+        // the digit than beside it) -- numeral ink starts a hair below the
+        // em-box top, so px(2) vertical ≈ px(3) horizontal optically.
+        g.textBaseline = 'top';
         g.font = '700 ' + px(7) + 'px ' + font;
         g.fillStyle = SCORECARD_C.plum;
-        g.fillText(String(rec.outNumberInHalf), gridX + c * L.cellW + px(3), y + px(8));
+        g.fillText(String(rec.outNumberInHalf), gridX + c * L.cellW + px(3), y + px(2));
+        g.textBaseline = 'middle';
         g.textAlign = 'center';
       }
       if (rec.endedHalf) { // third-out marker, LOWER-right corner (iteration 2)
@@ -4419,6 +4481,57 @@ function drawScorecard(canvas) {
         g.fill();
       }
     }
+  });
+}
+
+// Sticky-left names panel (2026-07-14, Jason's post-repair list: "it
+// becomes difficult to recall which player is on each line when reading
+// later innings"). Same part-sticky-canvas trick as the totals panel: the
+// grid canvas still draws names/labels itself (the share composite and the
+// unscrolled view need them there); this narrow canvas overlays them with
+// a solid tile fill so the grid visually disappears underneath when
+// scrolled. pointer-events: none in CSS -- pans must fall through to the
+// scroller; the grid canvas's own tap handler guards against taps landing
+// on cells hidden under this overlay.
+function drawScorecardNames(canvas) {
+  if (!canvas.getContext) return; // DOM-stub harness: layout only, no drawing
+  const L = scorecardLayout();
+  const g = canvas.getContext('2d');
+  const dpr = 2;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = L.pad + L.nameW;
+  g.clearRect(0, 0, w, L.h);
+  g.fillStyle = SCORECARD_C.tile;
+  g.fillRect(0, 0, w, L.h);
+  // Right seam, same idiom as the totals panel's left seam.
+  g.strokeStyle = SCORECARD_C.rule;
+  g.lineWidth = 1;
+  g.beginPath(); g.moveTo(w - 0.5, 0); g.lineTo(w - 0.5, L.h); g.stroke();
+  const font = "-apple-system, 'Segoe UI', system-ui, sans-serif";
+  const px = (n) => Math.round(n * ROW_SCALE);
+  const st = scoringState;
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  // Line-score team labels (they scroll away with the grid otherwise --
+  // same recall problem as the names).
+  const lsY = L.pad;
+  const topRow = st.isHome
+    ? { label: (st.opponent || 'THEM').slice(0, 6).toUpperCase(), color: SCORECARD_C.muted }
+    : { label: teamAbbrev(), color: SCORECARD_C.pickle };
+  const botRow = st.isHome
+    ? { label: teamAbbrev(), color: SCORECARD_C.pickle }
+    : { label: (st.opponent || 'THEM').slice(0, 6).toUpperCase(), color: SCORECARD_C.muted };
+  g.font = '600 14px ' + font;
+  g.fillStyle = topRow.color;
+  g.fillText(topRow.label, L.pad, lsY + 22);
+  g.fillStyle = botRow.color;
+  g.fillText(botRow.label, L.pad, lsY + 38);
+  // Player names, identical row geometry + highlight rule to drawScorecard.
+  const gridY = L.pad + L.lineH + L.headH;
+  g.font = '500 ' + px(9) + 'px ' + font;
+  L.lineup.forEach((pid, row) => {
+    const cy = gridY + row * L.rowH + L.rowH / 2;
+    g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us') ? SCORECARD_C.pickle : SCORECARD_C.text;
+    g.fillText(playerNameOf(pid).slice(0, 8), L.pad, cy);
   });
 }
 
@@ -4515,8 +4628,7 @@ function scorecardHitTest(x, y) {
       const cx = lsGridX + (ci + 0.5) * L.cellW;
       if (Math.abs(x - cx) > L.cellW / 2) continue;
       // Only halves that have actually begun (same predicate the draw uses).
-      const played = rowKey === leadoff ? (i <= st.inning) : (i < st.inning || (i === st.inning && st.half !== leadoff));
-      return played ? { kind: 'line', team: rowKey, inning: i } : null;
+      return lineCellPlayed(rowKey, i) ? { kind: 'line', team: rowKey, inning: i } : null;
     }
     return null;
   }
@@ -4797,7 +4909,18 @@ function renderBoxScoreBody() {
   const L = scorecardLayout();
   const canvas = h('canvas', {
     class: 'scorecard-canvas',
-    onclick: (e) => onScorecardTap((e && e.offsetX) || 0, (e && e.offsetY) || 0),
+    onclick: (e) => {
+      const x = (e && e.offsetX) || 0, y = (e && e.offsetY) || 0;
+      // The sticky names overlay is pointer-transparent (pans must reach
+      // the scroller), so a tap on a NAME arrives here at the grid's
+      // scrolled offset -- which could be a cell hidden under the overlay.
+      // Ignore taps in the overlay's viewport zone once scrolled.
+      let scrollLeft = 0;
+      const scroller = canvas.parentElement && canvas.parentElement.parentElement;
+      if (scroller && typeof scroller.scrollLeft === 'number') scrollLeft = scroller.scrollLeft;
+      if (scrollLeft > 0 && (x - scrollLeft) < (L.pad + L.nameW)) return;
+      onScorecardTap(x, y);
+    },
     width: L.w * 2, height: L.h * 2,
     // Inline sizing is required here: the backing store is 2x the CSS
     // size for retina sharpness, and the CSS size depends on runtime
@@ -4812,6 +4935,12 @@ function renderBoxScoreBody() {
     style: 'width:' + L.totalsW + 'px;height:' + L.totalsH + 'px',
   });
   drawScorecardTotals(totalsCanvas);
+  const namesCanvas = h('canvas', {
+    class: 'scorecard-names-canvas',
+    width: (L.pad + L.nameW) * 2, height: L.h * 2,
+    style: 'width:' + (L.pad + L.nameW) + 'px;height:' + L.h + 'px',
+  });
+  drawScorecardNames(namesCanvas);
   const wrap = h('div', { class: 'boxscore-panel' }, [
     h('div', { class: 'boxscore-grid-wrap' }, [
       // Inner width:max-content wrapper carries padding-right = the sticky
@@ -4823,6 +4952,7 @@ function renderBoxScoreBody() {
       h('div', { class: 'boxscore-scroll' }, [
         h('div', { class: 'boxscore-scroll-inner', style: 'padding-right:' + L.totalsW + 'px' }, [canvas]),
       ]),
+      h('div', { class: 'boxscore-names-sticky' }, [namesCanvas]), // sticky-left names (2026-07-14)
       h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
     ]),
     h('button', { class: 'correction-cancel boxscore-close', text: '✕ close box score', onclick: toggleBoxScore }),
@@ -6359,6 +6489,18 @@ function composeScorecardImage(rec) {
   g.fillText('FINAL ' + verdict.text, L.w + L.totalsW - L.pad, L.h + footerH / 2 + 2);
   return out;
 }
+// Dated export filename (2026-07-14, Jason: 'scorecard-2026-07-13.png').
+// Fixture date is authoritative (it's the game's real calendar slot);
+// falls back to the game_start event's own timestamp, then to nothing.
+function scorecardShareFilename(rec) {
+  const fixture = scheduleFixtureById(rec.scheduleGameId);
+  let d = fixture && fixture.date ? String(fixture.date).slice(0, 10) : '';
+  if (!d && rec.events) {
+    const start = rec.events.find(e => e.type === 'game_start');
+    if (start && start.ts) d = String(start.ts).slice(0, 10);
+  }
+  return 'scorecard' + (d ? '-' + d : '') + '.png';
+}
 function shareScorecard(rec) {
   // The tap arrives AFTER render() restored the live game's state, so the
   // historic game gets re-swapped in for the compose -- same save/restore
@@ -6381,7 +6523,7 @@ function shareScorecard(rec) {
   if (!(composed.toBlob && typeof File === 'function' && navigator.share && navigator.canShare)) { fallback(); return; }
   composed.toBlob((blob) => {
     if (!blob) { fallback(); return; }
-    const file = new File([blob], 'scorecard.png', { type: 'image/png' });
+    const file = new File([blob], scorecardShareFilename(rec), { type: 'image/png' });
     if (navigator.canShare({ files: [file] })) {
       // A user-cancelled sheet rejects -- that's a valid outcome, not an
       // error; any OTHER failure falls back to the press-and-hold image.
@@ -6418,6 +6560,8 @@ function renderPortalGameScorecard() {
     drawScorecard(canvas);
     const totalsCanvas = h('canvas', { class: 'scorecard-totals-canvas', width: L.totalsW * 2, height: L.totalsH * 2, style: 'width:' + L.totalsW + 'px;height:' + L.totalsH + 'px' });
     drawScorecardTotals(totalsCanvas);
+    const namesCanvas = h('canvas', { class: 'scorecard-names-canvas', width: (L.pad + L.nameW) * 2, height: L.h * 2, style: 'width:' + (L.pad + L.nameW) + 'px;height:' + L.h + 'px' });
+    drawScorecardNames(namesCanvas); // sticky-left names (2026-07-14) -- same overlay as the live box score
     wrap = h('div', {}, [
       renderPortalHeader('✕ close', () => { portalScorecardOpen = false; render(); }),
       h('div', { class: 'boxscore-panel' }, [
@@ -6425,6 +6569,7 @@ function renderPortalGameScorecard() {
           h('div', { class: 'boxscore-scroll' }, [
             h('div', { class: 'boxscore-scroll-inner', style: 'padding-right:' + L.totalsW + 'px' }, [canvas]),
           ]),
+          h('div', { class: 'boxscore-names-sticky' }, [namesCanvas]),
           h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
         ]),
         h('button', { class: 'portal-view-scorecard-btn scorecard-share-btn', text: '↑ share scorecard', onclick: () => shareScorecard(rec) }),

@@ -282,6 +282,10 @@ global.__hooks = {
   toggleBoxScore: function() { return toggleBoxScore(); },
   getBoxScoreOpen: function() { return scoringBoxScoreOpen; },
   setBoxScoreOpen: function(v) { scoringBoxScoreOpen = v; },
+  // 2026-07-14 round 2: post-repair scorecard polish.
+  scorecardShareFilename: function(rec) { return scorecardShareFilename(rec); },
+  scorecardDisplayInnings: function() { return scorecardDisplayInnings(); },
+  lineCellPlayed: function(rowKey, i) { return lineCellPlayed(rowKey, i); },
   pickDefaultScheduleGameId: function() { return pickDefaultScheduleGameId(); },
   scheduleFixtureById: function(id) { return scheduleFixtureById(id); },
   overlayBufferFor: function(id) { return overlayBufferFor(id); },
@@ -3477,6 +3481,88 @@ async function main() {
     hooks.setScoringEvents([]);
     render();
     console.log('86. Restore runner from a cell: basepath out tombstoned, replay re-places the runner: OK');
+  }
+
+  // 87. Post-repair scorecard polish (2026-07-14 round 2): dated share
+  // filename; sticky names canvas on both scorecard surfaces; completed
+  // games stop at the last half with recorded activity (the hanging
+  // next-half 0 dies with the game).
+  {
+    function findClass(cls, root) {
+      let found = null;
+      const walk = (node) => { if (found) return; if (node.classList && node.classList.contains(cls)) found = node; (node._children || []).forEach(walk); };
+      walk(root || screen);
+      return found;
+    }
+    // -- dated share filename: fixture date wins, game_start ts is the fallback --
+    hooks.getDATA().schedule = [{ id: 'gD', date: '2026-07-13', time: '20:30', opponent: 'Otter Nonsense' }];
+    let ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Otter Nonsense', innings: 7, lineup: ['alice'], scheduleGameId: 'gD' });
+    assert(hooks.scorecardShareFilename({ scheduleGameId: 'gD', events: ev }) === 'scorecard-2026-07-13.png', 'fixture date lands in the filename');
+    const tsDate = String(ev[0].ts).slice(0, 10);
+    assert(hooks.scorecardShareFilename({ scheduleGameId: 'nope', events: ev }) === 'scorecard-' + tsDate + '.png', 'game_start ts is the fallback');
+    // -- activity cap: away game, 1 full inning, flip leaves us in top 2, then game_end --
+    ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Cap FC', innings: 7, lineup: ['alice', 'bob', 'charlie'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'HR', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    hooks.setScoringEvents(ev);
+    assert(hooks.getScoringState().inning === 2 && hooks.getScoringState().half === 'us', 'sanity: flip left us hanging in the 2nd');
+    assert(hooks.scorecardDisplayInnings() === 2, 'LIVE game still shows the in-progress inning');
+    assert(hooks.lineCellPlayed('us', 2) === true, 'live: the fresh half reads as begun');
+    ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'game_end', { final_us: 1, final_them: 0 });
+    hooks.setScoringEvents(ev);
+    assert(hooks.scorecardDisplayInnings() === 1, 'ENDED game stops at the last active inning: ' + hooks.scorecardDisplayInnings());
+    assert(hooks.lineCellPlayed('us', 1) && hooks.lineCellPlayed('them', 1), 'both real halves still show');
+    assert(hooks.lineCellPlayed('us', 2) === false, 'the never-begun half is gone');
+    assert(hooks.scorecardLayout().innings === 1, 'layout window follows');
+    // -- home-game mirror: them top 1 + us bottom 1, flip to top 2, end --
+    ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Cap Home', innings: 7, lineup: ['alice', 'bob', 'charlie'], isHome: true });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'opp_out', { inning: 1 });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'bob', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'charlie', result: 'FLY', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'game_end', { final_us: 0, final_them: 0 });
+    hooks.setScoringEvents(ev);
+    assert(hooks.scorecardDisplayInnings() === 1 && hooks.lineCellPlayed('them', 2) === false, 'home-game mirror: hanging top-2 suppressed');
+    // -- sticky names canvas renders on the live box score --
+    ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Names FC', innings: 7, lineup: ['alice', 'bob'] });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: '1B', inning: 1, half: 'us' });
+    hooks.setScoringEvents(ev);
+    hooks.getState().activeTab = 'lineup';
+    hooks.getState().editing = false;
+    hooks.setBoxScoreOpen(true);
+    render();
+    assert(findClass('scorecard-names-canvas'), 'names canvas overlays the live box score');
+    assert(findClass('boxscore-names-sticky'), 'inside its sticky-left wrapper');
+    hooks.setBoxScoreOpen(false);
+    // -- and on the portal scorecard viewer --
+    hooks.getDATA().schedule = [{ id: 'gN', date: '2026-07-13', time: '20:30', opponent: 'Names FC' }];
+    ev = [];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Names FC', innings: 7, lineup: ['alice', 'bob'], scheduleGameId: 'gN' });
+    ev = hooks.appendScoringEvent(ev, 'pa', { playerId: 'alice', result: 'HR', inning: 1, half: 'us' });
+    ev = hooks.appendScoringEvent(ev, 'game_end', { final_us: 1, final_them: 0 });
+    hooks.setScoringEvents(ev);
+    hooks.setPortalActiveForTest(true);
+    hooks.setPortalScreen('gameDetail');
+    hooks.setPortalGameDetailId('gN');
+    hooks.setPortalScorecardOpen(true);
+    render();
+    assert(findClass('scorecard-names-canvas'), 'names canvas overlays the portal scorecard too');
+    hooks.setPortalScorecardOpen(false);
+    hooks.setPortalActiveForTest(false);
+    hooks.setScoringEvents([]);
+    render();
+    console.log('87. Scorecard polish: dated share filename, activity-capped ended games (away + home), sticky names on both surfaces: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after
