@@ -408,16 +408,15 @@
      gesture (its z-index panel isn't part of the scroller). */
   .boxscore-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
   .boxscore-scroll-inner { width: max-content; }
-  /* top offset is set inline per-render from scorecardLayout().totalsTop
-     (runtime geometry, same exception as the canvas sizing). */
-  .boxscore-totals-sticky { position: absolute; top: 0; right: 0; z-index: 2; }
+  /* (.boxscore-totals-sticky removed 2026-07-14 -- the AB·H·R·RBI column
+     is inline in the grid canvas now; see drawScorecard's totals block.) */
   /* Sticky-left names overlay (2026-07-14): pointer-events none is
      load-bearing -- horizontal pans that START on a name must reach the
      scroller underneath, or the card refuses to scroll from its left
      edge. The grid canvas's tap handler compensates for the taps this
      lets through (see renderBoxScoreBody). */
   .boxscore-names-sticky { position: absolute; top: 0; left: 0; z-index: 2; pointer-events: none; }
-  .scorecard-canvas, .scorecard-totals-canvas, .scorecard-names-canvas {
+  .scorecard-canvas, .scorecard-names-canvas {
     display: block; background: transparent; border: none; /* frame moved to .boxscore-grid-wrap, 2026-07-13 */
   }
   .boxscore-close { margin-top: 8px; }
@@ -4240,26 +4239,23 @@ function scorecardLayout() {
   const lineup = scoringState.lineup;
   // lineH 44 -> 58 -> 62 (2026-07-13, Jason, two passes: line-score fonts
   // up a step, then a few px more air under the line score before the
-  // snake grid). rColW: the line score's R totals column now hangs past
-  // the last inning column, since the inning cells themselves align with
-  // the snake columns below (same 2026-07-13 pass).
-  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 62, rColW = 30;
+  // snake grid). The line score's R total hangs past the last inning
+  // column (2026-07-13), centered over the inline totals column since
+  // 2026-07-14 (the old separate rColW region merged into totW).
+  // totW: the AB·H·R·RBI column. Sticky-right from 2026-07-12 to
+  // 2026-07-14, now INLINE at the end of the grid (Jason: with the names
+  // column pinned left, two pinned panels left too little scrollable
+  // middle -- totals scroll in after the innings instead). It doubles as
+  // the line score's R overhang region (the old separate rColW is gone).
+  const pad = 8, nameW = 68, totW = 84, rowH = ROW_H, headH = 16, lineH = 62;
   const nCols = Math.max(colInfo.cols.length, 1);
   const cellW = CELL_W;
   return {
     cols: colInfo.cols, cellMap: colInfo.cellMap,
     innings: scorecardDisplayInnings(), // only innings actually played -- see scorecardColumns; activity-capped on ended games (2026-07-14)
-    lineup: lineup, pad: pad, nameW: nameW, totW: totW, rColW: rColW,
+    lineup: lineup, pad: pad, nameW: nameW, totW: totW,
     cellW: cellW, rowH: rowH, headH: headH, lineH: lineH,
-    w: pad * 2 + nameW + cellW * nCols + rColW, // grid canvas: name + inning cells + the line score's R overhang
-    totalsW: pad + totW, // totals canvas: its own small sticky panel
-    // Totals panel starts BELOW the line score (2026-07-13, Jason: its
-    // frame used to run the full canvas height, boxing the line score in
-    // and hiding its right edge under the overlay -- the frame should end
-    // just above the AB·H·R·RBI header). Render sites offset the sticky
-    // wrapper by totalsTop and size the canvas to totalsH.
-    totalsTop: pad + lineH,
-    totalsH: headH + rowH * lineup.length + pad,
+    w: pad * 2 + nameW + cellW * nCols + totW, // grid canvas: names + inning cells + inline totals/R column
     h: pad * 2 + lineH + headH + rowH * lineup.length,
   };
 }
@@ -4373,7 +4369,7 @@ function drawScorecard(canvas) {
     g.fillStyle = botRow.key === 'us' ? SCORECARD_C.text : SCORECARD_C.muted;
     g.fillText(botPlayed ? String(st.runsByInning[botRow.key][i] || 0) : '·', x, lsY + 38);
   }
-  const rX = lsGridX + L.cols.length * L.cellW + L.rColW / 2;
+  const rX = lsGridX + L.cols.length * L.cellW + L.totW / 2; // centered over the inline totals column (2026-07-14)
   g.font = '700 10px ' + font;
   g.fillStyle = SCORECARD_C.muted;
   g.fillText('R', rX, lsY + 6);
@@ -4403,7 +4399,10 @@ function drawScorecard(canvas) {
     const cy = y + L.rowH / 2;
     g.textAlign = 'left';
     g.font = '500 ' + px(9) + 'px ' + font;
-    g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us') ? SCORECARD_C.pickle : SCORECARD_C.text;
+    // Ended games have no "up next" -- the pointer highlight is a live-
+    // game affordance only (2026-07-14, Jason: the post-final-out kicker
+    // was still glowing moss on the finished card).
+    g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us' && !st.gameEnded) ? SCORECARD_C.pickle : SCORECARD_C.text;
     g.fillText(playerNameOf(pid).slice(0, 8), L.pad, cy);
     g.textAlign = 'center';
     const joinedInning = (st.joinedInning && st.joinedInning[pid]) || 1;
@@ -4482,6 +4481,31 @@ function drawScorecard(canvas) {
       }
     }
   });
+
+  // ---- inline AB·H·R·RBI totals (2026-07-14: un-pinned from the sticky
+  // right panel -- with the names column pinned left, two fixed panels
+  // squeezed the scrollable middle. The column now scrolls in after the
+  // last inning, same drawing the old drawScorecardTotals did, minus the
+  // panel chrome). ----
+  const totX = gridX + nCols * L.cellW + L.totW / 2;
+  g.strokeStyle = SCORECARD_C.rule;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(gridX + nCols * L.cellW + 0.5, L.pad + L.lineH);
+  g.lineTo(gridX + nCols * L.cellW + 0.5, L.h);
+  g.stroke(); // seam between the last inning column and the totals, matching the old panel's
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '600 ' + px(8) + 'px ' + font;
+  g.fillStyle = SCORECARD_C.muted;
+  g.fillText('AB·H·R·RBI', totX, gridY - px(6));
+  const totStats = computeStats(st);
+  L.lineup.forEach((pid, row) => {
+    const cy = gridY + row * L.rowH + L.rowH / 2;
+    const s = totStats[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
+    g.font = '600 ' + px(10) + 'px ' + font;
+    g.fillStyle = SCORECARD_C.text;
+    g.fillText(s.ab + '·' + s.h + '·' + s.r + '·' + s.rbi, totX, cy);
+  });
 }
 
 // Sticky-left names panel (2026-07-14, Jason's post-repair list: "it
@@ -4530,59 +4554,16 @@ function drawScorecardNames(canvas) {
   g.font = '500 ' + px(9) + 'px ' + font;
   L.lineup.forEach((pid, row) => {
     const cy = gridY + row * L.rowH + L.rowH / 2;
-    g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us') ? SCORECARD_C.pickle : SCORECARD_C.text;
+    // No pointer highlight on finished games (2026-07-14) -- mirrors drawScorecard.
+    g.fillStyle = (pid === st.lineup[st.lineupPointer] && st.half === 'us' && !st.gameEnded) ? SCORECARD_C.pickle : SCORECARD_C.text;
     g.fillText(playerNameOf(pid).slice(0, 8), L.pad, cy);
   });
 }
 
-// Sticky-right totals panel (2026-07-12, Jason: "AB/H/R/RBI fixed to the
-// right, innings scrolling beneath it"). Shares scorecardLayout's row
-// geometry (pad/lineH/headH/rowH) with drawScorecard so the two canvases'
-// rows line up pixel-for-pixel when renderBoxScoreBody sits them side by
-// side -- this one just never scrolls.
-function drawScorecardTotals(canvas) {
-  if (!canvas.getContext) return; // DOM-stub harness: layout only, no drawing
-  const L = scorecardLayout();
-  const g = canvas.getContext('2d');
-  const dpr = 2;
-  // The canvas is only totalsH tall and its sticky wrapper sits at
-  // totalsTop (2026-07-13, Jason: the panel's frame must end just above
-  // the AB·H·R·RBI header, not box in the line score above it). The
-  // vertical translate keeps every drawing call below in the SAME shared
-  // absolute coordinates as drawScorecard, so row alignment stays
-  // pixel-for-pixel without touching any of the row math.
-  g.setTransform(dpr, 0, 0, dpr, 0, -L.totalsTop * dpr);
-  g.clearRect(0, L.totalsTop, L.totalsW, L.totalsH);
-  const font = "-apple-system, 'Segoe UI', system-ui, sans-serif";
-  const px = (n) => Math.round(n * ROW_SCALE);
-  const gridY = L.pad + L.lineH + L.headH;
-
-  // Solid fill so the grid canvas visually disappears underneath this one
-  // when scrolled, rather than showing through at the seam. Tile-colored
-  // since 2026-07-13 (frame moved to the wrapper): the totals column now
-  // blends into the shared box, divided only by the left seam rule,
-  // instead of reading as its own darker floating panel.
-  g.fillStyle = SCORECARD_C.tile;
-  g.fillRect(0, L.totalsTop, L.totalsW, L.totalsH);
-  g.strokeStyle = SCORECARD_C.rule;
-  g.lineWidth = 1;
-  g.beginPath(); g.moveTo(0.5, L.totalsTop); g.lineTo(0.5, L.h); g.stroke();
-
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '600 ' + px(8) + 'px ' + font;
-  g.fillStyle = SCORECARD_C.muted;
-  g.fillText('AB·H·R·RBI', L.totalsW / 2, gridY - px(6));
-
-  const stats = computeStats(scoringState);
-  L.lineup.forEach((pid, row) => {
-    const y = gridY + row * L.rowH;
-    const cy = y + L.rowH / 2;
-    const s = stats[pid] || { ab: 0, h: 0, r: 0, rbi: 0 };
-    g.font = '600 ' + px(10) + 'px ' + font;
-    g.fillStyle = SCORECARD_C.text;
-    g.fillText(s.ab + '·' + s.h + '·' + s.r + '·' + s.rbi, L.totalsW / 2, cy);
-  });
-}
+// (drawScorecardTotals -- the sticky-right AB·H·R·RBI panel -- lived here
+// 2026-07-12 .. 2026-07-14. Un-pinned at Jason's call once the names
+// column went sticky-left: two fixed panels squeezed the scrollable
+// middle. The totals now draw inline at the end of drawScorecard's grid.)
 
 /* ---- Scorecard editor (2026-07-14, Jason's game-2 field report) ----
    Past at-bats become correctable from the box score: tap a snake-grid
@@ -4929,12 +4910,6 @@ function renderBoxScoreBody() {
     style: 'width:' + L.w + 'px;height:' + L.h + 'px',
   });
   drawScorecard(canvas);
-  const totalsCanvas = h('canvas', {
-    class: 'scorecard-totals-canvas',
-    width: L.totalsW * 2, height: L.totalsH * 2,
-    style: 'width:' + L.totalsW + 'px;height:' + L.totalsH + 'px',
-  });
-  drawScorecardTotals(totalsCanvas);
   const namesCanvas = h('canvas', {
     class: 'scorecard-names-canvas',
     width: (L.pad + L.nameW) * 2, height: L.h * 2,
@@ -4943,17 +4918,13 @@ function renderBoxScoreBody() {
   drawScorecardNames(namesCanvas);
   const wrap = h('div', { class: 'boxscore-panel' }, [
     h('div', { class: 'boxscore-grid-wrap' }, [
-      // Inner width:max-content wrapper carries padding-right = the sticky
-      // panel's width, so a FULL horizontal scroll clears the overlay and
-      // the last inning columns are actually reachable (2026-07-13, Jason:
-      // "the snake does not scroll horizontally as it should" -- padding
-      // on the scroller itself is the classic unreliable spot; padding on
-      // an inner max-content box is included in scroll width dependably).
+      // (The scroll-inner's padding-right and the sticky totals canvas
+      // left with the un-pinning, 2026-07-14 -- the totals are inline in
+      // the grid now, so a full scroll naturally ends on them.)
       h('div', { class: 'boxscore-scroll' }, [
-        h('div', { class: 'boxscore-scroll-inner', style: 'padding-right:' + L.totalsW + 'px' }, [canvas]),
+        h('div', { class: 'boxscore-scroll-inner' }, [canvas]),
       ]),
       h('div', { class: 'boxscore-names-sticky' }, [namesCanvas]), // sticky-left names (2026-07-14)
-      h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
     ]),
     h('button', { class: 'correction-cancel boxscore-close', text: '✕ close box score', onclick: toggleBoxScore }),
     // End game lives here, not the lineup editor (Jason, 2026-07-12 live
@@ -6458,25 +6429,24 @@ let scorecardShareImage = null; // dataURL while the fallback takeover is up
 function composeScorecardImage(rec) {
   if (typeof document.createElement !== 'function') return null;
   const grid = document.createElement('canvas');
-  const totals = document.createElement('canvas');
   if (!grid.getContext) return null; // DOM-stub harness: no drawing surface
   const L = scorecardLayout();
   grid.width = L.w * 2; grid.height = L.h * 2;
-  totals.width = L.totalsW * 2; totals.height = L.totalsH * 2;
   drawScorecard(grid);
-  drawScorecardTotals(totals);
+  // (The separate totals canvas left with the un-pinning, 2026-07-14 --
+  // the grid now carries the AB·H·R·RBI column inline, so the composite
+  // is just grid + footer.)
   const footerH = 26;
   const out = document.createElement('canvas');
-  out.width = (L.w + L.totalsW) * 2;
+  out.width = L.w * 2;
   out.height = (L.h + footerH) * 2;
   const g = out.getContext('2d');
   g.fillStyle = SCORECARD_C.tile;
   g.fillRect(0, 0, out.width, out.height);
   g.drawImage(grid, 0, 0);
-  g.drawImage(totals, L.w * 2, L.totalsTop * 2);
   g.setTransform(2, 0, 0, 2, 0, 0);
   g.strokeStyle = SCORECARD_C.rule; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(L.pad, L.h + 2); g.lineTo(L.w + L.totalsW - L.pad, L.h + 2); g.stroke();
+  g.beginPath(); g.moveTo(L.pad, L.h + 2); g.lineTo(L.w - L.pad, L.h + 2); g.stroke();
   g.font = "500 10px -apple-system, 'Segoe UI', system-ui, sans-serif";
   g.fillStyle = SCORECARD_C.muted;
   g.textAlign = 'left'; g.textBaseline = 'middle';
@@ -6486,7 +6456,7 @@ function composeScorecardImage(rec) {
   g.textAlign = 'right';
   g.fillStyle = SCORECARD_C.pickle;
   const verdict = resultVerdict(rec.final);
-  g.fillText('FINAL ' + verdict.text, L.w + L.totalsW - L.pad, L.h + footerH / 2 + 2);
+  g.fillText('FINAL ' + verdict.text, L.w - L.pad, L.h + footerH / 2 + 2);
   return out;
 }
 // Dated export filename (2026-07-14, Jason: 'scorecard-2026-07-13.png').
@@ -6558,8 +6528,6 @@ function renderPortalGameScorecard() {
     const L = scorecardLayout();
     const canvas = h('canvas', { class: 'scorecard-canvas', width: L.w * 2, height: L.h * 2, style: 'width:' + L.w + 'px;height:' + L.h + 'px' });
     drawScorecard(canvas);
-    const totalsCanvas = h('canvas', { class: 'scorecard-totals-canvas', width: L.totalsW * 2, height: L.totalsH * 2, style: 'width:' + L.totalsW + 'px;height:' + L.totalsH + 'px' });
-    drawScorecardTotals(totalsCanvas);
     const namesCanvas = h('canvas', { class: 'scorecard-names-canvas', width: (L.pad + L.nameW) * 2, height: L.h * 2, style: 'width:' + (L.pad + L.nameW) + 'px;height:' + L.h + 'px' });
     drawScorecardNames(namesCanvas); // sticky-left names (2026-07-14) -- same overlay as the live box score
     wrap = h('div', {}, [
@@ -6567,10 +6535,9 @@ function renderPortalGameScorecard() {
       h('div', { class: 'boxscore-panel' }, [
         h('div', { class: 'boxscore-grid-wrap' }, [
           h('div', { class: 'boxscore-scroll' }, [
-            h('div', { class: 'boxscore-scroll-inner', style: 'padding-right:' + L.totalsW + 'px' }, [canvas]),
+            h('div', { class: 'boxscore-scroll-inner' }, [canvas]),
           ]),
           h('div', { class: 'boxscore-names-sticky' }, [namesCanvas]),
-          h('div', { class: 'boxscore-totals-sticky', style: 'top:' + L.totalsTop + 'px' }, [totalsCanvas]),
         ]),
         h('button', { class: 'portal-view-scorecard-btn scorecard-share-btn', text: '↑ share scorecard', onclick: () => shareScorecard(rec) }),
       ]),

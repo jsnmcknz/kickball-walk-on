@@ -2171,7 +2171,9 @@ async function main() {
     findByClassContaining('portal-view-scorecard-btn', 'view scorecard').click();
     assert(hooks.getPortalScorecardOpen() === true, 'view scorecard opens the takeover');
     assert(findByClassContaining('scorecard-canvas', ''), 'the scorecard grid canvas renders');
-    assert(findByClassContaining('scorecard-totals-canvas', ''), 'the sticky AB/H/R/RBI totals canvas renders alongside it');
+    // (The sticky totals canvas assertion left 2026-07-14 -- AB·H·R·RBI is
+    // inline in the grid now; its ABSENCE is asserted instead.)
+    assert(!findByClassContaining('scorecard-totals-canvas', ''), 'no sticky totals canvas since the un-pinning');
     findByClassContaining('portal-link', 'close').click();
     assert(hooks.getPortalScorecardOpen() === false && hooks.getPortalScreen() === 'gameDetail', 'closing the scorecard returns to game detail, not schedule');
 
