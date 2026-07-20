@@ -8,7 +8,8 @@
       "clips": [
         "Charlie-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "clayton",
@@ -16,7 +17,8 @@
       "clips": [
         "Clayton-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "eli",
@@ -24,7 +26,8 @@
       "clips": [
         "Eli-01.mp3"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "esther",
@@ -32,7 +35,8 @@
       "clips": [
         "Esther-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "woman"
     },
     {
       "id": "franny",
@@ -40,7 +44,8 @@
       "clips": [
         "Franny-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "woman"
     },
     {
       "id": "jason",
@@ -48,7 +53,8 @@
       "clips": [
         "Jason-02.mp3"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "kirsten",
@@ -57,6 +63,7 @@
         "Kirsten-01.m4a"
       ],
       "status": "member",
+      "gender": "woman",
       "code": "KB"
     },
     {
@@ -65,7 +72,8 @@
       "clips": [
         "Marcel-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "mark",
@@ -73,7 +81,8 @@
       "clips": [
         "Mark-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "megan",
@@ -81,7 +90,8 @@
       "clips": [
         "Megan-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "woman"
     },
     {
       "id": "mike",
@@ -89,7 +99,8 @@
       "clips": [
         "Mike-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "ming",
@@ -97,7 +108,8 @@
       "clips": [
         "Ming-01.mp3"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "penny",
@@ -105,7 +117,8 @@
       "clips": [
         "Penny-01.mp3"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "woman"
     },
     {
       "id": "pouriya",
@@ -113,7 +126,8 @@
       "clips": [
         "Pouriya-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "will",
@@ -121,7 +135,8 @@
       "clips": [
         "Will-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "winson",
@@ -129,7 +144,8 @@
       "clips": [
         "Winson-01.m4a"
       ],
-      "status": "member"
+      "status": "member",
+      "gender": "man"
     },
     {
       "id": "alex",
@@ -137,7 +153,8 @@
       "clips": [
         "Alex-01.mp3"
       ],
-      "status": "sub"
+      "status": "sub",
+      "gender": "woman"
     },
     {
       "id": "natalie",
@@ -145,7 +162,8 @@
       "clips": [
         "Sub-Thunderstruck.mp3"
       ],
-      "status": "sub"
+      "status": "sub",
+      "gender": "woman"
     }
   ],
   "teamSounds": [],

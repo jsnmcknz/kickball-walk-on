@@ -69,6 +69,15 @@ def load_manifest(path: Path) -> dict:
                 f"players[{i}] ('{p.get('id')}') has invalid status '{status}' "
                 f"-- must be one of {VALID_PLAYER_STATUS}."
             )
+        # Defensive rotation (2026-07-20): gender is required and fail-loud --
+        # there is no safe default (guessing 'man' silently under-counts women
+        # and can break the 3-women-on-field floor at a game).
+        gender = p.get("gender")
+        if gender not in ("woman", "man"):
+            raise BuildError(
+                f"players[{i}] ('{p.get('id')}') has invalid gender {gender!r} "
+                f'-- every player needs "gender": "woman" or "man".'
+            )
 
     # --- Scoring-merge additions (05-Scoring-Architecture.md §Manifest) ---
     # teamSounds and defaultClips are optional arrays; when absent, treated
@@ -265,6 +274,7 @@ def build(manifest_path: Path, out_path: Path):
                 "id": p["id"],
                 "name": p["name"],
                 "status": p.get("status", "member"),
+                "gender": p["gender"],  # defensive rotation (2026-07-20)
                 "clips": clip_entries,
             }
             # Optional manual 2-letter runner code (2026-07-13, Jason):

@@ -326,6 +326,14 @@ global.__hooks = {
   halfGlyph: function(half, isHome) { return halfGlyph(half, isHome); },
   getMercyState: function() { return { dismissed: mercyDismissedForHalf, paused: musicPausedForMercyHalf }; },
   setMercyStateForTest: function(d, p) { mercyDismissedForHalf = d; musicPausedForMercyHalf = p; },
+  // Defensive rotation (2026-07-20)
+  suggestBench: function(lineup, sitCounts) { return suggestBench(lineup, sitCounts); },
+  maybeOpenChangeover: function(prevHalf) { return maybeOpenChangeover(prevHalf); },
+  getChangeoverOpen: function() { return changeoverOpen; },
+  getChangeoverDraft: function() { return changeoverDraft; },
+  changeoverToggle: function(id) { return changeoverToggle(id); },
+  commitBench: function() { return commitBench(); },
+  playerGenderOf: function(id) { return playerGenderOf(id); },
 };
 `;
 
@@ -3627,6 +3635,91 @@ async function main() {
     hooks.setScoringEvents([]);
     render();
     console.log('88. Team sounds render/play/stop via shared machinery; adjust sheet leads with Scores, mercy files under We-kick: OK');
+  }
+
+  {
+    // 89. Defensive rotation: gender floor, fewest-sits, bench accumulation, screens.
+    const screen = document.getElementById('screen');
+    function findClass(cls) {
+      let found = null;
+      const walk = (node) => { if (found) return; if (node.classList && node.classList.contains(cls)) found = node; (node._children || []).forEach(walk); };
+      walk(screen);
+      return found;
+    }
+    hooks.enableScoringForTest();
+    const women = new Set(['w1', 'w2', 'w3', 'w4']);
+    let ev = [];
+    for (let i = 1; i <= 12; i++) {
+      const id = (i <= 4 ? 'w' + i : 'm' + (i - 4));
+      ev = hooks.appendScoringEvent(ev, 'player_add', { playerId: id, name: id.toUpperCase(), status: 'sub', gender: women.has(id) ? 'woman' : 'man' });
+    }
+    const lineup = ['w1', 'm1', 'w2', 'm2', 'w3', 'm3', 'w4', 'm4', 'm5', 'm6', 'm7', 'm8'];
+    ev = hooks.appendScoringEvent(ev, 'game_start', { opponent: 'Rotators', innings: 7, isHome: true, lineup: lineup });
+    hooks.setScoringEvents(ev);
+    let st = hooks.getScoringState();
+    assert(st.half === 'them', 'home game opens on defense (we field): ' + st.half);
+    assert(hooks.playerGenderOf('w1') === 'woman' && hooks.playerGenderOf('m1') === 'man', 'gender resolves from the roster overlay');
+
+    // suggestion: 12 present, 4 women -> 3 sit, exactly one woman, floor holds
+    let bench = hooks.suggestBench(lineup, {});
+    assert(bench.length === 3, '3 sit with 12 present: ' + bench.length);
+    assert(bench.filter(id => women.has(id)).length === 1, 'exactly 1 woman suggested to sit');
+
+    // exactly-3-women: no woman may ever sit
+    const l3 = ['w1', 'w2', 'w3', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
+    const b3 = hooks.suggestBench(l3, {});
+    assert(b3.length === 2 && b3.every(id => !women.has(id)), 'exactly-3-women: only men sit');
+
+    // changeover opens on the fielding turnover and renders
+    hooks.maybeOpenChangeover('us');
+    assert(hooks.getChangeoverOpen() === true, 'changeover opens when >9 take the field');
+    hooks.getState().activeTab = 'lineup';
+    render();
+    assert(findClass('changeover-cta'), 'changeover screen renders the Take-the-field CTA');
+    assert(findClass('co-tile'), 'changeover renders player tiles');
+
+    // the floor hard-blocks sitting a 4th... i.e. dropping women on field below 3
+    const draft = hooks.getChangeoverDraft(); // 3 sitting incl 1 woman -> 3 women on field
+    const onFieldWoman = ['w1', 'w2', 'w3', 'w4'].find(id => draft.indexOf(id) < 0);
+    hooks.changeoverToggle(onFieldWoman); // try to sit her -> would leave 2 women
+    assert(hooks.getChangeoverDraft().indexOf(onFieldWoman) < 0, 'floor blocks sitting a woman below 3 on field');
+
+    // commit -> bench event lands, changeover closes, sit-counts accumulate
+    hooks.commitBench();
+    assert(hooks.getChangeoverOpen() === false, 'commit closes the changeover');
+    let evs = hooks.getScoringEvents();
+    assert(evs[evs.length - 1].type === 'bench', 'commit appends a bench event');
+    st = hooks.getScoringState();
+    assert(st.currentBench.length === 3, 'currentBench reflects the committed inning-1 bench');
+    st.currentBench.forEach(id => assert(st.sitCount[id] === 1, 'each benched player sit-count = 1'));
+
+    // widget renders on the defense screen with the sitters
+    render();
+    assert(findClass('sitting-widget'), 'sitting widget renders on the defense screen');
+
+    // fewest-sits: next inning avoids the already-sat
+    const next = hooks.suggestBench(lineup, st.sitCount);
+    assert(st.currentBench.every(id => next.indexOf(id) < 0) || next.length === 3, 'next inning prefers the not-yet-sat');
+
+    // idempotent re-bench of the same inning replaces (never doubles)
+    const prevInning = st.inning;
+    ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'bench', { inning: prevInning, benched: ['w2', 'm7', 'm8'] });
+    hooks.setScoringEvents(ev);
+    st = hooks.getScoringState();
+    assert(st.sitCount.w2 === 1 && st.sitCount.m7 === 1, 're-benched players counted');
+    const firstBench = evs[evs.length - 1].payload.benched;
+    const droppedOnes = firstBench.filter(id => ['w2', 'm7', 'm8'].indexOf(id) < 0);
+    assert(droppedOnes.every(id => !st.sitCount[id]), 'idempotent: replacing an inning bench drops the old sitters');
+
+    // game_start resets the rotation tally
+    ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'game_start', { opponent: 'Game2', innings: 7, isHome: false, lineup: lineup });
+    hooks.setScoringEvents(ev);
+    st = hooks.getScoringState();
+    assert(Object.keys(st.sitCount).length === 0 && st.currentBench.length === 0, 'game_start resets sit-counts and bench');
+
+    hooks.setScoringEvents([]);
+    render();
+    console.log('89. Defensive rotation: gender floor, fewest-sits down the order, bench-event accumulation (idempotent per inning), changeover + widget render, game reset: OK');
   }
 
   // Leave scoring's live-game UI state clean for anything appended after

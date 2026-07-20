@@ -1313,6 +1313,38 @@
     border: 1px dashed var(--tile-border); border-radius: 8px;
     padding: 8px 0; font-size: 12px; font-weight: 500; color: var(--muted);
   }
+  /* Defensive rotation (2026-07-20): changeover screen + sitting widget. */
+  .changeover-head { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 2px 10px; }
+  .changeover-title { font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--olive-label); }
+  .changeover-count { font-size: 12px; color: var(--muted); }
+  .changeover-chips { display: flex; gap: 8px; margin: 0 0 12px; }
+  .changeover-chip { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 5px 11px; border: 1px solid; letter-spacing: 0.02em; }
+  .changeover-chip.ok { color: var(--pickle); border-color: var(--olive); background: rgba(130,161,103,0.08); }
+  .changeover-chip.bad { color: var(--plum-text); border-color: var(--plum-border); background: var(--plum-fill); }
+  .changeover-grouplab { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 7px; }
+  .changeover-grouplab.sit { color: var(--plum-text); }
+  .changeover-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
+  .co-tile { position: relative; min-height: 62px; background: var(--tile); border: 1px solid var(--olive); border-radius: 12px; padding: 11px 6px 9px; text-align: center; display: flex; align-items: center; justify-content: center; }
+  .co-tile .co-nm { font-size: 15px; font-weight: 500; color: var(--text); }
+  .co-tile .co-fem { position: absolute; top: 5px; left: 7px; font-size: 11px; color: var(--pickle); font-weight: 700; }
+  .co-tile .co-out { position: absolute; bottom: 5px; right: 8px; font-size: 9.5px; color: var(--muted); font-weight: 600; }
+  .co-tile .co-tag { position: absolute; top: 5px; right: 7px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--badge-text); background: var(--muted); border-radius: 4px; padding: 1px 5px; }
+  .co-tile.sit { border-style: dashed; border-color: var(--tile-border); background: transparent; }
+  .co-tile.sit .co-nm { color: var(--muted); }
+  .co-tile.sit.vol { border-color: var(--plum-border); }
+  .co-tile.sit.vol .co-tag { background: var(--plum-text); }
+  .co-tile.sit.vol .co-nm { color: var(--plum-text); }
+  .changeover-cta { display: block; width: 100%; background: var(--pickle); color: var(--badge-text); border: none; border-radius: 12px; padding: 14px 0; font-size: 15px; font-weight: 700; letter-spacing: 0.03em; margin-top: 2px; background-image: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.16)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(0,0,0,0.4); }
+  .changeover-skip { display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted); border-radius: 10px; padding: 11px 0; font-size: 13px; font-weight: 600; margin-top: 9px; }
+  .changeover-flash { min-height: 16px; text-align: center; font-size: 12px; color: var(--plum-text); margin-top: 9px; font-weight: 600; }
+  .changeover-legend { font-size: 10.5px; color: var(--muted); margin: 0 2px 12px; line-height: 1.5; }
+  .sitting-widget { display: block; width: calc(100% - 32px); margin: 0 16px 12px; border: none; border-radius: 16px; background: var(--pickle); color: var(--badge-text); padding: 13px 15px; text-align: left; background-image: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.16)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(0,0,0,0.4); }
+  .sitting-widget .sw-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .sitting-widget .sw-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.72; }
+  .sitting-widget .sw-edit { font-size: 11px; font-weight: 700; opacity: 0.6; }
+  .sitting-widget .sw-names { font-size: 16px; font-weight: 600; line-height: 1.4; }
+  .sitting-widget.empty { background: var(--tile); color: var(--muted); border: 1px dashed var(--tile-border); background-image: none; box-shadow: none; }
+  .sitting-widget.empty .sw-title { opacity: 1; }
   /* __SCORING_END__ */
   /* ============================================================
      GLOSS PASS (2026-07-14, Jason's pick from mockups/gloss-pass.html):
@@ -1806,6 +1838,9 @@ function deriveState(events) {
     mercyLimit: mercyDefault(),
     finalUs: null, finalThem: null,
     rosterOverlay: [],
+    // Defensive rotation (2026-07-20): benchByInning is the source of truth
+    // (inning -> [ids]); sitCount + currentBench are derived from it below.
+    benchByInning: {}, sitCount: {}, currentBench: [],
     scheduleGameId: null,
   };
 
@@ -1988,6 +2023,7 @@ function deriveState(events) {
       // not); a stale lastAction made a fresh game's last-action chip show
       // — and offer corrections against — the PREVIOUS game's final event.
       st.runsByInning = { us: {}, them: {} };
+      st.benchByInning = {}; // defensive rotation: a new game starts everyone at 0 sits
       st.lastAction = null;
       st.gameStarted = true; st.gameEnded = false;
       st.opponent = p.opponent || ''; st.innings = p.innings || 7;
@@ -2214,7 +2250,11 @@ function deriveState(events) {
       else if (p.field === 'mercyLimit') st.mercyLimit = p.value;
       st.lastAction = { kind: 'adjust', field: p.field, eventIdx: idx };
     } else if (e.type === 'player_add') {
-      st.rosterOverlay.push({ id: p.playerId, name: p.name, status: p.status || 'sub', defaultClip: p.defaultClip });
+      st.rosterOverlay.push({ id: p.playerId, name: p.name, status: p.status || 'sub', defaultClip: p.defaultClip, gender: p.gender || 'man' });
+    } else if (e.type === 'bench') {
+      // Defensive rotation (2026-07-20): the confirmed bench for this inning,
+      // keyed by inning so a re-confirm REPLACES (idempotent), never adds.
+      st.benchByInning[p.inning] = (p.benched || []).slice();
     } else if (e.type === 'game_end') {
       st.gameEnded = true;
       st.finalUs = p.final_us; st.finalThem = p.final_them;
@@ -2235,6 +2275,13 @@ function deriveState(events) {
   // The effective (insert-expanded) replay order (2026-07-14). Every
   // eventIdx stamped on records/lastAction above indexes THIS list, not
   // the raw scoringEvents array -- consumers must read through here.
+  // Defensive rotation (2026-07-20): fold benchByInning into a per-player
+  // sit tally + the current inning's bench (read by the suggestion + widget).
+  st.sitCount = {};
+  Object.keys(st.benchByInning).forEach(function(inn) {
+    st.benchByInning[inn].forEach(function(pid) { st.sitCount[pid] = (st.sitCount[pid] || 0) + 1; });
+  });
+  st.currentBench = st.benchByInning[st.inning] || [];
   st.effectiveEvents = events;
   return st;
 }
@@ -3040,8 +3087,10 @@ function applyRunnerOut(playerId) {
   // half -- scheduleScoringAutoPlay's own fire-time check is what actually
   // guards against a wrong-fire (e.g. this out being the 3rd), not this
   // eager cancel. See that function's comment for the full rationale.
+  const prevHalf = scoringState.half; // defensive rotation
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out' });
   scoringState = deriveState(scoringEvents);
+  maybeOpenChangeover(prevHalf); // a runner-out can be the 3rd out
   scoringCorrection = null;
   render();
 }
@@ -3107,8 +3156,10 @@ function applyScoredRunnerOut(playerId) {
   // `scored: true` is the explicit gate that lets replay reverse the run
   // and record the out -- a plain runner-out for an off-base player stays
   // a stale no-op (see the deriveState guard).
+  const prevHalf = scoringState.half; // defensive rotation
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out', scored: true });
   scoringState = deriveState(scoringEvents);
+  maybeOpenChangeover(prevHalf);
   scoringCorrection = null;
   render();
 }
@@ -3362,6 +3413,19 @@ function playerNameOf(id) {
     if (ov) return ov.name;
   }
   return id;
+}
+
+// Gender resolution for the defensive rotation (2026-07-20): manifest
+// players first, then the roster overlay (ad-hoc subs carry their own
+// gender). Defaults to 'man' only for a genuinely unknown id so the
+// 3-women floor never silently counts a phantom woman.
+function playerGenderOf(id) {
+  if (playersById[id] && playersById[id].gender) return playersById[id].gender;
+  if (scoringState && scoringState.rosterOverlay) {
+    const ov = scoringState.rosterOverlay.find(function(p) { return p.id === id; });
+    if (ov && ov.gender) return ov.gender;
+  }
+  return 'man';
 }
 
 // Unique 2-letter runner codes for the diamond labels (2026-07-08, Jason:
@@ -3883,11 +3947,13 @@ function logScoringResult(result) {
   lastResultTapMs = now;
   const batter = scoringState.lineup[scoringState.lineupPointer];
   if (!batter) return;
+  const prevHalf = scoringState.half; // defensive rotation: watch for us->them
   if (ctx.state !== 'running') rebuildAudioContext(ctx.state + ' at scoring result tap');
   scoringEvents = appendScoringEvent(scoringEvents, 'pa', {
     playerId: batter, result: result, inning: scoringState.inning, half: scoringState.half,
   });
   scoringState = deriveState(scoringEvents);
+  maybeOpenChangeover(prevHalf); // 3rd out on offense sends us to the field
   scoringClipFiredForBatter = null; // fresh turn for whoever's up now
   scheduleScoringAutoPlay();
   render();
@@ -4087,6 +4153,144 @@ function renderLeadoffPrompt(batter) {
   return h('div', { class: 'leadoff-card' }, kids);
 }
 
+// ---- Defensive rotation (2026-07-20) --------------------------------
+// Nine field; extras sit. Gender-blind fewest-sits down the batting order,
+// keeping >=3 women on the field (a hard floor). The suggestion is pure;
+// the committed bench is a `bench` event so sit-counts accumulate across
+// innings and survive reload/sync (deriveState replays them). Algorithm
+// verified against the mockup's headless tests.
+const FIELD_SIZE = 9, MIN_WOMEN_ON_FIELD = 3;
+function suggestBench(lineupIds, sitCounts) {
+  const present = (lineupIds || []).map(function(id, i) {
+    return { id: id, woman: playerGenderOf(id) === 'woman', order: i, sits: (sitCounts && sitCounts[id]) || 0 };
+  });
+  const numToSit = Math.max(0, present.length - FIELD_SIZE);
+  const womenPresent = present.filter(function(p) { return p.woman; }).length;
+  const maxWomenCanSit = Math.max(0, womenPresent - MIN_WOMEN_ON_FIELD);
+  const sorted = present.slice().sort(function(a, b) { return a.sits - b.sits || a.order - b.order; });
+  const bench = []; let womenSat = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const p = sorted[i];
+    if (bench.length >= numToSit) break;
+    if (p.woman) { if (womenSat >= maxWomenCanSit) continue; womenSat++; }
+    bench.push(p.id);
+  }
+  return bench;
+}
+// Sit-counts from every PRIOR inning's committed bench (excludes the inning
+// being set now, so re-opening a changeover never counts itself).
+function priorSitCounts() {
+  const c = {}; const bb = (scoringState && scoringState.benchByInning) || {};
+  Object.keys(bb).forEach(function(inn) {
+    if (Number(inn) !== scoringState.inning) bb[inn].forEach(function(id) { c[id] = (c[id] || 0) + 1; });
+  });
+  return c;
+}
+let changeoverOpen = false;   // intermediary screen at the fielding changeover
+let changeoverDraft = null;   // array of benched ids (mutated by taps)
+let changeoverFlash = '';
+// Mirror of maybeOpenLeadoffPrompt (which is them->us); this is us->them.
+// Only opens when there are extras to seat.
+function maybeOpenChangeover(prevHalf) {
+  if (prevHalf !== 'us' || scoringState.half !== 'them') return;
+  if (!isScoringLive()) return;
+  if (!scoringState.lineup || scoringState.lineup.length <= FIELD_SIZE) return;
+  changeoverDraft = suggestBench(scoringState.lineup, priorSitCounts());
+  changeoverFlash = '';
+  changeoverOpen = true;
+}
+// Manual re-open from the defense-screen widget: seed from what's already
+// committed for this inning, else the fresh suggestion.
+function openChangeover() {
+  const committed = (scoringState.currentBench && scoringState.currentBench.length) ? scoringState.currentBench.slice() : null;
+  changeoverDraft = committed || suggestBench(scoringState.lineup, priorSitCounts());
+  changeoverFlash = '';
+  changeoverOpen = true;
+  render();
+}
+function closeChangeover() { changeoverOpen = false; changeoverDraft = null; changeoverFlash = ''; render(); }
+function changeoverWomenOnField() {
+  const draft = changeoverDraft || [];
+  return scoringState.lineup.filter(function(id) { return playerGenderOf(id) === 'woman' && draft.indexOf(id) < 0; }).length;
+}
+function changeoverToggle(id) {
+  const draft = changeoverDraft || (changeoverDraft = []);
+  const idx = draft.indexOf(id);
+  if (idx >= 0) { draft.splice(idx, 1); changeoverFlash = ''; }
+  else {
+    if (playerGenderOf(id) === 'woman' && changeoverWomenOnField() <= MIN_WOMEN_ON_FIELD) {
+      changeoverFlash = 'Need 3 women on the field \u2014 can\u2019t sit ' + playerNameOf(id) + '.';
+      render(); return;
+    }
+    draft.push(id); changeoverFlash = '';
+  }
+  render();
+}
+function commitBench() {
+  const benched = (changeoverDraft || []).slice();
+  scoringEvents = appendScoringEvent(scoringEvents, 'bench', { inning: scoringState.inning, benched: benched });
+  scoringState = deriveState(scoringEvents);
+  changeoverOpen = false; changeoverDraft = null; changeoverFlash = '';
+  render();
+}
+function renderChangeoverScreen() {
+  const lineup = scoringState.lineup || [];
+  if (changeoverDraft === null) changeoverDraft = suggestBench(lineup, priorSitCounts());
+  const draft = changeoverDraft;
+  const suggested = suggestBench(lineup, priorSitCounts());
+  const suggestedSet = {}; suggested.forEach(function(id) { suggestedSet[id] = true; });
+  const numToSit = Math.max(0, lineup.length - FIELD_SIZE);
+  const womenOnField = changeoverWomenOnField();
+  const byName = function(a, b) { return playerNameOf(a).localeCompare(playerNameOf(b)); };
+  const sitters = lineup.filter(function(id) { return draft.indexOf(id) >= 0; }).sort(byName);
+  const fielders = lineup.filter(function(id) { return draft.indexOf(id) < 0; }).sort(byName);
+  const tile = function(id, sitting) {
+    const isVol = sitting && !suggestedSet[id];
+    const kids = [];
+    if (playerGenderOf(id) === 'woman') kids.push(h('span', { class: 'co-fem', text: '\u2640' }));
+    if (sitting) kids.push(h('span', { class: 'co-tag', text: isVol ? 'VOL' : 'SIT' }));
+    kids.push(h('div', { class: 'co-nm', text: playerNameOf(id) }));
+    kids.push(h('span', { class: 'co-out', text: 'Out: ' + ((scoringState.sitCount && scoringState.sitCount[id]) || 0) }));
+    return h('div', { class: 'co-tile ' + (sitting ? ('sit' + (isVol ? ' vol' : '')) : 'field'), onclick: function() { changeoverToggle(id); } }, kids);
+  };
+  const kids = [];
+  kids.push(h('div', { class: 'changeover-head' }, [
+    h('div', { class: 'changeover-title', text: 'Take the field \u00b7 ' + ordinal(scoringState.inning) }),
+    h('div', { class: 'changeover-count', text: lineup.length + ' here \u00b7 9 field' }),
+  ]));
+  kids.push(h('div', { class: 'changeover-chips' }, [
+    h('div', { class: 'changeover-chip ' + (womenOnField >= MIN_WOMEN_ON_FIELD ? 'ok' : 'bad'), text: '\u2640 ' + womenOnField + ' on field' + (womenOnField >= MIN_WOMEN_ON_FIELD ? ' \u2713' : '') }),
+    h('div', { class: 'changeover-chip ' + (draft.length === numToSit ? 'ok' : 'bad'), text: draft.length + ' sitting' + (draft.length === numToSit ? '' : ' \u00b7 want ' + numToSit) }),
+  ]));
+  if (sitters.length) {
+    kids.push(h('div', { class: 'changeover-grouplab sit', text: 'Sitting this inning' }));
+    kids.push(h('div', { class: 'changeover-grid' }, sitters.map(function(id) { return tile(id, true); })));
+  }
+  kids.push(h('div', { class: 'changeover-grouplab', text: 'On the field' + (sitters.length ? ' \u00b7 alphabetical' : '') }));
+  kids.push(h('div', { class: 'changeover-grid' }, fielders.map(function(id) { return tile(id, false); })));
+  kids.push(h('div', { class: 'changeover-legend', text: 'Tap to swap a volunteer. Dashed = sitting, \u2640 = woman, Out: N = times sat this game.' }));
+  kids.push(h('button', { class: 'changeover-cta', text: 'Take the field \u2192', onclick: commitBench }));
+  kids.push(h('button', { class: 'changeover-skip', text: 'skip \u2014 set it on the defense screen', onclick: closeChangeover }));
+  kids.push(h('div', { class: 'changeover-flash', text: changeoverFlash || '' }));
+  return h('div', { class: 'changeover-wrap' }, kids);
+}
+function renderSittingWidget() {
+  if (!scoringState.lineup || scoringState.lineup.length <= FIELD_SIZE) return null; // nobody could sit
+  const bench = scoringState.currentBench || [];
+  const head = [ h('span', { class: 'sw-title', text: 'Sitting \u00b7 ' + ordinal(scoringState.inning) }), h('span', { class: 'sw-edit', text: bench.length ? 'edit \u203a' : 'set \u203a' }) ];
+  if (!bench.length) {
+    return h('div', { class: 'sitting-widget empty', onclick: openChangeover }, [
+      h('div', { class: 'sw-head' }, head),
+      h('div', { class: 'sw-names', text: 'No one benched yet \u2014 tap to set' }),
+    ]);
+  }
+  const names = bench.slice().sort(function(a, b) { return playerNameOf(a).localeCompare(playerNameOf(b)); }).map(function(id) { return playerNameOf(id); }).join(', ');
+  return h('div', { class: 'sitting-widget', onclick: openChangeover }, [
+    h('div', { class: 'sw-head' }, head),
+    h('div', { class: 'sw-names', text: names }),
+  ]);
+}
+
 function renderMercyBanner() {
   const isUs = scoringState.half === 'us';
   const isFinalInning = scoringState.inning >= scoringState.innings;
@@ -4104,6 +4308,7 @@ function renderMercyBanner() {
         musicPausedForMercyHalf = null;
         scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
         maybeOpenLeadoffPrompt(prevHalf); // mercy-ending THEIR half is a turnover like any other
+        maybeOpenChangeover(prevHalf); // ...and mercy-ending OUR half sends us to field
         render();
       } }),
       h('button', { class: 'mercy-btn dashed', text: 'Keep playing', onclick: () => {
@@ -4172,6 +4377,8 @@ function renderDefenseBody() {
     ]),
     h('button', { text: '+', onclick: () => adjustOppRuns(1) }),
   ]));
+  const _sw = renderSittingWidget(); // defensive rotation: between runs + NEXT UP
+  if (_sw) wrap.appendChild(_sw);
   const lineup = scoringState.lineup;
   const ptr = scoringState.lineupPointer;
   const nextThreeIds = lineup.length ? [0, 1, 2].map(k => lineup[(ptr + k) % lineup.length]) : [];
@@ -5253,6 +5460,7 @@ function renderScoringGameScreen() {
   } else {
     const leadoff = leadoffPromptBatter();
     if (leadoff) wrap.appendChild(renderLeadoffPrompt(leadoff));
+    else if (changeoverOpen && scoringState.half === 'them') wrap.appendChild(renderChangeoverScreen());
     // The adjust sheet replaces EITHER body since 2026-07-14 (the score
     // bug that opens it is now tappable on defense too); every other
     // correction sheet remains offense-only and renders through
@@ -5519,7 +5727,7 @@ function commitEndGame() {
   render();
 }
 
-function openAddPlayerSheet() { addPlayerSheet = { name: '', status: 'member', clipIndex: 0 }; render(); }
+function openAddPlayerSheet() { addPlayerSheet = { name: '', status: 'member', clipIndex: 0, gender: 'man' }; render(); }
 function closeAddPlayerSheet() { addPlayerSheet = null; render(); }
 function commitAddPlayer() {
   const s = addPlayerSheet;
@@ -5528,7 +5736,7 @@ function commitAddPlayer() {
   const id = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
   const clip = (DATA.defaultClips || [])[s.clipIndex] || null;
   scoringEvents = appendScoringEvent(scoringEvents, 'player_add', {
-    playerId: id, name: name, status: s.status, defaultClip: clip ? clip.id : null,
+    playerId: id, name: name, status: s.status, defaultClip: clip ? clip.id : null, gender: s.gender || 'man',
   });
   scoringState = deriveState(scoringEvents);
   addPlayerSheet = null;
@@ -5627,6 +5835,7 @@ function applyAdjustEndHalf() {
   scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
   maybeOpenLeadoffPrompt(prevHalf);
   stopMusicIfBackOnDefense(prevHalf);
+  maybeOpenChangeover(prevHalf);
   render();
 }
 
@@ -5945,6 +6154,10 @@ function renderAddPlayerSheet() {
     h('div', { class: 'addplayer-toggle-row' }, [
       h('button', { class: 'addplayer-toggle' + (s.status === 'member' ? ' active' : ''), text: 'member', onclick: () => { s.status = 'member'; render(); } }),
       h('button', { class: 'addplayer-toggle' + (s.status === 'sub' ? ' active' : ''), text: 'sub', onclick: () => { s.status = 'sub'; render(); } }),
+    ]),
+    h('div', { class: 'addplayer-toggle-row' }, [
+      h('button', { class: 'addplayer-toggle' + (s.gender === 'woman' ? ' active' : ''), text: 'woman', onclick: () => { s.gender = 'woman'; render(); } }),
+      h('button', { class: 'addplayer-toggle' + (s.gender === 'man' ? ' active' : ''), text: 'man', onclick: () => { s.gender = 'man'; render(); } }),
     ]),
     h('div', { class: 'addplayer-songlabel', text: 'walk-up song' }),
   ];
@@ -6716,7 +6929,7 @@ function render() {
   // The box score survives half flips (it shows both halves) but not
   // leaving the live game screen -- same choke-point pattern as
   // scoringCorrection above. The scorecard editor rides with it (2026-07-14).
-  if (!onLiveGameScreen) { scoringBoxScoreOpen = false; endGameConfirmOpen = false; cardEditor = null; }
+  if (!onLiveGameScreen) { scoringBoxScoreOpen = false; endGameConfirmOpen = false; cardEditor = null; changeoverOpen = false; changeoverDraft = null; }
   if (isScoringLive()) checkMercyMusicPause();
   // Portal: a live game always wins (rule 1 of 07's boot rule), same
   // choke-point pattern as the resets above -- if a game starts while the
