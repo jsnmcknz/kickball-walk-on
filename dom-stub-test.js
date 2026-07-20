@@ -3677,6 +3677,7 @@ async function main() {
     render();
     assert(findClass('changeover-cta'), 'changeover screen renders the Take-the-field CTA');
     assert(findClass('co-tile'), 'changeover renders player tiles');
+    assert(document.getElementById('app').classList.contains('reorder-frame'), 'changeover shows the moss interstitial frame');
 
     // the floor hard-blocks sitting a 4th... i.e. dropping women on field below 3
     const draft = hooks.getChangeoverDraft(); // 3 sitting incl 1 woman -> 3 women on field

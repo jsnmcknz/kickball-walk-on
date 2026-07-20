@@ -1314,27 +1314,29 @@
     padding: 8px 0; font-size: 12px; font-weight: 500; color: var(--muted);
   }
   /* Defensive rotation (2026-07-20): changeover screen + sitting widget. */
+  .changeover-wrap { padding: 0 16px 6px; }
   .changeover-head { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 2px 10px; }
   .changeover-title { font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--olive-label); }
   .changeover-count { font-size: 12px; color: var(--muted); }
   .changeover-chips { display: flex; gap: 8px; margin: 0 0 12px; }
-  .changeover-chip { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 5px 11px; border: 1px solid; letter-spacing: 0.02em; }
+  .changeover-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 5px 11px; border: 1px solid; letter-spacing: 0.02em; }
   .changeover-chip.ok { color: var(--pickle); border-color: var(--olive); background: rgba(130,161,103,0.08); }
   .changeover-chip.bad { color: var(--plum-text); border-color: var(--plum-border); background: var(--plum-fill); }
+  .gsym { line-height: 1; font-size: 0.95em; }
   .changeover-grouplab { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 7px; }
   .changeover-grouplab.sit { color: var(--plum-text); }
   .changeover-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 14px; }
   .co-tile { position: relative; min-height: 62px; background: var(--tile); border: 1px solid var(--olive); border-radius: 12px; padding: 11px 6px 9px; text-align: center; display: flex; align-items: center; justify-content: center; }
   .co-tile .co-nm { font-size: 15px; font-weight: 500; color: var(--text); }
-  .co-tile .co-fem { position: absolute; top: 5px; left: 7px; font-size: 11px; color: var(--pickle); font-weight: 700; }
+  .co-tile .co-fem { position: absolute; top: 6px; left: 7px; line-height: 1; font-size: 11px; color: var(--pickle); font-weight: 700; }
   .co-tile .co-out { position: absolute; bottom: 5px; right: 8px; font-size: 9.5px; color: var(--muted); font-weight: 600; }
-  .co-tile .co-tag { position: absolute; top: 5px; right: 7px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--badge-text); background: var(--muted); border-radius: 4px; padding: 1px 5px; }
+  .co-tile .co-tag { position: absolute; top: 6px; right: 7px; line-height: 1; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--badge-text); background: var(--muted); border-radius: 4px; padding: 2px 5px; }
   .co-tile.sit { border-style: dashed; border-color: var(--tile-border); background: transparent; }
   .co-tile.sit .co-nm { color: var(--muted); }
   .co-tile.sit.vol { border-color: var(--plum-border); }
   .co-tile.sit.vol .co-tag { background: var(--plum-text); }
   .co-tile.sit.vol .co-nm { color: var(--plum-text); }
-  .changeover-cta { display: block; width: 100%; background: var(--pickle); color: var(--badge-text); border: none; border-radius: 12px; padding: 14px 0; font-size: 15px; font-weight: 700; letter-spacing: 0.03em; margin-top: 2px; background-image: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.16)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(0,0,0,0.4); }
+  .changeover-cta { display: block; width: 100%; background: var(--pickle); color: var(--badge-text); border: none; border-radius: 12px; padding: 14px 0; font-size: 15px; font-weight: 700; letter-spacing: 0.03em; margin: 2px 0 16px; background-image: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.16)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 10px rgba(0,0,0,0.4); }
   .changeover-skip { display: block; width: 100%; background: var(--bg); border: 1px dashed var(--tile-border); color: var(--muted); border-radius: 10px; padding: 11px 0; font-size: 13px; font-weight: 600; margin-top: 9px; }
   .changeover-flash { min-height: 16px; text-align: center; font-size: 12px; color: var(--plum-text); margin-top: 9px; font-weight: 600; }
   .changeover-legend { font-size: 10.5px; color: var(--muted); margin: 0 2px 12px; line-height: 1.5; }
@@ -4259,18 +4261,22 @@ function renderChangeoverScreen() {
     h('div', { class: 'changeover-count', text: lineup.length + ' here \u00b7 9 field' }),
   ]));
   kids.push(h('div', { class: 'changeover-chips' }, [
-    h('div', { class: 'changeover-chip ' + (womenOnField >= MIN_WOMEN_ON_FIELD ? 'ok' : 'bad'), text: '\u2640 ' + womenOnField + ' on field' + (womenOnField >= MIN_WOMEN_ON_FIELD ? ' \u2713' : '') }),
-    h('div', { class: 'changeover-chip ' + (draft.length === numToSit ? 'ok' : 'bad'), text: draft.length + ' sitting' + (draft.length === numToSit ? '' : ' \u00b7 want ' + numToSit) }),
+    h('div', { class: 'changeover-chip ' + (womenOnField >= MIN_WOMEN_ON_FIELD ? 'ok' : 'bad') }, [
+      h('span', { class: 'gsym', text: '\u2640' }),
+      h('span', { text: womenOnField + ' on field' + (womenOnField >= MIN_WOMEN_ON_FIELD ? ' \u2713' : '') }),
+    ]),
+    h('div', { class: 'changeover-chip ' + (draft.length === numToSit ? 'ok' : 'bad') }, [
+      h('span', { text: draft.length + ' sitting' + (draft.length === numToSit ? '' : ' \u00b7 want ' + numToSit) }),
+    ]),
   ]));
   if (sitters.length) {
     kids.push(h('div', { class: 'changeover-grouplab sit', text: 'Sitting this inning' }));
     kids.push(h('div', { class: 'changeover-grid' }, sitters.map(function(id) { return tile(id, true); })));
   }
+  kids.push(h('button', { class: 'changeover-cta', text: 'Take the field \u2192', onclick: commitBench }));
   kids.push(h('div', { class: 'changeover-grouplab', text: 'On the field' + (sitters.length ? ' \u00b7 alphabetical' : '') }));
   kids.push(h('div', { class: 'changeover-grid' }, fielders.map(function(id) { return tile(id, false); })));
   kids.push(h('div', { class: 'changeover-legend', text: 'Tap to swap a volunteer. Dashed = sitting, \u2640 = woman, Out: N = times sat this game.' }));
-  kids.push(h('button', { class: 'changeover-cta', text: 'Take the field \u2192', onclick: commitBench }));
-  kids.push(h('button', { class: 'changeover-skip', text: 'skip \u2014 set it on the defense screen', onclick: closeChangeover }));
   kids.push(h('div', { class: 'changeover-flash', text: changeoverFlash || '' }));
   return h('div', { class: 'changeover-wrap' }, kids);
 }
@@ -5447,7 +5453,13 @@ function renderScoringGameScreen() {
       h('button', { class: 'order-btn', text: '✎ lineup', onclick: openMidGameLineupEditor }),
     ]),
   ]));
-  wrap.appendChild(renderScoreBug());
+  // The changeover is a full interstitial and HIDES the score bug (2026-07-20,
+  // Jason) so the between-innings moment reads clearly. Computed once here so
+  // the bug-skip and the body branch agree, and leadoffPromptBatter() (which
+  // carries a validity side-effect) is called exactly once.
+  const leadoffBatter = leadoffPromptBatter();
+  const showChangeover = changeoverOpen && scoringState.half === 'them' && !endGameConfirmOpen && !scoringBoxScoreOpen && !leadoffBatter;
+  if (!showChangeover) wrap.appendChild(renderScoreBug());
   // End-game confirm is a full takeover below the score bug -- same
   // convention as every other correction/confirm sheet in this file
   // (mockup screen 7: "render as takeover sheets... not modals over
@@ -5458,9 +5470,8 @@ function renderScoringGameScreen() {
   } else if (scoringBoxScoreOpen) {
     wrap.appendChild(renderBoxScoreBody()); // takeover panel, either half -- read-only, music unaffected
   } else {
-    const leadoff = leadoffPromptBatter();
-    if (leadoff) wrap.appendChild(renderLeadoffPrompt(leadoff));
-    else if (changeoverOpen && scoringState.half === 'them') wrap.appendChild(renderChangeoverScreen());
+    if (leadoffBatter) wrap.appendChild(renderLeadoffPrompt(leadoffBatter));
+    else if (showChangeover) wrap.appendChild(renderChangeoverScreen());
     // The adjust sheet replaces EITHER body since 2026-07-14 (the score
     // bug that opens it is now tappable on defense too); every other
     // correction sheet remains offense-only and renders through
@@ -7007,7 +7018,8 @@ function render() {
   // their own content. The root at-bat screen keeps it (principle 5).
   document.getElementById('tabbar').classList.toggle('hidden', isPortalActive() || (isTeamPhone() && !isScoringLive()) || isScoringSubpageActive());
   const inReorder = !isPortalActive() && state.activeTab === 'lineup' && (state.editing || scoringEditorActive());
-  document.getElementById('app').classList.toggle('reorder-frame', inReorder);
+  // The changeover is an interstitial like the lineup editor -- same moss frame (2026-07-20).
+  document.getElementById('app').classList.toggle('reorder-frame', inReorder || (changeoverOpen && isScoringLive()));
 
   // Keep the on-card countdown live: start the tick the moment something
   // starts playing, stop it the moment nothing is. Living here (rather
