@@ -5768,7 +5768,7 @@ function renderMercyLimitRow(ed) {
     h('span', { class: 'kickorder-label', text: 'Mercy limit' }),
     h('div', { class: 'adjust-stepper' }, [
       h('button', { class: 'adjust-btn', text: '−', disabled: ed.mercyLimit <= 1, onclick: () => { ed.mercyLimit = Math.max(1, ed.mercyLimit - 1); render(); } }),
-      h('span', { class: 'adjust-value', text: ed.mercyLimit + ' runs' }),
+      h('span', { class: 'adjust-value', text: String(ed.mercyLimit) }),
       h('button', { class: 'adjust-btn', text: '+', onclick: () => { ed.mercyLimit += 1; render(); } }),
     ]),
   ]);

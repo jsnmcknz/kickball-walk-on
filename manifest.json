@@ -210,7 +210,7 @@
     "clipsDir": "source/clips",
     "fadeOutMs": 1500,
     "theme": "dark",
-    "autoPlayDelayMs": 5000,
+    "autoPlayDelayMs": 2500,
     "fadeInMs": 500
   },
   "scoring": {
