@@ -3089,10 +3089,9 @@ function applyRunnerOut(playerId) {
   // half -- scheduleScoringAutoPlay's own fire-time check is what actually
   // guards against a wrong-fire (e.g. this out being the 3rd), not this
   // eager cancel. See that function's comment for the full rationale.
-  const prevHalf = scoringState.half; // defensive rotation
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out' });
   scoringState = deriveState(scoringEvents);
-  maybeOpenChangeover(prevHalf); // a runner-out can be the 3rd out
+  autoAssignBenchIfFielding(); // a runner-out can be the 3rd out
   scoringCorrection = null;
   render();
 }
@@ -3158,10 +3157,9 @@ function applyScoredRunnerOut(playerId) {
   // `scored: true` is the explicit gate that lets replay reverse the run
   // and record the out -- a plain runner-out for an off-base player stays
   // a stale no-op (see the deriveState guard).
-  const prevHalf = scoringState.half; // defensive rotation
   scoringEvents = appendScoringEvent(scoringEvents, 'runner', { playerId: playerId, action: 'out', scored: true });
   scoringState = deriveState(scoringEvents);
-  maybeOpenChangeover(prevHalf);
+  autoAssignBenchIfFielding();
   scoringCorrection = null;
   render();
 }
@@ -3949,13 +3947,12 @@ function logScoringResult(result) {
   lastResultTapMs = now;
   const batter = scoringState.lineup[scoringState.lineupPointer];
   if (!batter) return;
-  const prevHalf = scoringState.half; // defensive rotation: watch for us->them
   if (ctx.state !== 'running') rebuildAudioContext(ctx.state + ' at scoring result tap');
   scoringEvents = appendScoringEvent(scoringEvents, 'pa', {
     playerId: batter, result: result, inning: scoringState.inning, half: scoringState.half,
   });
   scoringState = deriveState(scoringEvents);
-  maybeOpenChangeover(prevHalf); // 3rd out on offense sends us to the field
+  autoAssignBenchIfFielding(); // 3rd out on offense: auto-assign the fielding bench
   scoringClipFiredForBatter = null; // fresh turn for whoever's up now
   scheduleScoringAutoPlay();
   render();
@@ -4191,15 +4188,19 @@ function priorSitCounts() {
 let changeoverOpen = false;   // intermediary screen at the fielding changeover
 let changeoverDraft = null;   // array of benched ids (mutated by taps)
 let changeoverFlash = '';
-// Mirror of maybeOpenLeadoffPrompt (which is them->us); this is us->them.
-// Only opens when there are extras to seat.
-function maybeOpenChangeover(prevHalf) {
-  if (prevHalf !== 'us' || scoringState.half !== 'them') return;
-  if (!isScoringLive()) return;
+// The rotation is a management aid, not a gate (Jason, 2026-07-20). On the
+// fielding turnover we commit the SUGGESTED bench silently and drop straight
+// onto the defense screen -- the sitting widget shows it in list form, and a
+// tap on that widget (openChangeover) is the edit path. Zero extra taps in
+// the common case. Idempotent per inning (benchByInning is keyed by inning),
+// so re-entering the same defensive half never overwrites an edited bench.
+function autoAssignBenchIfFielding() {
+  if (!isScoringLive() || scoringState.half !== 'them') return;
   if (!scoringState.lineup || scoringState.lineup.length <= FIELD_SIZE) return;
-  changeoverDraft = suggestBench(scoringState.lineup, priorSitCounts());
-  changeoverFlash = '';
-  changeoverOpen = true;
+  if (scoringState.benchByInning && scoringState.benchByInning[scoringState.inning]) return;
+  const bench = suggestBench(scoringState.lineup, priorSitCounts());
+  scoringEvents = appendScoringEvent(scoringEvents, 'bench', { inning: scoringState.inning, benched: bench });
+  scoringState = deriveState(scoringEvents);
 }
 // Manual re-open from the defense-screen widget: seed from what's already
 // committed for this inning, else the fresh suggestion.
@@ -4257,7 +4258,7 @@ function renderChangeoverScreen() {
   };
   const kids = [];
   kids.push(h('div', { class: 'changeover-head' }, [
-    h('div', { class: 'changeover-title', text: 'Take the field \u00b7 ' + ordinal(scoringState.inning) }),
+    h('div', { class: 'changeover-title', text: 'Defensive bench \u00b7 ' + ordinal(scoringState.inning) }),
     h('div', { class: 'changeover-count', text: lineup.length + ' here \u00b7 9 field' }),
   ]));
   kids.push(h('div', { class: 'changeover-chips' }, [
@@ -4273,7 +4274,7 @@ function renderChangeoverScreen() {
     kids.push(h('div', { class: 'changeover-grouplab sit', text: 'Sitting this inning' }));
     kids.push(h('div', { class: 'changeover-grid' }, sitters.map(function(id) { return tile(id, true); })));
   }
-  kids.push(h('button', { class: 'changeover-cta', text: 'Take the field \u2192', onclick: commitBench }));
+  kids.push(h('button', { class: 'changeover-cta', text: 'Confirm edits', onclick: commitBench }));
   kids.push(h('div', { class: 'changeover-grouplab', text: 'On the field' + (sitters.length ? ' \u00b7 alphabetical' : '') }));
   kids.push(h('div', { class: 'changeover-grid' }, fielders.map(function(id) { return tile(id, false); })));
   kids.push(h('div', { class: 'changeover-legend', text: 'Tap to swap a volunteer. Dashed = sitting, \u2640 = woman, Out: N = times sat this game.' }));
@@ -4314,7 +4315,7 @@ function renderMercyBanner() {
         musicPausedForMercyHalf = null;
         scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
         maybeOpenLeadoffPrompt(prevHalf); // mercy-ending THEIR half is a turnover like any other
-        maybeOpenChangeover(prevHalf); // ...and mercy-ending OUR half sends us to field
+        autoAssignBenchIfFielding(); // mercy-ending OUR half also auto-assigns the bench
         render();
       } }),
       h('button', { class: 'mercy-btn dashed', text: 'Keep playing', onclick: () => {
@@ -5707,6 +5708,7 @@ function commitStartGame() {
   // needs the prompt"). A home game opens in THEIR half; the ordinary
   // them->us turnover path prompts when our first half arrives.
   leadoffPromptOpen = scoringState.half === 'us' && !!scoringState.lineup[scoringState.lineupPointer];
+  autoAssignBenchIfFielding(); // a home game opens on defense with no turnover to trigger it
   state.activeTab = 'lineup';
   render();
 }
@@ -5846,7 +5848,7 @@ function applyAdjustEndHalf() {
   scoringClipFiredForBatter = null; // manual tap required once teams have swapped -- same as a real 3rd out
   maybeOpenLeadoffPrompt(prevHalf);
   stopMusicIfBackOnDefense(prevHalf);
-  maybeOpenChangeover(prevHalf);
+  autoAssignBenchIfFielding();
   render();
 }
 

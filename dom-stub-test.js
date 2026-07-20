@@ -328,7 +328,8 @@ global.__hooks = {
   setMercyStateForTest: function(d, p) { mercyDismissedForHalf = d; musicPausedForMercyHalf = p; },
   // Defensive rotation (2026-07-20)
   suggestBench: function(lineup, sitCounts) { return suggestBench(lineup, sitCounts); },
-  maybeOpenChangeover: function(prevHalf) { return maybeOpenChangeover(prevHalf); },
+  autoAssignBenchIfFielding: function() { return autoAssignBenchIfFielding(); },
+  openChangeover: function() { return openChangeover(); },
   getChangeoverOpen: function() { return changeoverOpen; },
   getChangeoverDraft: function() { return changeoverDraft; },
   changeoverToggle: function(id) { return changeoverToggle(id); },
@@ -3670,47 +3671,55 @@ async function main() {
     const b3 = hooks.suggestBench(l3, {});
     assert(b3.length === 2 && b3.every(id => !women.has(id)), 'exactly-3-women: only men sit');
 
-    // changeover opens on the fielding turnover and renders
-    hooks.maybeOpenChangeover('us');
-    assert(hooks.getChangeoverOpen() === true, 'changeover opens when >9 take the field');
+    // NEW FLOW (2026-07-20): the fielding turnover auto-assigns the bench
+    // SILENTLY -> straight to defense, no interstitial gate.
+    hooks.autoAssignBenchIfFielding();
+    assert(hooks.getChangeoverOpen() === false, 'no gate -- auto-assign drops straight to defense');
+    let evs = hooks.getScoringEvents();
+    assert(evs[evs.length - 1].type === 'bench', 'bench auto-committed on the fielding turnover');
+    st = hooks.getScoringState();
+    assert(st.currentBench.length === 3, 'defense shows the auto-assigned bench (3)');
+    st.currentBench.forEach(id => assert(st.sitCount[id] === 1, 'each auto-benched player sit-count = 1'));
+    const nBefore = hooks.getScoringEvents().length;
+    hooks.autoAssignBenchIfFielding();
+    assert(hooks.getScoringEvents().length === nBefore, 'auto-assign is idempotent per inning (no second bench)');
+
+    // widget renders on the plain defense screen (list form), NO moss frame
     hooks.getState().activeTab = 'lineup';
     render();
-    assert(findClass('changeover-cta'), 'changeover screen renders the Take-the-field CTA');
-    assert(findClass('co-tile'), 'changeover renders player tiles');
-    assert(document.getElementById('app').classList.contains('reorder-frame'), 'changeover shows the moss interstitial frame');
+    assert(findClass('sitting-widget'), 'sitting widget renders on the defense screen');
+    assert(!document.getElementById('app').classList.contains('reorder-frame'), 'plain defense -- no interstitial frame');
 
-    // the floor hard-blocks sitting a 4th... i.e. dropping women on field below 3
-    const draft = hooks.getChangeoverDraft(); // 3 sitting incl 1 woman -> 3 women on field
+    // tapping the widget opens the EDIT screen: moss frame + confirm button
+    hooks.openChangeover();
+    assert(hooks.getChangeoverOpen() === true, 'tapping the widget opens the edit screen');
+    render();
+    assert(findClass('changeover-cta'), 'edit screen renders the confirm button');
+    assert(findClass('co-tile'), 'edit screen renders player tiles');
+    assert(document.getElementById('app').classList.contains('reorder-frame'), 'edit screen shows the moss interstitial frame');
+
+    // the floor still hard-blocks dropping women on field below 3
+    const draft = hooks.getChangeoverDraft();
     const onFieldWoman = ['w1', 'w2', 'w3', 'w4'].find(id => draft.indexOf(id) < 0);
-    hooks.changeoverToggle(onFieldWoman); // try to sit her -> would leave 2 women
+    hooks.changeoverToggle(onFieldWoman);
     assert(hooks.getChangeoverDraft().indexOf(onFieldWoman) < 0, 'floor blocks sitting a woman below 3 on field');
 
-    // commit -> bench event lands, changeover closes, sit-counts accumulate
+    // confirm edits -> re-commits (replace), closes the edit screen
     hooks.commitBench();
-    assert(hooks.getChangeoverOpen() === false, 'commit closes the changeover');
-    let evs = hooks.getScoringEvents();
-    assert(evs[evs.length - 1].type === 'bench', 'commit appends a bench event');
+    assert(hooks.getChangeoverOpen() === false, 'confirm edits closes the edit screen');
     st = hooks.getScoringState();
-    assert(st.currentBench.length === 3, 'currentBench reflects the committed inning-1 bench');
-    st.currentBench.forEach(id => assert(st.sitCount[id] === 1, 'each benched player sit-count = 1'));
+    assert(st.currentBench.length === 3, 'edited bench still 3');
 
-    // widget renders on the defense screen with the sitters
-    render();
-    assert(findClass('sitting-widget'), 'sitting widget renders on the defense screen');
-
-    // fewest-sits: next inning avoids the already-sat
+    // fewest-sits: a later inning still seats 3
     const next = hooks.suggestBench(lineup, st.sitCount);
-    assert(st.currentBench.every(id => next.indexOf(id) < 0) || next.length === 3, 'next inning prefers the not-yet-sat');
+    assert(next.length === 3, 'still 3 sit next inning');
 
-    // idempotent re-bench of the same inning replaces (never doubles)
-    const prevInning = st.inning;
-    ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'bench', { inning: prevInning, benched: ['w2', 'm7', 'm8'] });
+    // idempotent per inning: a second bench for the SAME inning replaces it
+    ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'bench', { inning: st.inning, benched: ['w2', 'm7', 'm8'] });
     hooks.setScoringEvents(ev);
-    st = hooks.getScoringState();
-    assert(st.sitCount.w2 === 1 && st.sitCount.m7 === 1, 're-benched players counted');
-    const firstBench = evs[evs.length - 1].payload.benched;
-    const droppedOnes = firstBench.filter(id => ['w2', 'm7', 'm8'].indexOf(id) < 0);
-    assert(droppedOnes.every(id => !st.sitCount[id]), 'idempotent: replacing an inning bench drops the old sitters');
+    let st2 = hooks.getScoringState();
+    assert(st2.sitCount.w2 === 1 && st2.sitCount.m7 === 1 && st2.sitCount.m8 === 1, 're-benched trio counted');
+    assert(!st2.sitCount.m1, 'replacing an inning bench drops the old sitters (m1 no longer counted)');
 
     // game_start resets the rotation tally
     ev = hooks.appendScoringEvent(hooks.getScoringEvents(), 'game_start', { opponent: 'Game2', innings: 7, isHome: false, lineup: lineup });
